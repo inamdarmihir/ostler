@@ -1,0 +1,22 @@
+<!doctype html><meta charset=utf-8><title>Shipping</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Shipping address</h1>
+<form id="f">
+  <label for="name">Recipient</label><input id="name" name="recipient" required>
+  <label for="country">Country *</label>
+  <select id="country" name="country" required><option value="">Choose…</option><option value="us">United States</option><option value="de">Germany</option><option value="in">India</option></select>
+  <label for="state">State / region *</label>
+  <select id="state" name="state" required disabled><option value="">Choose a country first</option></select>
+  <label for="city">City</label><input id="city" name="city">
+  <button type="submit">Ship it</button>
+</form>
+<script>
+const st=document.getElementById('state');
+document.getElementById('country').addEventListener('change',async e=>{
+  st.disabled=true;st.innerHTML='<option value="">Loading…</option>';
+  const r=await fetch('/api/states?country='+e.target.value);const list=await r.json();
+  st.innerHTML='<option value="">Choose…</option>'+list.map(s=>'<option value="'+s.code+'">'+s.name+'</option>').join('');
+  st.disabled=false});
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+  await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+  document.body.innerHTML='<h1>Shipped</h1>'});
+</script>

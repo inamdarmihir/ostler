@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><title>Shadow signup</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Newsletter</h1>
+<signup-form></signup-form>
+<script>
+customElements.define('signup-form',class extends HTMLElement{connectedCallback(){
+ const r=this.attachShadow({mode:'open'});
+ r.innerHTML='<form><label for="n">Your name</label><input id="n" name="name" required><label for="e">Email address</label><input id="e" name="email" type="email" required><button type="submit">Join</button></form>';
+ r.querySelector('form').addEventListener('submit',async ev=>{ev.preventDefault();
+  await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(ev.target)))});
+  r.innerHTML='<h2>Subscribed</h2>'})}});
+</script>

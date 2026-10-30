@@ -1,0 +1,38 @@
+<!doctype html><meta charset=utf-8><title>Application</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Job application</h1>
+<form id="f" novalidate>
+ <p id="progress">Step 1 of 3</p>
+ <div class="step" data-step="1">
+  <h2>About you</h2>
+  <label for="fn">First name</label><input id="fn" name="first_name" required>
+  <label for="ln">Last name</label><input id="ln" name="last_name" required>
+  <div class="error" id="e1" role="alert" hidden></div>
+  <button type="button" class="next">Continue</button>
+ </div>
+ <div class="step" data-step="2" hidden>
+  <h2>Contact</h2>
+  <label for="em">Email</label><input id="em" name="email" type="email" required>
+  <label for="ph">Phone</label><input id="ph" name="phone" type="tel">
+  <div class="error" id="e2" role="alert" hidden></div>
+  <button type="button" class="back">Back</button> <button type="button" class="next">Continue</button>
+ </div>
+ <div class="step" data-step="3" hidden>
+  <h2>Review</h2>
+  <label><input type="checkbox" name="terms" id="terms" style="width:auto"> I confirm the details are correct *</label>
+  <div class="error" id="e3" role="alert" hidden></div>
+  <button type="button" class="back">Back</button> <button type="submit">Submit application</button>
+ </div>
+</form>
+<script>
+let cur=1;const steps=[...document.querySelectorAll('.step')];
+function show(n){cur=n;steps.forEach(s=>s.hidden=(+s.dataset.step!==n));document.getElementById('progress').textContent='Step '+n+' of 3'}
+function valid(n){const s=steps[n-1],err=document.getElementById('e'+n);err.hidden=true;
+ for(const i of s.querySelectorAll('[required]')) if(!i.value.trim()){err.textContent='Please fill in all required fields.';err.hidden=false;return false}
+ if(n===3&&!document.getElementById('terms').checked){err.textContent='You must confirm to continue.';err.hidden=false;return false}
+ return true}
+document.querySelectorAll('.next').forEach(b=>b.onclick=()=>valid(cur)&&show(cur+1));
+document.querySelectorAll('.back').forEach(b=>b.onclick=()=>show(cur-1));
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();if(!valid(3))return;
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+ document.body.innerHTML='<h1>Application received</h1><p>We will be in touch.</p>'});
+</script>

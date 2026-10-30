@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>Controlled form</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Checkout contact</h1>
+<form id="f">
+  <label for="fn">First name</label><input id="fn" data-k="first">
+  <label for="ln">Last name</label><input id="ln" data-k="last">
+  <label for="co">Company</label><input id="co" data-k="company">
+  <button type="submit">Continue</button>
+</form>
+<script>
+// Mimics a controlled component: state only changes on real input events and is
+// written back to the DOM, so a bare element.value = x is silently discarded.
+const state={first:'',last:'',company:''};
+function render(){document.querySelectorAll('[data-k]').forEach(i=>{if(i.value!==state[i.dataset.k])i.value=state[i.dataset.k]})}
+document.querySelectorAll('[data-k]').forEach(i=>i.addEventListener('input',e=>{state[i.dataset.k]=e.target.value;render()}));
+render();setInterval(render,50);
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(state)});
+ document.body.innerHTML='<h1>Saved</h1>'});
+</script>

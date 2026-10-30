@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Contact us</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Contact us</h1>
+<form action="/submit" method="post">
+  <label for="n">Full name *</label><input id="n" name="name" required autocomplete="name">
+  <label for="e">Email *</label><input id="e" name="email" type="email" required autocomplete="email">
+  <label for="m">Message</label><textarea id="m" name="message" rows="3"></textarea>
+  <label><input type="checkbox" name="newsletter" value="yes" style="width:auto"> Subscribe to newsletter</label>
+  <button type="submit">Send message</button>
+</form>

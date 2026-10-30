@@ -1,0 +1,25 @@
+<!doctype html><meta charset=utf-8><title>Signup</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Create account</h1>
+<form id="f" novalidate>
+  <label for="em">Email</label><input id="em" name="email" type="email" required>
+  <div class="error" id="em-err" hidden></div>
+  <label for="age">Age</label><input id="age" name="age" type="number" min="18" max="120" required>
+  <div class="error" id="age-err" hidden></div>
+  <label for="zip">ZIP code</label><input id="zip" name="zip" pattern="[0-9]{5}" required>
+  <div class="error" id="zip-err" hidden></div>
+  <button type="submit">Create account</button>
+</form>
+<script>
+const rules={em:v=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)||'Enter a valid email address',
+ age:v=>(+v>=18&&+v<=120)||'Age must be between 18 and 120',
+ zip:v=>/^[0-9]{5}$/.test(v)||'ZIP must be 5 digits'};
+function check(id){const el=document.getElementById(id),r=rules[id](el.value),err=document.getElementById(id+'-err');
+ if(r===true){el.removeAttribute('aria-invalid');err.hidden=true;return true}
+ el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby',id+'-err');err.textContent=r;err.hidden=false;return false}
+for(const id of Object.keys(rules))document.getElementById(id).addEventListener('blur',()=>check(id));
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ const ok=Object.keys(rules).map(check).every(Boolean);if(!ok)return;
+ const d=Object.fromEntries(new FormData(e.target));
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)});
+ document.body.innerHTML='<h1>Account created</h1><p>Welcome aboard.</p>'});
+</script>

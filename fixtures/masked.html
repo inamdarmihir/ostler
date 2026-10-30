@@ -1,0 +1,15 @@
+<!doctype html><meta charset=utf-8><title>Masked</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<h1>Phone verification</h1>
+<form id="f">
+  <label for="ph">Mobile number</label><input id="ph" name="phone" placeholder="(555) 123-4567">
+  <label for="code">Short code (max 4 chars)</label><input id="code" name="code" maxlength="4">
+  <button type="submit">Verify</button>
+</form>
+<script>
+const ph=document.getElementById('ph');
+ph.addEventListener('input',()=>{const d=ph.value.replace(/\D/g,'').slice(0,10);
+ let o=d;if(d.length>6)o='('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);else if(d.length>3)o='('+d.slice(0,3)+') '+d.slice(3);else if(d.length>0)o='('+d;ph.value=o});
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+ document.body.innerHTML='<h1>Verified</h1>'});
+</script>

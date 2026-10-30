@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>Combobox</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input{width:auto}</style>
+<style>[role=listbox]{list-style:none;margin:0;padding:0;border:1px solid #999;max-height:150px;overflow:auto}[role=option]{padding:.4rem}[role=option]:hover{background:#eef}</style>
+<h1>Where are you based?</h1>
+<form id="f">
+  <label for="co" id="colabel">Country</label>
+  <input id="co" role="combobox" aria-autocomplete="list" aria-controls="lb" aria-expanded="false" autocomplete="off">
+  <ul id="lb" role="listbox" aria-labelledby="colabel" hidden></ul>
+  <button type="submit">Save</button>
+</form>
+<script>
+const all=['Argentina','Australia','Austria','Germany','India','Ireland','Italy','Japan','United Kingdom','United States'];
+let chosen='';const inp=document.getElementById('co'),lb=document.getElementById('lb');
+function open(q){const m=all.filter(c=>c.toLowerCase().includes(q.toLowerCase()));lb.innerHTML=m.map(c=>'<li role="option">'+c+'</li>').join('');lb.hidden=!m.length;inp.setAttribute('aria-expanded',!lb.hidden)}
+inp.addEventListener('input',()=>{chosen='';open(inp.value)});inp.addEventListener('focus',()=>open(inp.value));
+lb.addEventListener('mousedown',e=>{if(e.target.matches('[role=option]')){chosen=e.target.textContent;inp.value=chosen;lb.hidden=true}});
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({country:chosen})});
+ document.body.innerHTML='<h1>Saved</h1>'});
+</script>

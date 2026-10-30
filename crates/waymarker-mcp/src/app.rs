@@ -1,0 +1,798 @@
+use std::collections::BTreeMap;
+use std::sync::Mutex as StdMutex;
+use std::time::{Duration, Instant};
+
+use async_trait::async_trait;
+use base64::Engine as _;
+use serde_json::{json, Value};
+use tokio::sync::Mutex;
+use waymarker_browser::{
+    AutoMode, Browser, FillReport, FillRequest, FillStatus, LaunchOptions, Policy, SnapshotMode,
+    SnapshotOpts, SubmitStatus, Suggester, Suggestion,
+};
+use waymarker_forms::Field;
+use waymarker_memory::{FieldQuery, Memory, PlaybookField};
+
+use crate::render;
+use crate::tools::{self, Profile};
+
+/// Run an async block against the (lazily launched) browser as `$b`.
+macro_rules! br {
+    ($self:ident, $b:ident, $body:block) => {{
+        let guard = $self.browser().await?;
+        let $b: &Browser = guard.as_ref().expect("browser launched");
+        async $body.await
+    }};
+}
+
+pub struct AppConfig {
+    pub launch: LaunchOptions,
+    pub policy: Policy,
+    pub profile: Profile,
+    pub memory: Option<Memory>,
+    /// Save the (non-sensitive) values the agent provided after a form is accepted.
+    pub learn: bool,
+    /// Make `form_submit` require `confirm: true`.
+    pub require_confirm_submit: bool,
+}
+
+/// One tool result: text and/or an image.
+pub enum Content {
+    Text(String),
+    Image { png: Vec<u8> },
+}
+
+pub struct ToolOutput {
+    pub content: Vec<Content>,
+    pub is_error: bool,
+}
+
+impl ToolOutput {
+    fn text(s: impl Into<String>) -> Self {
+        Self {
+            content: vec![Content::Text(s.into())],
+            is_error: false,
+        }
+    }
+    fn err(s: impl Into<String>) -> Self {
+        Self {
+            content: vec![Content::Text(s.into())],
+            is_error: true,
+        }
+    }
+    pub fn to_json(&self) -> Value {
+        let content: Vec<Value> = self
+            .content
+            .iter()
+            .map(|c| match c {
+                Content::Text(t) => json!({"type":"text","text":t}),
+                Content::Image { png } => json!({
+                    "type":"image","mimeType":"image/png",
+                    "data": base64::engine::general_purpose::STANDARD.encode(png)
+                }),
+            })
+            .collect();
+        json!({"content": content, "isError": self.is_error})
+    }
+    fn bytes(&self) -> usize {
+        self.content
+            .iter()
+            .map(|c| match c {
+                Content::Text(t) => t.len(),
+                // Images are billed by dimensions, not bytes; count a flat conservative figure.
+                Content::Image { .. } => 4800,
+            })
+            .sum()
+    }
+}
+
+#[derive(Default)]
+struct CallStat {
+    n: u64,
+    total_ms: u128,
+    max_ms: u128,
+    out_bytes: u64,
+}
+
+#[derive(Default)]
+struct Metrics {
+    per_tool: BTreeMap<String, CallStat>,
+    errors: u64,
+}
+
+/// What the last `form_fill` did, so a following successful submit can become a playbook.
+struct LastFill {
+    host: String,
+    fingerprint: String,
+    headings: Vec<String>,
+    fields: Vec<PlaybookField>,
+    provided: Vec<(String, Value, bool)>,
+    problems: Vec<(String, String, String)>,
+}
+
+pub struct App {
+    cfg: AppConfig,
+    browser: Mutex<Option<Browser>>,
+    metrics: StdMutex<Metrics>,
+    last_fill: StdMutex<Option<LastFill>>,
+    pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
+    started: Instant,
+}
+
+struct MemorySuggester(Memory);
+
+#[async_trait]
+impl Suggester for MemorySuggester {
+    async fn suggest(&self, host: &str, fingerprint: &str, f: &Field) -> Option<Suggestion> {
+        let kind = serde_json::to_value(f.kind).ok()?.as_str()?.to_string();
+        let q = FieldQuery {
+            host,
+            fingerprint,
+            label: &f.label,
+            name: f.name.as_deref(),
+            kind: &kind,
+            placeholder: f.placeholder.as_deref(),
+            autocomplete: f.autocomplete.as_deref(),
+        };
+        // 0.3 floor here; the caller applies the user-facing min_confidence.
+        let r = self.0.suggest(&q, 0.3).await.ok()??;
+        Some(Suggestion {
+            value: r.fact.value,
+            source: format!("memory:{} via {}", r.fact.key, r.via),
+            confidence: r.confidence,
+        })
+    }
+}
+
+fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
+    a.get(k).and_then(Value::as_str)
+}
+
+fn need_str<'a>(a: &'a Value, k: &str) -> Result<&'a str, String> {
+    arg_str(a, k).ok_or_else(|| format!("missing required argument {k:?}"))
+}
+
+fn wrap(s: &str) -> String {
+    format!(
+        "<page_content untrusted=\"true\">\n{}\n</page_content>",
+        s.trim_end_matches('\n')
+    )
+}
+
+impl App {
+    pub fn new(cfg: AppConfig) -> Self {
+        Self {
+            cfg,
+            browser: Mutex::new(None),
+            metrics: StdMutex::default(),
+            last_fill: StdMutex::default(),
+            pending: StdMutex::default(),
+            started: Instant::now(),
+        }
+    }
+
+    pub fn profile(&self) -> Profile {
+        self.cfg.profile
+    }
+
+    pub fn has_memory(&self) -> bool {
+        self.cfg.memory.is_some()
+    }
+
+    pub async fn init_memory(&self) -> Result<(), String> {
+        match &self.cfg.memory {
+            Some(m) => m.init().await.map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
+    }
+
+    /// Wait for background memory writes (called at shutdown).
+    pub async fn flush(&self) {
+        let handles: Vec<_> = std::mem::take(&mut *self.pending.lock().unwrap());
+        for h in handles {
+            let _ = tokio::time::timeout(Duration::from_secs(3), h).await;
+        }
+    }
+
+    pub async fn shutdown(&self) {
+        self.flush().await;
+        if let Some(b) = self.browser.lock().await.take() {
+            b.close().await;
+        }
+    }
+
+    fn spawn_memory_write<F>(&self, fut: F)
+    where
+        F: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let mut p = self.pending.lock().unwrap();
+        p.retain(|h| !h.is_finished());
+        p.push(tokio::spawn(fut));
+    }
+
+    /// The shared browser, launched on first use (so the server starts instantly and idles for free).
+    async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, String> {
+        let mut guard = self.browser.lock().await;
+        if guard.is_none() {
+            let b = Browser::launch(self.cfg.launch.clone(), self.cfg.policy.clone())
+                .await
+                .map_err(|e| e.to_string())?;
+            *guard = Some(b);
+        }
+        Ok(guard)
+    }
+
+    pub async fn call(&self, name: &str, args: &Value) -> ToolOutput {
+        let t0 = Instant::now();
+        let out = match tools::allowed(self.cfg.profile, name) {
+            None => ToolOutput::err(format!("unknown tool {name:?}")),
+            Some(false) => ToolOutput::err(format!(
+                "tool {name:?} is disabled by the server's tool profile"
+            )),
+            Some(true) => match self.dispatch(name, args).await {
+                Ok(o) => o,
+                Err(e) => ToolOutput::err(e),
+            },
+        };
+        let ms = t0.elapsed().as_millis();
+        let mut m = self.metrics.lock().unwrap();
+        let s = m.per_tool.entry(name.to_string()).or_default();
+        s.n += 1;
+        s.total_ms += ms;
+        s.max_ms = s.max_ms.max(ms);
+        s.out_bytes += out.bytes() as u64;
+        if out.is_error {
+            m.errors += 1;
+        }
+        out
+    }
+
+    async fn observe(
+        &self,
+        b: &Browser,
+        mode: Option<&str>,
+        default: SnapshotMode,
+    ) -> Result<String, String> {
+        let mode = match mode {
+            Some("none") => return Ok(String::new()),
+            Some("full") => SnapshotMode::Full,
+            Some("delta") => SnapshotMode::Delta,
+            Some("interactive") => SnapshotMode::Interactive,
+            _ => default,
+        };
+        let s = b
+            .page
+            .snapshot(SnapshotOpts {
+                mode,
+                max_chars: Some(if mode == SnapshotMode::Full {
+                    20000
+                } else {
+                    8000
+                }),
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut t = s.text;
+        if s.truncated {
+            t.push_str("(truncated; use snapshot with ref to read a part)\n");
+        }
+        Ok(wrap(&t))
+    }
+
+    fn action_text(&self, what: &str, o: &waymarker_browser::ActionOutcome) -> String {
+        let mut s = format!("{what}. Now at: {} — {}\n", o.title, o.url);
+        for w in &o.warnings {
+            s.push_str(&format!("Warning: {w}\n"));
+        }
+        for d in &o.dialogs {
+            s.push_str(&format!("Dialog (auto-accepted): {d}\n"));
+        }
+        s
+    }
+
+    async fn dispatch(&self, name: &str, a: &Value) -> Result<ToolOutput, String> {
+        match name {
+            "navigate" => {
+                let url = need_str(a, "url")?.to_string();
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let o = b.page.navigate(&url).await.map_err(|e| e.to_string())?;
+                    let mut t = self.action_text("Navigated", &o);
+                    t.push_str(
+                        &self
+                            .observe(b, obs.as_deref(), SnapshotMode::Interactive)
+                            .await?,
+                    );
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "snapshot" => {
+                let mode = match arg_str(a, "mode") {
+                    Some("delta") => SnapshotMode::Delta,
+                    Some("interactive") => SnapshotMode::Interactive,
+                    _ => SnapshotMode::Full,
+                };
+                let scope = arg_str(a, "ref").map(String::from);
+                let max = a
+                    .get("max_chars")
+                    .and_then(Value::as_u64)
+                    .map(|n| n as usize);
+                br!(self, b, {
+                    let s = b
+                        .page
+                        .snapshot(SnapshotOpts {
+                            mode,
+                            scope,
+                            max_chars: max,
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let mut t = format!("Page: {} — {}\n", s.title, s.url);
+                    t.push_str(&wrap(&s.text));
+                    if s.truncated {
+                        t.push_str(
+                            "\n(truncated; pass ref to read a subtree or raise max_chars)\n",
+                        );
+                    }
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "click" => {
+                let r = need_str(a, "ref")?.to_string();
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let o = b.page.click(&r).await.map_err(|e| e.to_string())?;
+                    let mut t = self.action_text(&format!("Clicked {r}"), &o);
+                    let default = if o.navigated {
+                        SnapshotMode::Interactive
+                    } else {
+                        SnapshotMode::Delta
+                    };
+                    t.push_str(&self.observe(b, obs.as_deref(), default).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "type" => {
+                let r = need_str(a, "ref")?.to_string();
+                let text = need_str(a, "text")?.to_string();
+                let submit = a.get("submit").and_then(Value::as_bool).unwrap_or(false);
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let o = b
+                        .page
+                        .type_text(&r, &text, submit)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let mut t = self.action_text(&format!("Typed into {r}"), &o);
+                    let default = if o.navigated {
+                        SnapshotMode::Interactive
+                    } else {
+                        SnapshotMode::Delta
+                    };
+                    t.push_str(&self.observe(b, obs.as_deref(), default).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "press" => {
+                let key = need_str(a, "key")?.to_string();
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let o = b.page.press(&key).await.map_err(|e| e.to_string())?;
+                    let mut t = self.action_text(&format!("Pressed {key}"), &o);
+                    let default = if o.navigated {
+                        SnapshotMode::Interactive
+                    } else {
+                        SnapshotMode::Delta
+                    };
+                    t.push_str(&self.observe(b, obs.as_deref(), default).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "back" => {
+                br!(self, b, {
+                    let o = b.page.back().await.map_err(|e| e.to_string())?;
+                    let mut t = self.action_text("Went back", &o);
+                    t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "wait_for" => {
+                let text = arg_str(a, "text").map(String::from);
+                let gone = arg_str(a, "text_gone").map(String::from);
+                let sel = arg_str(a, "selector").map(String::from);
+                if text.is_none() && gone.is_none() && sel.is_none() {
+                    return Err("give at least one of text, text_gone, selector".into());
+                }
+                let timeout = Duration::from_millis(
+                    a.get("timeout_ms")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(10_000)
+                        .min(60_000),
+                );
+                br!(self, b, {
+                    let ok = b
+                        .page
+                        .wait_for(text.as_deref(), gone.as_deref(), sel.as_deref(), timeout)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    Ok(if ok {
+                        ToolOutput::text("Condition met.")
+                    } else {
+                        ToolOutput::err(format!("Timed out after {}ms.", timeout.as_millis()))
+                    })
+                })
+            }
+            "screenshot" => {
+                let r = arg_str(a, "ref").map(String::from);
+                let full = a.get("full_page").and_then(Value::as_bool).unwrap_or(false);
+                br!(self, b, {
+                    let png = b
+                        .page
+                        .screenshot(r.as_deref(), full, false)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    Ok(ToolOutput {
+                        content: vec![Content::Image { png }],
+                        is_error: false,
+                    })
+                })
+            }
+            "form_inspect" => {
+                let want = arg_str(a, "form").map(String::from);
+                br!(self, b, {
+                    let mut ir = b.page.forms().await.map_err(|e| e.to_string())?;
+                    if let Some(w) = &want {
+                        ir.forms.retain(|f| f.r#ref == w.trim_start_matches('@'));
+                    }
+                    let host = url::Url::parse(&ir.url)
+                        .ok()
+                        .and_then(|u| u.host_str().map(String::from))
+                        .unwrap_or_default();
+                    let mut notes = BTreeMap::new();
+                    if let Some(mem) = &self.cfg.memory {
+                        for f in &ir.forms {
+                            let fp = f.fingerprint(&host);
+                            let mut n = String::new();
+                            if let Ok(Some(pb)) = mem.playbook(&fp).await {
+                                n.push_str(&format!(
+                                    "  memory: this form was filled successfully {}x before.\n",
+                                    pb.uses
+                                ));
+                            }
+                            if let Ok(eps) = mem.episodes(&fp, 3).await {
+                                for e in eps {
+                                    n.push_str(&format!(
+                                        "  memory: known issue on {:?}: {} (seen {}x)\n",
+                                        e.field, e.detail, e.count
+                                    ));
+                                }
+                            }
+                            notes.insert(f.r#ref.clone(), n);
+                        }
+                    }
+                    let text =
+                        render::forms(&ir, |f| notes.get(&f.r#ref).cloned().unwrap_or_default());
+                    Ok(ToolOutput::text(wrap(&text)))
+                })
+            }
+            "form_fill" => self.form_fill(a).await,
+            "fill_field" => {
+                let r = need_str(a, "ref")?.to_string();
+                let value = a
+                    .get("value")
+                    .cloned()
+                    .ok_or("missing required argument \"value\"")?;
+                br!(self, b, {
+                    let mut values = BTreeMap::new();
+                    values.insert(r, value);
+                    let rep = b
+                        .page
+                        .fill_form(
+                            FillRequest {
+                                values,
+                                ..Default::default()
+                            },
+                            None,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    Ok(ToolOutput::text(render::fill(&rep)))
+                })
+            }
+            "form_submit" => self.form_submit(a).await,
+            "memory_remember" => {
+                let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
+                let key = need_str(a, "key")?;
+                let value = a
+                    .get("value")
+                    .cloned()
+                    .ok_or("missing required argument \"value\"")?;
+                let f = mem
+                    .remember(
+                        key,
+                        value,
+                        arg_str(a, "description"),
+                        arg_str(a, "autocomplete"),
+                        "user",
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Ok(ToolOutput::text(format!(
+                    "Saved {:?}{}.",
+                    f.key,
+                    f.autocomplete
+                        .map(|a| format!(" (autocomplete={a})"))
+                        .unwrap_or_default()
+                )))
+            }
+            "memory_recall" => {
+                let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
+                let limit = a.get("limit").and_then(Value::as_u64).unwrap_or(5) as usize;
+                let hits = mem
+                    .recall(need_str(a, "query")?, limit)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if hits.is_empty() {
+                    return Ok(ToolOutput::text("Nothing relevant saved."));
+                }
+                Ok(ToolOutput::text(
+                    hits.iter()
+                        .map(|(f, s)| format!("{} = {} (score {:.2})", f.key, f.value, s))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ))
+            }
+            "memory_list" => {
+                let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
+                let facts = mem.facts(200).await.map_err(|e| e.to_string())?;
+                if facts.is_empty() {
+                    return Ok(ToolOutput::text("No facts saved."));
+                }
+                Ok(ToolOutput::text(
+                    facts
+                        .iter()
+                        .map(|f| format!("{} = {} [{}]", f.key, f.value, f.source))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ))
+            }
+            "memory_forget" => {
+                let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
+                let existed = mem
+                    .forget(need_str(a, "key")?)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Ok(ToolOutput::text(if existed {
+                    "Forgotten."
+                } else {
+                    "No such fact."
+                }))
+            }
+            "stats" => Ok(ToolOutput::text(self.stats().await)),
+            other => Err(format!("unknown tool {other:?}")),
+        }
+    }
+
+    async fn form_fill(&self, a: &Value) -> Result<ToolOutput, String> {
+        let values: BTreeMap<String, Value> = match a.get("values") {
+            Some(Value::Object(m)) => m.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            Some(_) => return Err("\"values\" must be an object of {label or ref: value}".into()),
+            None => BTreeMap::new(),
+        };
+        let auto = match arg_str(a, "auto") {
+            Some("all") => AutoMode::All,
+            Some("required") => AutoMode::Required,
+            Some("off") | None => {
+                if self.cfg.memory.is_some() && values.is_empty() {
+                    AutoMode::Required
+                } else {
+                    AutoMode::Off
+                }
+            }
+            Some(o) => return Err(format!("auto must be off|required|all, got {o:?}")),
+        };
+        if values.is_empty() && auto == AutoMode::Off {
+            return Err("provide values, or set auto=required|all with memory enabled".into());
+        }
+        let req = FillRequest {
+            form: arg_str(a, "form").map(String::from),
+            values: values.clone(),
+            auto,
+            min_confidence: a
+                .get("min_confidence")
+                .and_then(Value::as_f64)
+                .map(|x| x as f32),
+        };
+        let suggester = self.cfg.memory.clone().map(MemorySuggester);
+        let rep = br!(self, b, {
+            b.page
+                .fill_form(req, suggester.as_ref().map(|s| s as &dyn Suggester))
+                .await
+                .map_err(|e| e.to_string())
+        })?;
+        self.remember_fill(&rep, &values);
+        Ok(ToolOutput::text(render::fill(&rep)))
+    }
+
+    fn remember_fill(&self, rep: &FillReport, provided: &BTreeMap<String, Value>) {
+        let fields: Vec<PlaybookField> = rep
+            .fields
+            .iter()
+            .filter(|f| f.status != FillStatus::Failed)
+            .map(|f| PlaybookField {
+                label: f.label.clone(),
+                kind: serde_json::to_value(f.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                profile_key: f
+                    .source
+                    .strip_prefix("memory:")
+                    .and_then(|s| s.split_whitespace().next())
+                    .map(String::from),
+                required: false,
+            })
+            .collect();
+        let problems: Vec<(String, String, String)> = rep
+            .fields
+            .iter()
+            .filter(|f| f.status == FillStatus::Failed)
+            .map(|f| {
+                (
+                    f.label.clone(),
+                    "fill_failed".to_string(),
+                    f.note.clone().unwrap_or_default(),
+                )
+            })
+            .collect();
+        let mut prov = vec![];
+        for f in &rep.fields {
+            if f.source == "provided" && f.status != FillStatus::Failed {
+                // Match back to the original value; sensitive values are masked in the report already.
+                if let Some((_, v)) = provided
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(&f.label) || **k == f.r#ref)
+                {
+                    prov.push((f.label.clone(), v.clone(), f.requested == "***"));
+                }
+            }
+        }
+        *self.last_fill.lock().unwrap() = Some(LastFill {
+            host: rep.host.clone(),
+            fingerprint: rep.fingerprint.clone(),
+            headings: vec![],
+            fields,
+            provided: prov,
+            problems,
+        });
+    }
+
+    async fn form_submit(&self, a: &Value) -> Result<ToolOutput, String> {
+        if self.cfg.require_confirm_submit
+            && a.get("confirm").and_then(Value::as_bool) != Some(true)
+        {
+            return Ok(ToolOutput::err(
+                "Submission blocked: this server requires explicit confirmation. Show the user what will be submitted, \
+                 and call form_submit again with confirm=true only after they agree.",
+            ));
+        }
+        let form = arg_str(a, "form").map(String::from);
+        let ctl = arg_str(a, "control").map(String::from);
+        let out = br!(self, b, {
+            b.page
+                .submit(form.as_deref(), ctl.as_deref())
+                .await
+                .map_err(|e| e.to_string())
+        })?;
+        self.learn_from_submit(&out);
+        Ok(ToolOutput::text(render::submit(&out)))
+    }
+
+    /// Turn what just happened into memory, off the critical path.
+    fn learn_from_submit(&self, out: &waymarker_browser::SubmitOutcome) {
+        let Some(mem) = self.cfg.memory.clone() else {
+            return;
+        };
+        let Some(last) = self.last_fill.lock().unwrap().take() else {
+            return;
+        };
+        let learn = self.cfg.learn;
+        let status = out.status;
+        let errors = out.field_errors.clone();
+        self.spawn_memory_write(async move {
+            match status {
+                SubmitStatus::Submitted | SubmitStatus::Advanced => {
+                    let _ = mem
+                        .record_success(
+                            &last.host,
+                            &last.fingerprint,
+                            &last.headings,
+                            last.fields.clone(),
+                        )
+                        .await;
+                    if learn {
+                        for (label, value, sensitive) in &last.provided {
+                            if !*sensitive {
+                                let _ = mem
+                                    .remember(label, value.clone(), None, None, "learned")
+                                    .await;
+                            }
+                        }
+                    }
+                }
+                SubmitStatus::ValidationFailed => {
+                    for e in &errors {
+                        let _ = mem
+                            .record_episode(
+                                &last.host,
+                                &last.fingerprint,
+                                &e.label,
+                                "validation_error",
+                                &e.message,
+                            )
+                            .await;
+                    }
+                }
+                SubmitStatus::Unchanged => {}
+            }
+            for (field, problem, detail) in &last.problems {
+                let _ = mem
+                    .record_episode(&last.host, &last.fingerprint, field, problem, detail)
+                    .await;
+            }
+        });
+    }
+
+    async fn stats(&self) -> String {
+        let (lines, total_calls, total_bytes, total_ms, errors) = {
+            let m = self.metrics.lock().unwrap();
+            let mut lines = vec![];
+            let (mut c, mut by, mut ms) = (0, 0, 0);
+            for (name, s) in &m.per_tool {
+                lines.push(format!(
+                    "  {name}: {} calls, avg {}ms, max {}ms, ~{} output tokens",
+                    s.n,
+                    s.total_ms / s.n.max(1) as u128,
+                    s.max_ms,
+                    s.out_bytes / 4
+                ));
+                c += s.n;
+                by += s.out_bytes;
+                ms += s.total_ms;
+            }
+            (lines, c, by, ms, m.errors)
+        };
+        let (cdp, rss) = match self.browser.lock().await.as_ref() {
+            Some(b) => (Some(b.cdp_calls()), b.rss_kb()),
+            None => (None, None),
+        };
+        let schema_bytes = serde_json::to_string(&tools::list(self.cfg.profile))
+            .map(|s| s.len())
+            .unwrap_or(0);
+        let mut s = format!(
+            "Session {}s. {} tool calls ({} errors), {}ms inside tools, ~{} output tokens (estimate: bytes/4).\n",
+            self.started.elapsed().as_secs(), total_calls, errors, total_ms, total_bytes / 4
+        );
+        s.push_str(&format!(
+            "Tool schemas: {} bytes (~{} tokens) in context.\n",
+            schema_bytes,
+            schema_bytes / 4
+        ));
+        if let Some(c) = cdp {
+            s.push_str(&format!("Browser round-trips (CDP): {c}\n"));
+        }
+        match rss {
+            Some(kb) => s.push_str(&format!(
+                "Browser memory (all processes): {} MiB\n",
+                kb / 1024
+            )),
+            None => s.push_str("Browser: not started.\n"),
+        }
+        s.push_str(&lines.join("\n"));
+        s.push('\n');
+        s
+    }
+}
+
+const NO_MEMORY: &str = "memory is not configured. Start the server with --memory ephemeral, or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
