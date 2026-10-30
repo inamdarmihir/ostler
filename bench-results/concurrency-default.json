@@ -1,0 +1,48 @@
+{
+  "concurrency": [
+    {
+      "cpu_s_per_task": 0.5249999999999999,
+      "p50_ms": 506.90491699999995,
+      "p95_ms": 890.695292,
+      "rss_per_session_mib": 549.0,
+      "sessions": 1,
+      "success": 1.0,
+      "tasks": 6,
+      "tasks_per_min": 78.54133825960548,
+      "usd_per_1k_tasks": 0.006402176892215983
+    },
+    {
+      "cpu_s_per_task": 0.48166666666666663,
+      "p50_ms": 485.629792,
+      "p95_ms": 861.355208,
+      "rss_per_session_mib": 508.5,
+      "sessions": 2,
+      "success": 1.0,
+      "tasks": 12,
+      "tasks_per_min": 149.71785719717147,
+      "usd_per_1k_tasks": 0.005904649450110316
+    },
+    {
+      "cpu_s_per_task": 0.48374999999999996,
+      "p50_ms": 495.295875,
+      "p95_ms": 894.2757919999999,
+      "rss_per_session_mib": 505.25,
+      "sessions": 4,
+      "success": 1.0,
+      "tasks": 24,
+      "tasks_per_min": 262.47366206670944,
+      "usd_per_1k_tasks": 0.006001612970408687
+    },
+    {
+      "cpu_s_per_task": 0.5045833333333333,
+      "p50_ms": 604.73475,
+      "p95_ms": 960.0345,
+      "rss_per_session_mib": 482.875,
+      "sessions": 8,
+      "success": 1.0,
+      "tasks": 48,
+      "tasks_per_min": 354.2704922231672,
+      "usd_per_1k_tasks": 0.006493859210343057
+    }
+  ]
+}

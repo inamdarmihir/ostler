@@ -6,7 +6,10 @@
 
 mod launch;
 
-pub use launch::{find_chrome, process_tree_rss_kb, Chrome, LaunchOptions};
+pub use launch::{
+    find_chrome, lean_args, memory_method, process_tree_rss_kb, process_tree_stats, Chrome,
+    LaunchOptions,
+};
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

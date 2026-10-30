@@ -27,16 +27,24 @@ pub struct Browser {
 
 impl Browser {
     pub async fn launch(opts: LaunchOptions, policy: Policy) -> page::Result<Self> {
+        let lean = opts.lean;
         let chrome = Chrome::launch(opts).await?;
         let conn = chrome.connect().await?;
         let session = Session::new_page(conn.clone()).await?;
         let page = Page::attach(session, policy).await?;
+        if lean {
+            page.block_media().await?;
+        }
         Ok(Self { chrome, conn, page })
     }
 
     /// CDP round-trips so far: a proxy for browser-side work per task.
     pub fn cdp_calls(&self) -> u64 {
         self.conn.call_count()
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        self.chrome.pid()
     }
 
     /// Resident memory of Chrome and all its helper processes, in KiB (Unix only).

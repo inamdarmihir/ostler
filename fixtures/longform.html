@@ -1,0 +1,36 @@
+<!doctype html><meta charset=utf-8><title>Job application</title>
+<style>body{font:15px system-ui;max-width:560px;margin:2rem auto}label{display:block;margin:.6rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}label.c{display:flex;gap:.5rem;align-items:center}label.c input{width:auto}</style>
+<h1>Apply for the role</h1>
+<form id="f">
+  <label for="fn">First name *</label><input id="fn" name="first_name" required autocomplete="given-name">
+  <label for="ln">Last name *</label><input id="ln" name="last_name" required autocomplete="family-name">
+  <label for="em">Email *</label><input id="em" name="email" type="email" required autocomplete="email">
+  <label for="ph">Phone</label><input id="ph" name="phone" type="tel" autocomplete="tel">
+  <label for="a1">Address line 1</label><input id="a1" name="address1" autocomplete="address-line1">
+  <label for="a2">Address line 2</label><input id="a2" name="address2">
+  <label for="ci">City</label><input id="ci" name="city" autocomplete="address-level2">
+  <label for="st">State</label>
+  <select id="st" name="state" autocomplete="address-level1"><option value="">Choose…</option><option value="ca">California</option><option value="ny">New York</option><option value="tx">Texas</option><option value="wa">Washington</option></select>
+  <label for="zp">ZIP code</label><input id="zp" name="zip" autocomplete="postal-code">
+  <label for="co">Country</label>
+  <select id="co" name="country" autocomplete="country"><option value="">Choose…</option><option value="us">United States</option><option value="ca">Canada</option><option value="gb">United Kingdom</option></select>
+  <label for="cp">Current company</label><input id="cp" name="company" autocomplete="organization">
+  <label for="jt">Job title</label><input id="jt" name="title" autocomplete="organization-title">
+  <label for="li">LinkedIn URL</label><input id="li" name="linkedin" type="url">
+  <label for="ws">Website</label><input id="ws" name="website" type="url">
+  <label for="sd">Earliest start date</label><input id="sd" name="start" type="date">
+  <label for="sl">Expected salary (USD)</label><input id="sl" name="salary" type="number" min="0">
+  <label for="rf">How did you hear about us?</label>
+  <select id="rf" name="referral"><option value="">Choose…</option><option value="friend">A friend</option><option value="search">Web search</option><option value="social">Social media</option></select>
+  <label for="cv">Cover letter</label><textarea id="cv" name="cover" rows="3"></textarea>
+  <label class="c"><input type="checkbox" name="relocate"> Willing to relocate</label>
+  <label class="c"><input type="checkbox" name="consent"> I agree to the privacy policy *</label>
+  <button type="submit">Submit application</button>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ const fd=Object.fromEntries(new FormData(e.target));
+ if(!fd.consent){return}
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(fd)});
+ document.body.innerHTML='<h1>Application received</h1>'});
+</script>

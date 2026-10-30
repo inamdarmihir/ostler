@@ -449,3 +449,94 @@ async fn auto_mode_without_suggester_is_a_noop() {
     assert_eq!(rep.missing_required.len(), 2);
     b.close().await;
 }
+
+#[tokio::test]
+async fn snapshot_keeps_controls_wrapped_in_labels() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    let snap = b.page.snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(
+        snap.text.contains("checkbox \"Subscribe to newsletter\""),
+        "{}",
+        snap.text
+    );
+    // The label text is the control's name; it must not also appear as a duplicate text line.
+    assert!(
+        !snap.text.contains("text \"Subscribe to newsletter\""),
+        "{}",
+        snap.text
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn long_form_fills_in_one_call() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/longform.html")).await.unwrap();
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({
+                "First name": "Ada", "Last name": "Lovelace", "Email": "ada@example.com", "Phone": "5551234567",
+                "Address line 1": "12 Analytical St", "City": "San Francisco", "State": "California", "ZIP code": "94107",
+                "Country": "United States", "Current company": "Analytical Engines", "Job title": "Engineer",
+                "Earliest start date": "2026-12-01", "Expected salary": 150000, "How did you hear": "Web search",
+                "Cover letter": "Hello", "Willing to relocate": true, "privacy policy": true
+            })),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.unmatched.is_empty(), "{rep:#?}");
+    assert_eq!(rep.failed(), 0, "{rep:#?}");
+    assert_eq!(rep.fields.len(), 17);
+    assert_eq!(
+        b.page.submit(None, None).await.unwrap().status,
+        SubmitStatus::Submitted
+    );
+    let got = srv.last().unwrap();
+    assert_eq!(
+        (
+            got["state"].as_str(),
+            got["country"].as_str(),
+            got["salary"].as_str()
+        ),
+        (Some("ca"), Some("us"), Some("150000"))
+    );
+    b.close().await;
+}
+
+/// Regression guard: settle used to count its own polling as page activity and burned its full
+/// 3 s cap on every action. A whole fill+submit on a simple page must stay far below that.
+#[tokio::test]
+async fn actions_settle_quickly() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    let t = std::time::Instant::now();
+    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    let nav = t.elapsed();
+    let t = std::time::Instant::now();
+    b.page
+        .fill_form(req(json!({"name": "A", "email": "a@b.co"})), None)
+        .await
+        .unwrap();
+    let fill = t.elapsed();
+    let t = std::time::Instant::now();
+    b.page.submit(None, None).await.unwrap();
+    let submit = t.elapsed();
+    assert!(nav < Duration::from_millis(1500), "navigate took {nav:?}");
+    assert!(
+        fill < Duration::from_millis(1500),
+        "2-field fill took {fill:?}"
+    );
+    assert!(
+        submit < Duration::from_millis(2000),
+        "submit took {submit:?}"
+    );
+    b.close().await;
+}

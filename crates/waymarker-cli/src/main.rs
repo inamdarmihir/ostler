@@ -99,6 +99,9 @@ struct MemoryArgs {
     embedding_model: String,
     #[arg(long, default_value_t = 384)]
     embedding_dim: usize,
+    /// Keep Qdrant vectors on disk (memory-mapped): much less RAM per user, slightly slower search.
+    #[arg(long)]
+    qdrant_on_disk: bool,
     /// Isolates one user's memory from another's inside shared collections.
     #[arg(long, env = "WAYMARKER_TENANT", default_value = "default")]
     tenant: String,
@@ -115,6 +118,9 @@ struct ServeArgs {
     headed: bool,
     #[arg(long, env = "WAYMARKER_CHROME")]
     chrome_path: Option<PathBuf>,
+    /// Smaller footprint: lean Chrome flags and no image/font/media downloads (screenshots will lack images).
+    #[arg(long)]
+    lean: bool,
     /// Persistent Chrome profile (keeps logins). Default is a throwaway profile.
     #[arg(long)]
     profile_dir: Option<PathBuf>,
@@ -168,6 +174,7 @@ fn build_memory(a: &MemoryArgs) -> Result<Option<Memory>> {
                 api_key: a.qdrant_api_key.clone(),
                 vectors,
                 timeout: Duration::from_secs(10),
+                on_disk: a.qdrant_on_disk,
             })?;
             Some(Memory::new(Arc::new(store), a.tenant.clone()))
         }
@@ -185,6 +192,7 @@ async fn main() -> Result<()> {
                     chrome_path: a.chrome_path,
                     headless: !a.headed,
                     user_data_dir: a.profile_dir,
+                    lean: a.lean,
                     ..Default::default()
                 },
                 policy: Policy {

@@ -1,0 +1,20 @@
+{
+  "footprint": [
+    {
+      "processes": 10.0,
+      "profile": "default",
+      "rss_mib": 658.0,
+      "start_ms": 630.558375,
+      "success": 1.0,
+      "task_ms": 584.699375
+    },
+    {
+      "processes": 10.0,
+      "profile": "lean",
+      "rss_mib": 412.0,
+      "start_ms": 564.8924159999999,
+      "success": 1.0,
+      "task_ms": 586.640625
+    }
+  ]
+}

@@ -94,6 +94,7 @@ fn store(url: &str, dim: usize) -> Arc<QdrantStore> {
             api_key: None,
             vectors: VectorSource::Client(Arc::new(HashEmbedder::new(dim))),
             timeout: Duration::from_secs(10),
+            on_disk: false,
         })
         .unwrap(),
     )

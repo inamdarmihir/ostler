@@ -265,16 +265,17 @@
       }
       emit(depth, s + (attrs.length ? ' ' + attrs.join(' ') : ''));
     }
-    function walk(node, depth) {
+    function walk(node, depth, noText) {
       if (truncated) return;
       if (node.nodeType === 3) {
-        if (!interactiveOnly) { const t = clean(node.nodeValue); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+        if (!interactiveOnly && !noText) { const t = clean(node.nodeValue); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
         return;
       }
       if (node.nodeType !== 1) return;
       const el = node;
       if (SKIP.has(el.tagName) || hiddenSelf(el)) return;
-      if (el.tagName === 'LABEL' && el.control) return;
+      // A label that owns a control: keep the control (it may be wrapped), drop the duplicate text.
+      if (el.tagName === 'LABEL' && el.control) noText = true;
       const role = roleOf(el);
       const isFrame = el.tagName === 'IFRAME' || el.tagName === 'FRAME';
       if (isFrame) {
@@ -282,7 +283,7 @@
         try { accessible = !!el.contentDocument; } catch { accessible = false; }
         const r = refOf(el);
         emit(depth, accessible ? `iframe [${r}]:` : `iframe [${r}] (cross-origin: content not accessible)`);
-        if (accessible) for (const k of kids(el)) walk(k, depth + 1);
+        if (accessible) for (const k of kids(el)) walk(k, depth + 1, noText);
         return;
       }
       if (role === 'heading') { if (!interactiveOnly || true) ctl(el, role, depth); return; }
@@ -291,7 +292,7 @@
         // Composite widgets (e.g. role=combobox wrapping an input) still recurse for their popup/options.
         ctl(el, role, depth);
         if (!/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName) && el.children.length && role !== 'link' && role !== 'button') {
-          for (const k of kids(el)) walk(k, depth + 1);
+          for (const k of kids(el)) walk(k, depth + 1, noText);
         }
         return;
       }
@@ -308,15 +309,15 @@
       else if (!role && !el.shadowRoot && el.tagName !== 'SLOT' && el.tagName !== 'LEGEND') {
         // Plain container with nothing interesting inside: collapse to one text line.
         if (!el.querySelector('a[href],button,input,select,textarea,[role],[contenteditable],[tabindex],[onclick],summary,h1,h2,h3,h4,h5,h6,img,form,iframe,table,dialog,fieldset')) {
-          if (!interactiveOnly) { const t = clean(el.innerText || el.textContent); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+          if (!interactiveOnly && !noText) { const t = clean(el.innerText || el.textContent); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
           return;
         }
       }
       if (el.tagName === 'LEGEND') return;
-      for (const k of kids(el)) walk(k, d);
+      for (const k of kids(el)) walk(k, d, noText);
     }
     const root = opts.ref ? elOf(opts.ref) : document.documentElement;
-    walk(root, 0);
+    walk(root, 0, false);
     return { url: location.href, title: document.title, lines, truncated, refs: counter };
   }
 

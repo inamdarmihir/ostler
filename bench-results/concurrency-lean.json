@@ -1,0 +1,37 @@
+{
+  "concurrency": [
+    {
+      "cpu_s_per_task": 0.5233333333333333,
+      "p50_ms": 514.554375,
+      "p95_ms": 892.514833,
+      "rss_per_session_mib": 459.0,
+      "sessions": 1,
+      "success": 1.0,
+      "tasks": 6,
+      "tasks_per_min": 81.54293809696463,
+      "usd_per_1k_tasks": 0.006272898819349727
+    },
+    {
+      "cpu_s_per_task": 0.5179166666666667,
+      "p50_ms": 494.293541,
+      "p95_ms": 861.736334,
+      "rss_per_session_mib": 461.25,
+      "sessions": 4,
+      "success": 1.0,
+      "tasks": 24,
+      "tasks_per_min": 276.72163995962194,
+      "usd_per_1k_tasks": 0.006297219953960278
+    },
+    {
+      "cpu_s_per_task": 0.4849999999999999,
+      "p50_ms": 527.182583,
+      "p95_ms": 917.594375,
+      "rss_per_session_mib": 454.5,
+      "sessions": 8,
+      "success": 1.0,
+      "tasks": 48,
+      "tasks_per_min": 392.5344780801779,
+      "usd_per_1k_tasks": 0.006142704041502209
+    }
+  ]
+}

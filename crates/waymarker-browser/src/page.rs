@@ -242,6 +242,23 @@ impl Page {
         self.eval(&expr).await
     }
 
+    /// Skip downloading images, video, audio and fonts. Forms rarely need them and they dominate bytes on real sites.
+    /// Screenshots will show missing images while this is on.
+    pub async fn block_media(&self) -> Result<()> {
+        let urls: Vec<String> = [
+            "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "mp4", "webm", "mp3", "ogg",
+            "woff", "woff2", "ttf", "otf",
+        ]
+        .iter()
+        .map(|e| format!("*.{e}"))
+        .collect();
+        self.session.call("Network.enable", json!({})).await?;
+        self.session
+            .call("Network.setBlockedURLs", json!({ "urls": urls }))
+            .await?;
+        Ok(())
+    }
+
     pub async fn info(&self) -> Result<PageInfo> {
         let v = self
             .eval("({url: location.href, title: document.title})")

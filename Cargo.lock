@@ -1955,6 +1955,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "waymarker-bench"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "waymarker-browser",
+ "waymarker-cdp",
+ "waymarker-fixtures",
+ "waymarker-mcp",
+ "waymarker-memory",
+]
+
+[[package]]
 name = "waymarker-browser"
 version = "0.1.0"
 dependencies = [

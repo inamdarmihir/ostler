@@ -60,6 +60,19 @@ impl ToolOutput {
             is_error: true,
         }
     }
+    pub fn text_content(&self) -> String {
+        self.content
+            .iter()
+            .filter_map(|c| {
+                if let Content::Text(t) = c {
+                    Some(t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
     pub fn to_json(&self) -> Value {
         let content: Vec<Value> = self
             .content
@@ -74,7 +87,7 @@ impl ToolOutput {
             .collect();
         json!({"content": content, "isError": self.is_error})
     }
-    fn bytes(&self) -> usize {
+    pub fn bytes(&self) -> usize {
         self.content
             .iter()
             .map(|c| match c {
@@ -169,6 +182,26 @@ impl App {
             pending: StdMutex::default(),
             started: Instant::now(),
         }
+    }
+
+    /// (CDP round-trips so far, browser memory in KiB). `None` until the browser has started.
+    pub async fn browser_metrics(&self) -> Option<(u64, Option<u64>)> {
+        self.browser
+            .lock()
+            .await
+            .as_ref()
+            .map(|b| (b.cdp_calls(), b.rss_kb()))
+    }
+
+    pub async fn browser_pid(&self) -> Option<u32> {
+        self.browser.lock().await.as_ref().and_then(|b| b.pid())
+    }
+
+    /// Approximate size of the tool schemas the agent must carry in context.
+    pub fn schema_bytes(&self) -> usize {
+        serde_json::to_string(&tools::list(self.cfg.profile))
+            .map(|s| s.len())
+            .unwrap_or(0)
     }
 
     pub fn profile(&self) -> Profile {

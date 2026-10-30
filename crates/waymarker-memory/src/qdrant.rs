@@ -41,6 +41,9 @@ pub struct QdrantConfig {
     pub api_key: Option<String>,
     pub vectors: VectorSource,
     pub timeout: Duration,
+    /// Keep vectors (and the HNSW graph) on disk, memory-mapped, instead of in RAM.
+    /// Trades a little latency for far lower memory per user. Applies when collections are created.
+    pub on_disk: bool,
 }
 
 pub struct QdrantStore {
@@ -102,6 +105,39 @@ impl QdrantStore {
         }
     }
 
+    /// Bulk-load points: `(id, text, payload)` in one request. For imports and benchmarks.
+    pub async fn upsert_batch(
+        &self,
+        kind: Kind,
+        items: Vec<(String, String, Value)>,
+    ) -> Result<()> {
+        let texts: Vec<String> = items.iter().map(|i| i.1.clone()).collect();
+        let vectors: Vec<Value> = match &self.cfg.vectors {
+            VectorSource::CloudInference { model, .. } => texts
+                .iter()
+                .map(|t| json!({"text": t, "model": model}))
+                .collect(),
+            VectorSource::Client(e) => e
+                .embed(&texts)
+                .await?
+                .into_iter()
+                .map(|v| json!(v))
+                .collect(),
+        };
+        let points: Vec<Value> = items
+            .into_iter()
+            .zip(vectors)
+            .map(|((id, _, payload), vector)| json!({"id": id, "vector": vector, "payload": payload}))
+            .collect();
+        self.ok(
+            reqwest::Method::PUT,
+            &format!("/collections/{}/points?wait=true", kind.collection()),
+            Some(json!({ "points": points })),
+        )
+        .await?;
+        Ok(())
+    }
+
     /// The vector (or inference document) for `text`, in the shape Qdrant expects.
     async fn vector_for(&self, text: &str) -> Result<Value> {
         match &self.cfg.vectors {
@@ -146,7 +182,11 @@ impl Store for QdrantStore {
             self.ok(
                 reqwest::Method::PUT,
                 &format!("/collections/{name}"),
-                Some(json!({ "vectors": { "size": self.cfg.vectors.dim(), "distance": "Cosine" }, "on_disk_payload": true })),
+                Some(json!({
+                    "vectors": { "size": self.cfg.vectors.dim(), "distance": "Cosine", "on_disk": self.cfg.on_disk },
+                    "hnsw_config": { "on_disk": self.cfg.on_disk },
+                    "on_disk_payload": true
+                })),
             )
             .await?;
             // Tenant index first: with is_tenant Qdrant co-locates a tenant's points for fast filtered search.
@@ -272,6 +312,7 @@ mod tests {
             api_key: Some("k3y".into()),
             vectors: VectorSource::cloud_default(),
             timeout: Duration::from_secs(5),
+            on_disk: false,
         })
         .unwrap()
     }

@@ -30,6 +30,7 @@ pub const PAGES: &[(&str, &str)] = &[
     ("iframe", include_str!("../../../fixtures/iframe.html")),
     ("types", include_str!("../../../fixtures/types.html")),
     ("masked", include_str!("../../../fixtures/masked.html")),
+    ("longform", include_str!("../../../fixtures/longform.html")),
 ];
 
 pub struct FixtureServer {
@@ -66,77 +67,84 @@ impl FixtureServer {
                 let Ok(Some(mut req)) = server.recv_timeout(Duration::from_millis(100)) else {
                     continue;
                 };
-                let full = format!("http://localhost{}", req.url());
-                let url = url::Url::parse(&full).unwrap();
-                let path = url.path().to_string();
-                let html = Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
-                let jsonh = Header::from_bytes("Content-Type", "application/json").unwrap();
-                match (req.method().clone(), path.as_str()) {
-                    (Method::Get, "/api/states") => {
-                        thread::sleep(api_delay);
-                        let c = url
-                            .query_pairs()
-                            .find(|(k, _)| k == "country")
-                            .map(|(_, v)| v.to_string())
-                            .unwrap_or_default();
-                        let _ = req.respond(
-                            Response::from_string(states(&c).to_string()).with_header(jsonh),
-                        );
-                    }
-                    (Method::Post, "/submit") => {
-                        let ctype = req
-                            .headers()
-                            .iter()
-                            .find(|h| h.field.equiv("Content-Type"))
-                            .map(|h| h.value.to_string())
-                            .unwrap_or_default();
-                        let mut body = String::new();
-                        let _ = req.as_reader().read_to_string(&mut body);
-                        let is_json = ctype.contains("json");
-                        let parsed: Value = if is_json {
-                            serde_json::from_str(&body).unwrap_or(Value::Null)
-                        } else {
-                            let mut m = serde_json::Map::new();
-                            for (k, v) in url::form_urlencoded::parse(body.as_bytes()) {
-                                m.insert(k.to_string(), json!(v.to_string()));
+                let subs = subs.clone();
+                // One thread per request so slow endpoints don't serialise parallel sessions.
+                thread::spawn(move || {
+                    let full = format!("http://localhost{}", req.url());
+                    let url = url::Url::parse(&full).unwrap();
+                    let path = url.path().to_string();
+                    let html =
+                        Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
+                    let jsonh = Header::from_bytes("Content-Type", "application/json").unwrap();
+                    match (req.method().clone(), path.as_str()) {
+                        (Method::Get, "/api/states") => {
+                            thread::sleep(api_delay);
+                            let c = url
+                                .query_pairs()
+                                .find(|(k, _)| k == "country")
+                                .map(|(_, v)| v.to_string())
+                                .unwrap_or_default();
+                            let _ = req.respond(
+                                Response::from_string(states(&c).to_string()).with_header(jsonh),
+                            );
+                        }
+                        (Method::Post, "/submit") => {
+                            let ctype = req
+                                .headers()
+                                .iter()
+                                .find(|h| h.field.equiv("Content-Type"))
+                                .map(|h| h.value.to_string())
+                                .unwrap_or_default();
+                            let mut body = String::new();
+                            let _ = req.as_reader().read_to_string(&mut body);
+                            let is_json = ctype.contains("json");
+                            let parsed: Value = if is_json {
+                                serde_json::from_str(&body).unwrap_or(Value::Null)
+                            } else {
+                                let mut m = serde_json::Map::new();
+                                for (k, v) in url::form_urlencoded::parse(body.as_bytes()) {
+                                    m.insert(k.to_string(), json!(v.to_string()));
+                                }
+                                Value::Object(m)
+                            };
+                            subs.lock().unwrap().push(parsed);
+                            if is_json {
+                                let _ = req.respond(
+                                    Response::from_string("{\"ok\":true}").with_header(jsonh),
+                                );
+                            } else {
+                                let page = "<!doctype html><title>Thanks</title><h1>Thank you</h1><p>Your message was received.</p>";
+                                let _ = req.respond(Response::from_string(page).with_header(html));
                             }
-                            Value::Object(m)
-                        };
-                        subs.lock().unwrap().push(parsed);
-                        if is_json {
-                            let _ = req
-                                .respond(Response::from_string("{\"ok\":true}").with_header(jsonh));
-                        } else {
-                            let page = "<!doctype html><title>Thanks</title><h1>Thank you</h1><p>Your message was received.</p>";
+                        }
+                        (Method::Get, "/") => {
+                            let list: String = PAGES
+                                .iter()
+                                .map(|(n, _)| format!("<li><a href=\"/{n}.html\">{n}</a></li>"))
+                                .collect();
+                            let page = format!("<!doctype html><title>Fixtures</title><h1>Fixtures</h1><ul>{list}</ul>");
                             let _ = req.respond(Response::from_string(page).with_header(html));
                         }
-                    }
-                    (Method::Get, "/") => {
-                        let list: String = PAGES
-                            .iter()
-                            .map(|(n, _)| format!("<li><a href=\"/{n}.html\">{n}</a></li>"))
-                            .collect();
-                        let page = format!("<!doctype html><title>Fixtures</title><h1>Fixtures</h1><ul>{list}</ul>");
-                        let _ = req.respond(Response::from_string(page).with_header(html));
-                    }
-                    (Method::Get, p) if p.ends_with(".html") => {
-                        let name = p.trim_start_matches('/').trim_end_matches(".html");
-                        match PAGES.iter().find(|(n, _)| *n == name) {
-                            Some((_, body)) => {
-                                let _ = req.respond(Response::from_string(*body).with_header(html));
-                            }
-                            None => {
-                                let _ = req.respond(
-                                    Response::from_string("not found").with_status_code(404),
-                                );
+                        (Method::Get, p) if p.ends_with(".html") => {
+                            let name = p.trim_start_matches('/').trim_end_matches(".html");
+                            match PAGES.iter().find(|(n, _)| *n == name) {
+                                Some((_, body)) => {
+                                    let _ =
+                                        req.respond(Response::from_string(*body).with_header(html));
+                                }
+                                None => {
+                                    let _ = req.respond(
+                                        Response::from_string("not found").with_status_code(404),
+                                    );
+                                }
                             }
                         }
+                        _ => {
+                            let _ = req
+                                .respond(Response::from_string("not found").with_status_code(404));
+                        }
                     }
-                    _ => {
-                        let _ =
-                            req.respond(Response::from_string("not found").with_status_code(404));
-                    }
-                }
+                });
             }
         });
         Self {
