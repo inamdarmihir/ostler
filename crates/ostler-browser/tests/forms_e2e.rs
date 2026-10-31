@@ -867,3 +867,39 @@ async fn submit_gate_blocks_every_path_except_a_confirmed_submit() {
     assert_eq!(srv.last().unwrap()["name"], "Ada Lovelace");
     b.close().await;
 }
+
+#[tokio::test]
+async fn visual_only_error_cues_are_reported() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/visual.html")).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::ValidationFailed, "{out:#?}");
+    let msgs = format!("{out:?}");
+    // Red text with no ARIA/class, red border with no text, and a floating toast.
+    assert!(msgs.contains("does not look like an email"), "{msgs}");
+    assert!(msgs.contains("red border"), "{msgs}");
+    assert!(msgs.contains("Could not send your message"), "{msgs}");
+    assert!(srv.last().is_none());
+    // Fixing the fields clears every cue and submits.
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"email": "ada@example.com", "phone": "+1 415 555 0100"})),
+            None,
+        )
+        .await
+        .unwrap();
+    // The page only re-validates on submit, so leftover cues are flagged as possibly stale.
+    assert!(
+        rep.field_errors
+            .iter()
+            .all(|e| e.message.contains("shown before this fill")),
+        "{rep:#?}"
+    );
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
+    assert_eq!(srv.last().unwrap()["phone"], "+1 415 555 0100");
+    b.close().await;
+}

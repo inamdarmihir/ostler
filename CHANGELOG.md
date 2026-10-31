@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Visual error cues.** Fields marked invalid only by colour (red border/outline/glow, red message text with no ARIA or class) and floating toasts/banners are now reported as field and page errors. Leftover errors on fields just filled are tagged as possibly stale.
 Fixes from the [design review](docs/REVIEW-2026-10.md) (status table there), plus three features.
 
 - **Renamed Waymarker to Ostler** (crates `ostler-*`, binary `ostler`, env vars `OSTLER_*`, config `~/.config/ostler/config.toml`). Move an existing `~/.config/waymarker` directory to `~/.config/ostler` and rename `WAYMARKER_*` variables.

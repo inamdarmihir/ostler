@@ -365,6 +365,72 @@
     }
     return false;
   }
+  // Visual-only error cues: pages that signal failure with colour alone (no ARIA, no error class).
+  function parseRgb(c) {
+    const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/.exec(c || '');
+    return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+  }
+  function isRed(c) {
+    const k = parseRgb(c);
+    return !!k && k.a > 0.3 && k.r >= 150 && k.r - k.g >= 70 && k.r - k.b >= 60 && Math.abs(k.g - k.b) < 90;
+  }
+  function redBorder(el) {
+    const cs = styleOf(el);
+    for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+      if (parseFloat(cs['border' + side + 'Width']) > 0 && cs['border' + side + 'Style'] !== 'none' && isRed(cs['border' + side + 'Color'])) return 'red border';
+    }
+    if (parseFloat(cs.outlineWidth) > 0 && cs.outlineStyle !== 'none' && isRed(cs.outlineColor)) return 'red outline';
+    if (cs.boxShadow && cs.boxShadow !== 'none' && (cs.boxShadow.match(/rgba?\([^)]*\)/g) || []).some(isRed)) return 'red glow';
+    return null;
+  }
+  function redTextNear(el) {
+    // Only text that follows this control with no other control in between, so a message is never
+    // attributed to a neighbouring field.
+    const own = new Set([el, ...(el.labels || [])]);
+    const scope = el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement : el.parentElement;
+    if (!scope) return null;
+    const nodes = [...scope.querySelectorAll('*')];
+    const idx = nodes.indexOf(el);
+    for (let i = idx + 1; i < nodes.length; i++) {
+      const cand = nodes[i];
+      if (cand.matches('input,select,textarea,button') || cand.querySelector('input,select,textarea,button')) {
+        if (cand.contains(el)) continue;
+        break;
+      }
+      if (own.has(cand) || cand.tagName === 'LABEL' || !rendered(cand)) continue;
+      const t = ownText(cand);
+      if (!t || t.length > 200 || /^[*\s]*$/.test(t)) continue;
+      if (isRed(styleOf(cand).color)) return t;
+    }
+    return null;
+  }
+  function visualCue(el) {
+    if (!rendered(el)) return null;
+    const border = redBorder(el);
+    const text = redTextNear(el);
+    if (!border && !text) return null;
+    return { cue: border || 'red text', text };
+  }
+  const ALERT_WORDS = /\b(error|errors|invalid|failed|failure|required|could not|couldn't|cannot|can't|unable|incorrect|denied|not valid|try again|please (?:enter|fix|correct|select|provide|check))\b/i;
+  function toasts() {
+    const out = [];
+    for (const n of document.querySelectorAll('body *')) {
+      if (n.closest('form') && !/toast|snack|flash|banner|notif/i.test(n.className || '')) continue;
+      const cs = styleOf(n);
+      const floating = cs.position === 'fixed' || cs.position === 'sticky';
+      const live = ['alert', 'status'].includes(n.getAttribute('role')) || n.getAttribute('aria-live');
+      const named = /toast|snack|flash|banner|notif|alert/i.test(String(n.className || '') + ' ' + (n.id || ''));
+      if (!(floating || live || named) || !rendered(n)) continue;
+      if (n.querySelector('input,select,textarea') || n.children.length > 6) continue;
+      const t = ownText(n);
+      if (!t || t.length > 300) continue;
+      const bg = parseRgb(cs.backgroundColor);
+      const redBg = isRed(cs.backgroundColor) || (bg && bg.a > 0.3 && bg.r >= 200 && bg.g <= 120 && bg.b <= 120);
+      if (isRed(cs.color) || redBg || ALERT_WORDS.test(t)) { if (!out.includes(t)) out.push(t); }
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
   function errorText(el) {
     const grab = (id) => { const t = byId(el, id); return t && rendered(t) ? ownText(t) : ''; };
     const em = el.getAttribute('aria-errormessage');
@@ -383,7 +449,10 @@
         if (t && t.length < 200) return t;
       }
     }
-    return invalid ? (el.validationMessage || 'invalid') : null;
+    if (invalid) return el.validationMessage || 'invalid';
+    const v = visualCue(el);
+    if (v) return v.text || ('marked invalid visually (' + v.cue + ')');
+    return null;
   }
   function optionsOf(el) {
     return [...el.options].map((o) => ({ value: o.value, label: clean(o.text), selected: o.selected, disabled: o.disabled || (o.parentElement && o.parentElement.disabled) || false }));
@@ -559,7 +628,7 @@
         fields, hidden_fields: hiddenCount,
         submit: submitControls(scope, submitRoot),
         step: stepInfo(container && container.querySelectorAll ? container : document.body),
-        errors: pageErrors(container && container.querySelectorAll ? container : document.body),
+        errors: pageErrors(container && container.querySelectorAll ? container : document.body).concat(toasts()).filter((t, i, a) => a.indexOf(t) === i).slice(0, 4),
       });
     }
     return { url: location.href, title: document.title, forms: result };

@@ -238,6 +238,8 @@ impl Page {
         let mut host = String::new();
         let mut fingerprint = String::new();
         let max_rounds = req.values.len() + 60;
+        // Errors the page was already showing before we touched anything, by ref.
+        let mut prior_errors: BTreeMap<String, String> = BTreeMap::new();
 
         for _ in 0..max_rounds {
             let ir = self.forms().await?;
@@ -251,6 +253,13 @@ impl Page {
                 break;
             };
             form_ref = Some(form.r#ref.clone());
+            if results.is_empty() {
+                for f in &form.fields {
+                    if let Some(e) = &f.error {
+                        prior_errors.insert(f.r#ref.clone(), e.clone());
+                    }
+                }
+            }
             fingerprint = form.fingerprint(&host);
             // Resolve against every visible field, including ones already filled. If a key was
             // ambiguous when its rivals were still empty, it must stay ambiguous once they are filled;
@@ -370,10 +379,23 @@ impl Page {
                     });
                 }
                 if let Some(e) = &f.error {
+                    // Same message as before our fill: pages that only re-validate on submit keep
+                    // showing it, so say so rather than letting it read as a fresh failure.
+                    let refilled = results.iter().any(|r| {
+                        r.r#ref == f.r#ref
+                            && matches!(r.status, FillStatus::Verified | FillStatus::Reformatted)
+                    });
+                    let message = if refilled && prior_errors.get(&f.r#ref) == Some(e) {
+                        format!(
+                            "{e} [shown before this fill; the page may only re-check on submit]"
+                        )
+                    } else {
+                        e.clone()
+                    };
                     errors.push(FieldError {
                         r#ref: f.r#ref.clone(),
                         label: f.display(),
-                        message: e.clone(),
+                        message,
                     });
                 }
             }

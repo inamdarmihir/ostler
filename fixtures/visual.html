@@ -1,0 +1,23 @@
+<!doctype html><meta charset=utf-8><title>Contact (visual errors)</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box;border:1px solid #888}button{margin-top:1rem;padding:.5rem 1rem}
+.bad{border:2px solid #d32f2f}.msg{color:#d32f2f;font-size:13px}#toast{position:fixed;right:1rem;bottom:1rem;background:#c62828;color:#fff;padding:.7rem 1rem;border-radius:6px}</style>
+<h1>Contact us</h1>
+<form id="f" novalidate>
+  <label for="em">Email</label><input id="em" name="email" type="email">
+  <span id="em-m" class="msg" style="display:none"></span>
+  <label for="ph">Phone</label><input id="ph" name="phone">
+  <label for="co">Company</label><input id="co" name="company">
+  <button type="submit">Send</button>
+</form>
+<div id="toast" style="display:none"></div>
+<script>
+const f=document.getElementById('f'),toast=document.getElementById('toast');
+f.addEventListener('submit',async e=>{e.preventDefault();
+ const em=document.getElementById('em'),ph=document.getElementById('ph'),m=document.getElementById('em-m');
+ let bad=false;
+ if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em.value)){em.classList.add('bad');m.textContent='That does not look like an email';m.style.display='';bad=true}else{em.classList.remove('bad');m.style.display='none'}
+ if(!/^\+?[0-9 ()-]{7,}$/.test(ph.value)){ph.classList.add('bad');bad=true}else ph.classList.remove('bad');
+ if(bad){toast.textContent='Could not send your message';toast.style.display='';return}
+ toast.style.display='none';
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(f)))});
+ document.body.innerHTML='<h1>Thanks</h1><p>We will reply soon.</p>'});
+</script>
