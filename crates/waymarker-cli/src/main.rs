@@ -27,6 +27,17 @@ enum Cmd {
     Serve(ServeArgs),
     /// Check Chrome, Qdrant and print ready-to-paste client configuration.
     Doctor(MemoryArgs),
+    /// Print (or with --apply, run) the exact setup for an MCP client, using this binary's absolute path.
+    Setup {
+        #[arg(value_enum)]
+        client: Client,
+        /// Run the client's own CLI to register Waymarker (only supported for `claude`).
+        #[arg(long)]
+        apply: bool,
+        /// Extra `waymarker serve` flags, after `--` (e.g. `-- --lean --tools forms`).
+        #[arg(last = true)]
+        serve_args: Vec<String>,
+    },
     /// Open a URL and print the typed form model (for debugging).
     Inspect {
         url: String,
@@ -47,6 +58,65 @@ enum Cmd {
         #[arg(long, default_value_t = 8787)]
         port: u16,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Client {
+    Claude,
+    Codex,
+    Cursor,
+    Vscode,
+    /// Generic `mcpServers` JSON.
+    Json,
+}
+
+fn setup(client: Client, apply: bool, serve_args: &[String]) -> Result<()> {
+    // The absolute path avoids "command not found" when the client's PATH differs from your shell's.
+    let exe = std::env::current_exe()?.display().to_string();
+    let mut args = vec!["serve".to_string()];
+    args.extend(serve_args.iter().cloned());
+    let json_args = serde_json::to_string(&args)?;
+    match client {
+        Client::Claude => {
+            let cmd = format!("claude mcp add waymarker -- {exe} {}", args.join(" "));
+            if apply {
+                let st = std::process::Command::new("claude")
+                    .args(["mcp", "add", "waymarker", "--", &exe])
+                    .args(&args)
+                    .status()
+                    .map_err(|e| anyhow::anyhow!("could not run `claude` ({e}); run this yourself:\n  {cmd}"))?;
+                if !st.success() {
+                    anyhow::bail!("`claude mcp add` failed; run it yourself to see why:\n  {cmd}");
+                }
+                println!("Registered. Restart Claude Code, then ask it to use waymarker.");
+            } else {
+                println!("{cmd}\n\n(add --apply to run it for you)");
+            }
+        }
+        Client::Codex => println!(
+            "Add to ~/.codex/config.toml:\n\n[mcp_servers.waymarker]\ncommand = {exe:?}\nargs = {json_args}"
+        ),
+        Client::Cursor => println!(
+            "Add to ~/.cursor/mcp.json (or .cursor/mcp.json in a project):\n\n{}",
+            mcp_json(&exe, &args)
+        ),
+        Client::Vscode => println!(
+            "Add to .vscode/mcp.json:\n\n{}",
+            serde_json::to_string_pretty(&serde_json::json!({"servers": {"waymarker": {"type": "stdio", "command": exe, "args": args}}}))?
+        ),
+        Client::Json => println!("{}", mcp_json(&exe, &args)),
+    }
+    if apply && !matches!(client, Client::Claude) {
+        eprintln!("note: --apply only supports `claude`; other clients' config files are left untouched. Paste the snippet above.");
+    }
+    Ok(())
+}
+
+fn mcp_json(exe: &str, args: &[String]) -> String {
+    serde_json::to_string_pretty(
+        &serde_json::json!({"mcpServers": {"waymarker": {"command": exe, "args": args}}}),
+    )
+    .unwrap()
 }
 
 #[derive(Subcommand)]
@@ -219,6 +289,11 @@ async fn main() -> Result<()> {
             waymarker_mcp::serve_stdio(app).await?;
         }
         Cmd::Doctor(m) => doctor(m).await?,
+        Cmd::Setup {
+            client,
+            apply,
+            serve_args,
+        } => setup(client, apply, &serve_args)?,
         Cmd::Inspect {
             url,
             headed,
@@ -327,9 +402,7 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
             }
         },
     }
-    println!(
-        "\nClaude Code:  claude mcp add waymarker -- waymarker serve\nCodex (~/.codex/config.toml):\n  [mcp_servers.waymarker]\n  command = \"waymarker\"\n  args = [\"serve\"]\nCursor / others (JSON):\n  {{\"mcpServers\":{{\"waymarker\":{{\"command\":\"waymarker\",\"args\":[\"serve\"]}}}}}}"
-    );
+    println!("\nNext: `waymarker setup claude|codex|cursor|vscode|json` prints the exact config for your client.");
     if !ok {
         std::process::exit(1);
     }

@@ -13,27 +13,22 @@ waymarker doctor
 cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
 ```
 
-## Claude Code
+## Easiest: `waymarker setup`
 
 ```sh
-claude mcp add waymarker -- waymarker serve
-# smaller context, forms only:
-claude mcp add waymarker -- waymarker serve --tools forms
+waymarker setup claude --apply     # runs `claude mcp add` for you
+waymarker setup codex              # prints the ~/.codex/config.toml block
+waymarker setup cursor             # prints ~/.cursor/mcp.json
+waymarker setup vscode             # prints .vscode/mcp.json
+waymarker setup json               # generic mcpServers JSON
+waymarker setup claude --apply -- --lean --tools forms   # extra serve flags after --
 ```
 
-## Codex (`~/.codex/config.toml`)
+It uses this binary's absolute path, so it works even when the client's `PATH` differs from your shell's. Only `claude` is applied automatically; other config files are never modified. Manual equivalents:
 
-```toml
-[mcp_servers.waymarker]
-command = "waymarker"
-args = ["serve"]
-```
-
-## Cursor / VS Code / others (JSON)
-
-```json
-{ "mcpServers": { "waymarker": { "command": "waymarker", "args": ["serve"] } } }
-```
+- Claude Code: `claude mcp add waymarker -- waymarker serve`
+- Codex: `[mcp_servers.waymarker]` with `command = "waymarker"`, `args = ["serve"]`
+- Cursor / others: `{ "mcpServers": { "waymarker": { "command": "waymarker", "args": ["serve"] } } }`
 
 > Client config formats change between releases. If one of these does not load, check that client's current MCP documentation; the server itself only needs `waymarker serve` on stdio.
 
