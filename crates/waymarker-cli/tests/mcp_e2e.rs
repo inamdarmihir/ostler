@@ -140,7 +140,7 @@ async fn agent_session_with_memory() {
 
     let (_, insp) = c.tool("form_inspect", json!({})).await;
     assert!(
-        insp.contains("Full name") && insp.contains("required") && insp.contains("fingerprint="),
+        insp.contains("Full name") && insp.contains("required") && !insp.contains("fingerprint="),
         "{insp}"
     );
     assert!(

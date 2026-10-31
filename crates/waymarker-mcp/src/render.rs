@@ -92,12 +92,21 @@ fn field_line(f: &Field) -> String {
     s
 }
 
-pub fn forms(ir: &FormIr, annotate: impl Fn(&waymarker_forms::Form) -> String) -> String {
+pub fn forms(
+    ir: &FormIr,
+    verbose: bool,
+    annotate: impl Fn(&waymarker_forms::Form) -> String,
+) -> String {
     let host = url::Url::parse(&ir.url)
         .ok()
         .and_then(|u| u.host_str().map(String::from))
         .unwrap_or_default();
-    let mut out = format!("Page: {} — {}\n", ir.title, ir.url);
+    // The agent already knows where it is from navigate; repeating title and URL on every call is noise.
+    let mut out = if verbose {
+        format!("Page: {} — {}\n", ir.title, ir.url)
+    } else {
+        String::new()
+    };
     if ir.forms.is_empty() {
         out.push_str("No form fields found. Use snapshot to see the page.\n");
     }
@@ -107,11 +116,17 @@ pub fn forms(ir: &FormIr, annotate: impl Fn(&waymarker_forms::Form) -> String) -
             .clone()
             .or_else(|| form.headings.first().cloned())
             .unwrap_or_default();
-        let _ = write!(out, "form [{}] {}", form.r#ref, q(&title));
+        let _ = write!(out, "form [{}]", form.r#ref);
+        if !title.is_empty() {
+            let _ = write!(out, " {}", q(&title));
+        }
         if let Some(st) = &form.step {
             let _ = write!(out, " step {}/{}", st.index, st.total);
         }
-        let _ = writeln!(out, " fingerprint={}", form.fingerprint(&host));
+        if verbose {
+            let _ = write!(out, " fingerprint={}", form.fingerprint(&host));
+        }
+        out.push('\n');
         let note = annotate(form);
         if !note.is_empty() {
             out.push_str(&note);
@@ -130,20 +145,43 @@ pub fn forms(ir: &FormIr, annotate: impl Fn(&waymarker_forms::Form) -> String) -
     out
 }
 
-pub fn fill(r: &FillReport) -> String {
+pub fn fill(r: &FillReport, verbose: bool) -> String {
     let ok = r
         .fields
         .iter()
         .filter(|f| f.status != FillStatus::Failed)
         .count();
-    let mut out = format!(
-        "Filled {}/{} fields in {}ms (form {}).\n",
-        ok,
-        r.fields.len(),
-        r.elapsed_ms,
-        r.form
-    );
+    let mut out = if verbose {
+        format!(
+            "Filled {}/{} fields in {}ms (form {}).\n",
+            ok,
+            r.fields.len(),
+            r.elapsed_ms,
+            r.form
+        )
+    } else {
+        // Verified fields are named once here instead of getting a line each; only exceptions get detail.
+        let good: Vec<String> = r
+            .fields
+            .iter()
+            .filter(|f| f.status == FillStatus::Verified && f.source == "provided")
+            .map(|f| f.label.clone())
+            .collect();
+        let tail = if good.is_empty() {
+            String::new()
+        } else {
+            format!(" verified: {}", good.join(", "))
+        };
+        format!("Filled {}/{}.{}\n", ok, r.fields.len(), tail)
+    };
     for f in &r.fields {
+        if !verbose
+            && f.status == FillStatus::Verified
+            && f.source == "provided"
+            && f.error.is_none()
+        {
+            continue;
+        }
         let tag = match f.status {
             FillStatus::Verified => "OK",
             FillStatus::Reformatted => "OK (reformatted by page)",
@@ -227,25 +265,33 @@ pub fn fill(r: &FillReport) -> String {
             .find(|c| c.role == "submit")
             .or(r.submit.first())
         {
-            let _ = writeln!(
-                out,
-                "Ready: form_submit (control {} {}).",
-                c.r#ref,
-                q(&c.label)
-            );
+            if verbose {
+                let _ = writeln!(
+                    out,
+                    "Ready: form_submit (control {} {}).",
+                    c.r#ref,
+                    q(&c.label)
+                );
+            } else {
+                let _ = writeln!(out, "Ready: form_submit.");
+            }
         }
     }
     out
 }
 
-pub fn submit(o: &SubmitOutcome) -> String {
+pub fn submit(o: &SubmitOutcome, verbose: bool) -> String {
     let head = match o.status {
         SubmitStatus::ValidationFailed => "NOT SUBMITTED: the page reported validation problems.",
         SubmitStatus::Advanced => "Advanced: a new form or step is showing.",
         SubmitStatus::Submitted => "Submitted: the form is gone and the page changed.",
         SubmitStatus::Unchanged => "Nothing changed: the form is still showing without errors. It may not have been submitted; check with snapshot.",
     };
-    let mut out = format!("{head}\nNow at: {} — {}\n", o.action.title, o.action.url);
+    let mut out = format!("{head}\n");
+    // Only say where we are when it changed (or when asked): a rejected submit stays on the same page.
+    if verbose || o.action.navigated {
+        let _ = writeln!(out, "Now at: {} — {}", o.action.title, o.action.url);
+    }
     for e in &o.field_errors {
         let _ = writeln!(out, "  {} {}: {}", e.r#ref, q(&e.label), q(&e.message));
     }
@@ -254,7 +300,7 @@ pub fn submit(o: &SubmitOutcome) -> String {
     }
     if !o.excerpt.is_empty() {
         let _ = writeln!(out, "Page says:");
-        for l in &o.excerpt {
+        for l in o.excerpt.iter().take(if verbose { usize::MAX } else { 6 }) {
             let _ = writeln!(out, "  {l}");
         }
     }

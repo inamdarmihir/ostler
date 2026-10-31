@@ -121,6 +121,7 @@ mod tests {
             memory: None,
             learn: false,
             require_confirm_submit: false,
+            verbose: false,
         })
     }
 
@@ -188,6 +189,7 @@ mod tests {
             memory: None,
             learn: false,
             require_confirm_submit: false,
+            verbose: false,
         });
         let r = handle(&a, &json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"form_fill","arguments":{"values":{"a":1}}}})).await.unwrap();
         assert_eq!(r["result"]["isError"], true);
@@ -206,6 +208,7 @@ mod tests {
             memory: None,
             learn: false,
             require_confirm_submit: true,
+            verbose: false,
         });
         let r = handle(&a, &json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"form_submit","arguments":{}}})).await.unwrap();
         assert_eq!(r["result"]["isError"], true);

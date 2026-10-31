@@ -306,7 +306,7 @@
       }
       if (role === 'clickable') { ctl(el, role, depth); return; }
       let d = depth;
-      if (role === 'form') { const r = refOf(el); const n = nameOf(el); emit(depth, `form${n ? ' ' + q(n) : ''} [${r}]:`); d++; }
+      if (role === 'form') { const r = refOf(el); const n = clean(el.getAttribute('aria-label') || '') || (el.getAttribute('aria-labelledby') && textOfIds(el, el.getAttribute('aria-labelledby'))) || el.getAttribute('name') || ''; emit(depth, `form${n ? ' ' + q(n) : ''} [${r}]:`); d++; }
       else if (LANDMARK[el.tagName] || (role && ['main', 'navigation', 'dialog', 'alert', 'alertdialog', 'status', 'banner', 'region', 'listbox', 'menu', 'tablist'].includes(role))) {
         const n = clean(el.getAttribute('aria-label') || '');
         emit(depth, `${role || LANDMARK[el.tagName]}${n ? ' ' + q(n) : ''}:`); d++;

@@ -205,6 +205,7 @@ pub(crate) fn new_app_with(lean: bool) -> App {
         memory: None,
         learn: false,
         require_confirm_submit: false,
+        verbose: false,
     })
 }
 

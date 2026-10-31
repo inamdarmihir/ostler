@@ -517,9 +517,14 @@ async fn actions_settle_quickly() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    let t = std::time::Instant::now();
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
-    let nav = t.elapsed();
+    // The settle bug made *every* action wait ~3 s, so the best of three still fails with it present,
+    // while one slow run on a loaded CI machine does not.
+    let mut nav = Duration::MAX;
+    for _ in 0..3 {
+        let t = std::time::Instant::now();
+        b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+        nav = nav.min(t.elapsed());
+    }
     let t = std::time::Instant::now();
     b.page
         .fill_form(req(json!({"name": "A", "email": "a@b.co"})), None)

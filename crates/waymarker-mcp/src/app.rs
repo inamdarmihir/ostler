@@ -34,6 +34,8 @@ pub struct AppConfig {
     pub learn: bool,
     /// Make `form_submit` require `confirm: true`.
     pub require_confirm_submit: bool,
+    /// Include timings, fingerprints and ids that help a human debug but cost the agent context.
+    pub verbose: bool,
 }
 
 /// One tool result: text and/or an image.
@@ -234,6 +236,14 @@ fn inert(s: &str) -> String {
 /// page-derived detail beneath it (labels, option text, validation messages).
 fn wrap_detail(s: &str) -> String {
     match s.split_once('\n') {
+        // Nothing but our own hints below the verdict: no page text, so nothing to quarantine.
+        Some((_, rest))
+            if rest.lines().all(|l| {
+                l.trim().is_empty() || l.starts_with("Ready:") || l.starts_with("Step ")
+            }) =>
+        {
+            s.trim_end().to_string()
+        }
         Some((head, rest)) if !rest.trim().is_empty() => format!("{head}\n{}", wrap(rest)),
         _ => s.to_string(),
     }
@@ -603,8 +613,9 @@ impl App {
                             notes.insert(f.r#ref.clone(), n);
                         }
                     }
-                    let text =
-                        render::forms(&ir, |f| notes.get(&f.r#ref).cloned().unwrap_or_default());
+                    let text = render::forms(&ir, self.cfg.verbose, |f| {
+                        notes.get(&f.r#ref).cloned().unwrap_or_default()
+                    });
                     Ok(ToolOutput::text(wrap(&text)))
                 })
             }
@@ -629,7 +640,10 @@ impl App {
                         )
                         .await
                         .map_err(|e| e.to_string())?;
-                    Ok(ToolOutput::text(wrap_detail(&render::fill(&rep))))
+                    Ok(ToolOutput::text(wrap_detail(&render::fill(
+                        &rep,
+                        self.cfg.verbose,
+                    ))))
                 })
             }
             "form_submit" => self.form_submit(a).await,
@@ -744,7 +758,10 @@ impl App {
                 .map_err(|e| e.to_string())
         })?;
         self.remember_fill(&rep, &values);
-        Ok(ToolOutput::text(wrap_detail(&render::fill(&rep))))
+        Ok(ToolOutput::text(wrap_detail(&render::fill(
+            &rep,
+            self.cfg.verbose,
+        ))))
     }
 
     fn remember_fill(&self, rep: &FillReport, provided: &BTreeMap<String, Value>) {
@@ -819,7 +836,10 @@ impl App {
                 .map_err(|e| e.to_string())
         })?;
         self.learn_from_submit(&out);
-        Ok(ToolOutput::text(wrap_detail(&render::submit(&out))))
+        Ok(ToolOutput::text(wrap_detail(&render::submit(
+            &out,
+            self.cfg.verbose,
+        ))))
     }
 
     /// Turn what just happened into memory, off the critical path.

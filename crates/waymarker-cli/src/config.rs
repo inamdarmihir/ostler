@@ -18,6 +18,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("qdrant_on_disk", "WAYMARKER_QDRANT_ON_DISK"),
     ("learn", "WAYMARKER_LEARN"),
     ("lean", "WAYMARKER_LEAN"),
+    ("verbose", "WAYMARKER_VERBOSE"),
     ("tools", "WAYMARKER_TOOLS"),
 ];
 

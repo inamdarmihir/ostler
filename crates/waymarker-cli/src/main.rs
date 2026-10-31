@@ -445,6 +445,9 @@ struct ServeArgs {
     /// Require confirm=true on form_submit so a human can approve irreversible actions.
     #[arg(long)]
     require_confirm_submit: bool,
+    /// Include timings, fingerprints and ids in tool output. Off by default: they cost the agent context for no benefit.
+    #[arg(long, env = "WAYMARKER_VERBOSE")]
+    verbose: bool,
     /// After an accepted submit, save the non-sensitive values the agent typed as profile facts.
     #[arg(long, env = "WAYMARKER_LEARN")]
     learn: bool,
@@ -517,6 +520,7 @@ async fn main() -> Result<()> {
                 memory,
                 learn: a.learn,
                 require_confirm_submit: a.require_confirm_submit,
+                verbose: a.verbose,
             });
             if app.has_memory() {
                 // Fail fast and loudly: a misconfigured memory should not silently degrade mid-task.
