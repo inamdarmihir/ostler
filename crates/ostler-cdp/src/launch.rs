@@ -57,13 +57,18 @@ pub fn find_chrome(explicit: Option<&Path>) -> Result<PathBuf> {
         return if p.exists() {
             Ok(p.to_path_buf())
         } else {
-            Err(CdpError::ChromeNotFound)
+            Err(CdpError::ChromePathMissing(p.display().to_string()))
         };
     }
+    // An explicit setting that is wrong is an error, not a cue to quietly use some other browser.
     if let Ok(p) = std::env::var("OSTLER_CHROME") {
-        let p = PathBuf::from(p);
-        if p.exists() {
-            return Ok(p);
+        if !p.trim().is_empty() {
+            let p = PathBuf::from(p);
+            return if p.exists() {
+                Ok(p)
+            } else {
+                Err(CdpError::ChromePathMissing(p.display().to_string()))
+            };
         }
     }
     let fixed = [

@@ -10,7 +10,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::store::{Filter, Hit, Kind, Store};
+use crate::store::{Filter, Hit, Kind, Rank, Store};
 use crate::{Embedder, MemoryError, Result};
 
 #[derive(Clone)]
@@ -152,6 +152,38 @@ impl QdrantStore {
     }
 }
 
+impl QdrantStore {
+    /// Payload indexes. Creating an index that already exists is a no-op, so this runs on every start.
+    async fn ensure_indexes(&self, name: &str) {
+        // Tenant index first: with is_tenant Qdrant co-locates a tenant's points for fast filtered search.
+        let mut specs: Vec<(&str, Value)> =
+            vec![("tenant", json!({ "type": "keyword", "is_tenant": true }))];
+        for field in [
+            "key_norm",
+            "fingerprint",
+            "autocomplete",
+            "id_hint",
+            "host",
+            "labels_norm",
+        ] {
+            specs.push((field, json!("keyword")));
+        }
+        // Integer indexes serve both range filters (pruning) and the score-boosting formula.
+        for field in ["verified_ts", "wins", "losses"] {
+            specs.push((field, json!("integer")));
+        }
+        for (field, schema) in specs {
+            let _ = self
+                .ok(
+                    reqwest::Method::PUT,
+                    &format!("/collections/{name}/index?wait=true"),
+                    Some(json!({ "field_name": field, "field_schema": schema })),
+                )
+                .await;
+        }
+    }
+}
+
 #[async_trait]
 impl Store for QdrantStore {
     async fn ensure(&self) -> Result<()> {
@@ -171,6 +203,8 @@ impl Store for QdrantStore {
                         )));
                     }
                 }
+                // Idempotent: collections made by older versions gain the newer indexes.
+                self.ensure_indexes(name).await;
                 continue;
             }
             if status != 404 {
@@ -189,23 +223,7 @@ impl Store for QdrantStore {
                 })),
             )
             .await?;
-            // Tenant index first: with is_tenant Qdrant co-locates a tenant's points for fast filtered search.
-            let _ = self
-                .ok(
-                    reqwest::Method::PUT,
-                    &format!("/collections/{name}/index?wait=true"),
-                    Some(json!({ "field_name": "tenant", "field_schema": { "type": "keyword", "is_tenant": true } })),
-                )
-                .await;
-            for field in ["key_norm", "fingerprint", "autocomplete", "id_hint"] {
-                let _ = self
-                    .ok(
-                        reqwest::Method::PUT,
-                        &format!("/collections/{name}/index?wait=true"),
-                        Some(json!({ "field_name": field, "field_schema": "keyword" })),
-                    )
-                    .await;
-            }
+            self.ensure_indexes(name).await;
         }
         Ok(())
     }
@@ -234,6 +252,25 @@ impl Store for QdrantStore {
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/query", kind.collection()),
                 Some(json!({ "query": query, "filter": filter.to_qdrant(), "limit": limit, "with_payload": true })),
+            )
+            .await?;
+        Ok(parse_hits(&v["result"]["points"]))
+    }
+
+    async fn search_ranked(
+        &self,
+        kind: Kind,
+        text: &str,
+        filter: &Filter,
+        limit: usize,
+        rank: &Rank,
+    ) -> Result<Vec<Hit>> {
+        let vector = self.vector_for(text).await?;
+        let v = self
+            .ok(
+                reqwest::Method::POST,
+                &format!("/collections/{}/points/query", kind.collection()),
+                Some(rank.to_qdrant_query(vector, filter, limit)),
             )
             .await?;
         Ok(parse_hits(&v["result"]["points"]))

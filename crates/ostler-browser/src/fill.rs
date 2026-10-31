@@ -111,7 +111,15 @@ pub struct FillReport {
     pub page_errors: Vec<String>,
     pub submit: Vec<SubmitControl>,
     pub step: Option<StepInfo>,
+    /// Times the page was still busy (network/timers) when we gave up waiting. Non-zero means
+    /// verdicts may reflect a page that had not finished updating.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub unsettled: u64,
     pub elapsed_ms: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 impl FillReport {
@@ -229,6 +237,7 @@ impl Page {
     ) -> Result<FillReport> {
         self.guard().await?;
         let t0 = Instant::now();
+        let unsettled_before = self.unsettled_count();
         let mut pending = req.values.clone();
         let mut attempted: HashSet<String> = HashSet::new();
         let mut results: Vec<FieldResult> = vec![];
@@ -430,6 +439,7 @@ impl Page {
             page_errors,
             submit,
             step,
+            unsettled: self.unsettled_count().saturating_sub(unsettled_before),
             elapsed_ms: t0.elapsed().as_millis() as u64,
         })
     }
@@ -511,13 +521,13 @@ impl Page {
                         idx.push(m.map_err(verr)?);
                     }
                     if live.kind == FieldKind::Radio {
-                        self.rt("apply", &[json!(r), json!("radio"), json!(idx[0])])
+                        self.rt_effect("apply", &[json!(r), json!("radio"), json!(idx[0])])
                             .await?;
                     } else if live.kind == FieldKind::Select {
-                        self.rt("apply", &[json!(r), json!("select"), json!(idx)])
+                        self.rt_effect("apply", &[json!(r), json!("select"), json!(idx)])
                             .await?;
                     } else {
-                        self.rt("apply", &[json!(r), json!("multi_select"), json!(idx)])
+                        self.rt_effect("apply", &[json!(r), json!("multi_select"), json!(idx)])
                             .await?;
                     }
                     Ok(None)
@@ -531,7 +541,8 @@ impl Page {
                     } else {
                         "checkbox"
                     };
-                    self.rt("apply", &[json!(r), json!(kind), json!(b)]).await?;
+                    self.rt_effect("apply", &[json!(r), json!(kind), json!(b)])
+                        .await?;
                     Ok(None)
                 }
                 FieldKind::Date => {
@@ -547,16 +558,7 @@ impl Page {
                     self.set_native(r, &d[..7]).await
                 }
                 FieldKind::DatetimeLocal => {
-                    let t = text_of(value);
-                    let (d, tm) = t
-                        .split_once('T')
-                        .or_else(|| t.split_once(' '))
-                        .unwrap_or((&t, "00:00"));
-                    let v = format!(
-                        "{}T{}",
-                        normalize_date(d).map_err(verr)?,
-                        normalize_time(tm).map_err(verr)?
-                    );
+                    let v = normalize_datetime_local(&text_of(value)).map_err(verr)?;
                     self.set_native(r, &v).await
                 }
                 FieldKind::Week | FieldKind::Range | FieldKind::Color => {
@@ -577,7 +579,7 @@ impl Page {
                     let iso = ostler_forms::normalize_date(&text).map_err(|_| {
                         BrowserError::Other(format!("{r} is read-only and the value is not a date"))
                     })?;
-                    let res = self.rt("pickDate", &[json!(r), json!(iso)]).await?;
+                    let res = self.rt_effect("pickDate", &[json!(r), json!(iso)]).await?;
                     if res["ok"].as_bool() != Some(true) {
                         return Err(BrowserError::Other(format!(
                             "{r} is read-only; calendar: {}",
@@ -597,7 +599,7 @@ impl Page {
                         }
                     }
                     self.type_into(r, &text).await?;
-                    self.rt("finish", &[json!(r)]).await?;
+                    self.rt_effect("finish", &[json!(r)]).await?;
                     Ok(None)
                 }
             }
@@ -660,7 +662,7 @@ impl Page {
     }
 
     async fn set_native(&self, r: &str, v: &str) -> Result<Option<String>> {
-        self.rt("setNative", &[json!(r), json!(v)]).await?;
+        self.rt_effect("setNative", &[json!(r), json!(v)]).await?;
         Ok(None)
     }
 
@@ -677,7 +679,7 @@ impl Page {
             self.click(r).await?;
         }
         let pick = self
-            .rt("comboPick", &[json!(r), json!(text), json!(1800)])
+            .rt_effect("comboPick", &[json!(r), json!(text), json!(1800)])
             .await?;
         if let Some(label) = pick["picked"].as_str() {
             return Ok(Some(format!("picked option {label:?}")));
@@ -692,7 +694,7 @@ impl Page {
             .unwrap_or_default();
         if editable && avail.is_empty() {
             // Free-text autocomplete with no popup: the typed text stands.
-            self.rt("finish", &[json!(r)]).await?;
+            self.rt_effect("finish", &[json!(r)]).await?;
             return Ok(Some("no suggestion list appeared; kept typed text".into()));
         }
         Err(BrowserError::Other(format!(
@@ -838,6 +840,16 @@ fn finish_verdict(
     }
 }
 
+/// Normalize a datetime-local request to `YYYY-MM-DDTHH:MM`, the form the
+/// browser reports back. Shared by the write path and `verify`.
+fn normalize_datetime_local(t: &str) -> std::result::Result<String, ValueError> {
+    let (d, tm) = t
+        .split_once('T')
+        .or_else(|| t.split_once(' '))
+        .unwrap_or((t, "00:00"));
+    Ok(format!("{}T{}", normalize_date(d)?, normalize_time(tm)?))
+}
+
 fn verify(field: &Field, requested: &Value, observed: &Value) -> Verdict {
     use FieldKind::*;
     match field.kind {
@@ -891,9 +903,9 @@ fn verify(field: &Field, requested: &Value, observed: &Value) -> Verdict {
             let (a, b) = (alnum(&text_of(requested)), alnum(&text_of(observed)));
             if a == b {
                 Verdict::Exact
-            } else if b.contains(&a) || a.contains(&b) && !b.is_empty() {
-                Verdict::Equivalent
             } else {
+                // No substring rule: "United States" must not verify against
+                // "United States Minor Outlying Islands".
                 Verdict::Mismatch
             }
         }
@@ -910,12 +922,12 @@ fn verify(field: &Field, requested: &Value, observed: &Value) -> Verdict {
             let want = match field.kind {
                 Date => normalize_date(&text_of(requested)).ok(),
                 Time => normalize_time(&text_of(requested)).ok(),
+                DatetimeLocal => normalize_datetime_local(&text_of(requested)).ok(),
                 _ => Some(text_of(requested)),
             };
             if want.as_deref().is_some_and(|w| {
                 w == text_of(observed)
                     || (field.kind == Month && text_of(observed).starts_with(&w[..w.len().min(7)]))
-                    || field.kind == DatetimeLocal
             }) {
                 Verdict::Exact
             } else {
@@ -960,6 +972,36 @@ mod tests {
             verify(&f, &json!("5551234567"), &json!("")),
             Verdict::Mismatch
         );
+    }
+
+    #[test]
+    fn verify_datetime_local_is_checked() {
+        let f = fld(FieldKind::DatetimeLocal);
+        let req = json!("2001-03-05T15:30");
+        assert_eq!(verify(&f, &req, &json!("2001-03-05T15:30")), Verdict::Exact);
+        assert_eq!(
+            verify(&f, &req, &json!("2025-01-01T00:00")),
+            Verdict::Mismatch
+        );
+        assert_eq!(verify(&f, &req, &json!("")), Verdict::Mismatch);
+    }
+
+    #[test]
+    fn verify_combobox_rejects_substring_matches() {
+        let f = fld(FieldKind::Combobox);
+        assert_eq!(
+            verify(&f, &json!("United States"), &json!("United States")),
+            Verdict::Exact
+        );
+        assert_eq!(
+            verify(
+                &f,
+                &json!("United States"),
+                &json!("United States Minor Outlying Islands")
+            ),
+            Verdict::Mismatch
+        );
+        assert_eq!(verify(&f, &json!(""), &json!("Canada")), Verdict::Mismatch);
     }
 
     #[test]

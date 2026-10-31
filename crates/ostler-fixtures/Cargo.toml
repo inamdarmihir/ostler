@@ -1,10 +1,13 @@
 [package]
 name = "ostler-fixtures"
-description = "Ostler: local form fixtures and a recording HTTP server for tests and benchmarks"
+description = "Local form fixtures and a recording HTTP server for Ostler tests and demos (internal crate)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
 rust-version.workspace = true
 
 [lints]

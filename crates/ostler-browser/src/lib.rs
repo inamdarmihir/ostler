@@ -10,7 +10,7 @@ pub use fill::{
 };
 pub use ostler_cdp::LaunchOptions;
 pub use page::{
-    ActionOutcome, BrowserError, Page, PageInfo, SnapshotMode, SnapshotOpts, SnapshotOut,
+    ActionOutcome, BrowserError, Challenge, Page, PageInfo, SnapshotMode, SnapshotOpts, SnapshotOut,
 };
 pub use policy::Policy;
 

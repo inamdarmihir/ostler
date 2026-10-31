@@ -8,10 +8,15 @@ ostler doctor
 
 ## Install
 
+You need Chrome or Chromium, plus one of:
+
 ```sh
-# from source (needs Rust 1.82+ and Chrome/Chromium)
-cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+cargo install --git https://github.com/inamdarmihir/ostler ostler   # from source (Rust 1.89+); works today
+curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh     # prebuilt binary, from the first release
+claude mcp add ostler -- npx -y ostler serve                         # no install step: npx downloads it on first run (first release)
 ```
+
+See the [README](../README.md#install) for the status of each and [RELEASING](RELEASING.md) for how they get published.
 
 ## Easiest: `ostler setup`
 

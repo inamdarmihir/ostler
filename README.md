@@ -7,14 +7,38 @@
 <p align="center">
   <a href="https://github.com/inamdarmihir/ostler/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/inamdarmihir/ostler/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Rust 1.82+" src="https://img.shields.io/badge/rust-1.82%2B-orange.svg">
+  <img alt="Rust 1.89+" src="https://img.shields.io/badge/rust-1.89%2B-orange.svg">
   <img alt="MCP" src="https://img.shields.io/badge/protocol-MCP-black.svg">
   <a href="https://inamdarmihir.github.io/ostler/"><img alt="Site" src="https://img.shields.io/badge/site-github.io-informational.svg"></a>
 </p>
 
-**The headless browser for AI coding agents that fills complex forms and remembers how.**
+<p align="center">
+  <b>The headless browser for AI coding agents that fills complex forms, checks its work, and remembers how.</b><br>
+  Rust · MCP · A2A · Chrome · <a href="https://qdrant.tech">Qdrant</a> memory
+</p>
 
-Rust, MCP, Chrome, and [Qdrant](https://qdrant.tech) memory. Works with Claude Code, Codex, Cursor, VS Code and anything else that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#use-with-your-agent">Use with your agent</a> ·
+  <a href="#memory">Memory</a> ·
+  <a href="#benchmarks">Benchmarks</a> ·
+  <a href="#safety">Safety</a> ·
+  <a href="https://inamdarmihir.github.io/ostler/">Website</a>
+</p>
+
+Works with Claude Code, Codex, Cursor, VS Code and anything else that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
+
+### At a glance
+
+| | |
+|---|---|
+| **One call per form** | `form_inspect`, `form_fill`, `form_submit`: typed fields in, intent out, instead of a click and a snapshot per field |
+| **Verified, not assumed** | every value is read back from the live page and compared by field type; a page that rewrites a date or picks a different combobox option is reported as a failure |
+| **Honest about gaps** | keys that match nothing are `UNMATCHED`, ties are `ambiguous`, a rejected submit returns the page's own messages |
+| **Sees like a user** | `look` returns a screenshot with numbered click targets; red borders and toasts count as errors |
+| **Remembers** | profile facts, per-site playbooks and episodes in Qdrant, scoped per tenant |
+| **Two front doors** | MCP over stdio for coding agents, [A2A](docs/A2A.md) over HTTP for other agents |
 
 > **Status: v0.2, early.** Tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](docs/REVIEW-2026-10.md) found real flaws; they are listed openly with a fix order. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it.
 
@@ -33,39 +57,62 @@ What worked is saved in Qdrant: which profile fact fills which field, per site a
 | Dependent dropdowns, wizards | handled inside `form_fill` / `form_submit` | agent has to notice and retry |
 | Submit result | `Submitted` / `Advanced` / `NOT SUBMITTED` + the page's messages | agent infers from a new snapshot |
 | Memory across sessions | **Qdrant**: facts, playbooks, episodes | none, or a browser profile |
-| Tool schema cost per turn | ~1.4k tokens (`--tools forms` is smaller) | varies |
+| Tool schema cost per turn | ~1.5k tokens (`--tools forms` is smaller) | varies |
 
 The "3 vs ~20" row is measured on our own fixtures with a scripted agent, and the comparison column is **our engine driven that way, not another product**. Tools that already offer a batched fill (Playwright MCP, chrome-devtools-mcp) are closer to Ostler than this table suggests. See [Benchmarks](#benchmarks) and the [design review](docs/REVIEW-2026-10.md).
+
+<details>
+<summary><b>Contents</b></summary>
+
+[Install](#install) · [Quick start](#quick-start) · [Configure](#configure) · [Use with your agent](#use-with-your-agent) · [Memory](#memory) · [Benchmarks](#benchmarks) · [CLI reference](#cli-reference) · [A2A](#a2a-let-other-agents-hand-it-forms) · [Safety](#safety) · [How it compares](#how-it-compares) · [Roadmap](#roadmap)
+
+</details>
 
 ---
 
 ## Install
 
-You need **Chrome or Chromium** and **Rust 1.82+**. Prebuilt binaries are not published yet.
+You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to get the binary:
+
+| how | command | needs |
+|---|---|---|
+| **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
+| Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh` | nothing else; macOS and Linux |
+| npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
+| crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
+
+> **Status:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [docs/RELEASING.md](docs/RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
+
+Then check it:
 
 ```sh
-cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
-
-# or from a checkout
-git clone https://github.com/inamdarmihir/ostler && cd ostler
-cargo build --release -p ostler-cli      # binary: target/release/ostler
+ostler doctor        # Chrome launches? Qdrant reachable (if you set one)? prints the fix when not
 ```
 
-Check it works:
-
-```sh
-ostler doctor
-```
+**Update:** rerun the same install command (`install.sh` replaces the binary in place). **Uninstall:** delete the `ostler` binary (`~/.local/bin/ostler`, or `~/.cargo/bin/ostler`), and `~/.config/ostler` and `~/.cache/ostler` if you want the settings and the npx download gone. Memory lives in your Qdrant; `ostler memory wipe --yes` erases it first.
 
 ## Quick start
 
+Three steps, under a minute:
+
 ```sh
-ostler init                      # optional: save Qdrant URL + API key and other defaults (see Configure)
-ostler setup claude --apply      # register with Claude Code
-ostler fixtures                  # serve demo forms at http://127.0.0.1:8787
+ostler doctor                    # 1. check Chrome
+ostler setup claude --apply      # 2. connect your agent (also: codex, cursor, vscode, json)
+ostler fixtures                  # 3. serve demo forms at http://127.0.0.1:8787 to try it on
 ```
 
+Using `npx` instead of an installed binary: `claude mcp add ostler -- npx -y ostler serve`.
+
 Then ask your agent: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
+
+Memory is optional. Everything above works without it. To turn it on (so Ostler learns each form you fill): [Configure](#configure), or just `ostler init`.
+
+### Things to ask your agent
+
+- "Fill in the contact form on this page with my details." (after `memory_remember` of your name and email, or with `--learn`)
+- "Sign up for the newsletter on example.com, but ask me before you submit."  (`--require-confirm-submit`)
+- "This form has a date picker and a country dropdown: fill it and tell me anything you couldn't verify."
+- "What's blocking this page?"  (`look` shows numbered click targets; a CAPTCHA is reported, not bypassed)
 
 ### What the agent sees
 
@@ -94,6 +141,8 @@ NOT SUBMITTED: the page reported validation problems.
 ```
 
 A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words.
+
+Verification is strict by design: a combobox must show the option you asked for (not a longer one that merely contains it), a `datetime-local` must read back as the requested instant, and `form_fill` reports `unsettled` when the page was still busy at the end of the fill so the verdicts can be treated with care.
 
 ---
 
@@ -135,7 +184,8 @@ ostler config path                          # ~/.config/ostler/config.toml
 
 Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-shape tests, but has **not** been run against a live Cloud cluster by the maintainers. The open-source path is tested against a real Qdrant server.
 
-### Config file reference
+<details>
+<summary><b>Config file reference</b></summary>
 
 `~/.config/ostler/config.toml` (or `$XDG_CONFIG_HOME`, or the path in `OSTLER_CONFIG`):
 
@@ -151,6 +201,8 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `tools` | `OSTLER_TOOLS` | `core`, `forms` or `all` |
+
+</details>
 
 Anything stored: [what is and is not saved](SECURITY.md). Inspect or erase it any time: `ostler memory list | remember | forget | wipe`.
 
@@ -174,13 +226,13 @@ Extra serve flags go after `--`: `ostler setup claude --apply -- --lean --tools 
 
 | group | tools |
 |---|---|
-| browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `look` `screenshot` `back` |
+| browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `wait_for_human` `look` `screenshot` `back` |
 | tabs | `tabs` (list, new, switch, close; popups arrive as tabs) · `context` (notes shared by every tab) |
 | forms | `form_inspect` `form_fill` `form_submit` `fill_field` |
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
 | other | `stats` |
 
-`--tools core|forms|all` controls how many the agent sees. The full set (19 tools) is about 5.6 KB of schema, roughly 1.4k tokens on every turn; a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+`--tools core|forms|all` controls how many the agent sees. The full set (21 tools) is about 5.9 KB of schema, roughly 1.5k tokens on every turn; a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 **Tabs share one browser context**, so cookies and logins carry across them, and the `context` tool is a small key/value notepad every tab (and every later call) can read, for things like "applicant = Ada, order id = 4471". It survives a browser restart.
 
@@ -193,10 +245,26 @@ Three Qdrant collections, multi-tenant through a `tenant` payload index:
 | collection | holds | never holds |
 |---|---|---|
 | `ostler_profile` | facts you saved (`email`, `company`, …) | passwords, card numbers, anything `looks_sensitive` |
-| `ostler_playbooks` | per site and form: which fact fills which field | the values themselves |
+| `ostler_playbooks` | per site and form: which fact fills which field, with wins, losses and last verified time | the values themselves |
 | `ostler_episodes` | what went wrong on a form, so it is not repeated | secrets |
 
-Retrieval order for a field: a saved playbook mapping, then an exact `autocomplete`-token match, then semantic search. `form_fill` with `auto: "required"` fills what memory can supply and reports the rest. Details: [ARCHITECTURE](docs/ARCHITECTURE.md), [ADRs](docs/adr/).
+Retrieval order for a field: the form's own playbook, then an exact `autocomplete`-token match, then a **playbook from a similar form on the same site** (a redesign or a sibling form), then semantic search. `form_fill` with `auto: "required"` fills what memory can supply and reports the rest.
+
+### It learns from every fill
+
+Playbooks work like skills that improve with use. Ostler doesn't need a model to judge whether a fill worked: the browser reads every value back and the page accepts or rejects the submit, so every outcome is ground truth.
+
+| step | what happens | Qdrant feature |
+|---|---|---|
+| recall | exact form first; after a redesign, mappings transfer from a similar form on the same site with the same label | keyword-array filter on `labels_norm` + `host`, tenant index |
+| rank | proven, recently verified skills beat stale or failing ones | Query API prefetch + **score-boosting formula** (similarity + smoothed win rate + `exp_decay` on `verified_ts`) |
+| reinforce | verified fields on accepted submits add wins per mapping | integer payload indexes |
+| demote | a mapping that loses more than it wins is dropped | |
+| forget | `ostler memory prune --days 90` removes stale, unproven skills | range filter on `verified_ts` |
+
+`ostler memory skills` shows what has been learned: wins, losses, trusted mappings, and which form a skill was learned from. On a scripted site with redesigned forms, correct suggestions went from 1 to 8 of 10 fillable fields, with zero wrong fills in both conditions. That's a synthetic fixture, not real sites ([ADR-0008](docs/adr/0008-learning-loop.md)).
+
+Details: [ARCHITECTURE](docs/ARCHITECTURE.md), [ADRs](docs/adr/).
 
 ---
 
@@ -233,11 +301,12 @@ ostler <COMMAND>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
   doctor     Check that Chrome launches and Qdrant is reachable
   inspect    Open a URL and print the typed form model as JSON
-  memory     list | remember <key> <value> | forget <key> | wipe --yes
+  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | wipe --yes
   fixtures   Serve the demo form pages (default port 8787)
 ```
 
-### `ostler serve`
+<details>
+<summary><b><code>ostler serve</code> flags</b></summary>
 
 | flag | default | description |
 |---|---|---|
@@ -257,6 +326,8 @@ ostler <COMMAND>
 | `--qdrant-on-disk` | off | vectors on disk |
 | `--tenant` | `default` | memory namespace |
 
+</details>
+
 Set `OSTLER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root or in some containers). See [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 ---
@@ -275,6 +346,7 @@ Besides MCP, Ostler speaks [Agent2Agent](https://a2a-protocol.org) v1.0. Another
 - `--allow-domain` is enforced **inside the browser** on navigations, form posts, `fetch`/XHR, beacons and event streams, so a request to another host never leaves. It does not cover images, scripts, stylesheets or WebSockets, and it ignores ports.
 - `--require-confirm-submit` blocks **every non-GET request** (click, Enter, page script) unless it happens inside a confirmed `form_submit`. A GET with side effects is not covered.
 - Page text is wrapped as untrusted (the wrapper cannot be closed from inside); secrets are refused by memory and masked in reports, snapshots and notes; memory never overwrites a fact you told it.
+- **CAPTCHAs and verification walls are reported, never solved or bypassed.** reCAPTCHA, hCaptcha and Turnstile widgets and "verify you are human" interstitials put a `CHALLENGE:` line at the top of the tool result, so the agent stops retrying and asks the user. With `--headed`, `wait_for_human` waits while the person completes it in the window. A2A tasks come back `input-required`. Invisible badges and ordinary pages that mention verification are not flagged.
 - Popups open as tabs under the same policy. A crashed Chrome is restarted and the agent is told.
 
 **Still open, from our own review:** file fields accept any local path, the DevTools port is a TCP port other local users can reach, an empty allowlist still permits localhost and private addresses (including cloud metadata), `confirm()` dialogs are auto-accepted, and Chrome can be orphaned if the server is killed. For anything sensitive use `--allow-domain` and a throwaway profile. Status of every finding: [review](docs/REVIEW-2026-10.md#status). Policy and threat model: [SECURITY.md](SECURITY.md).
@@ -304,7 +376,7 @@ Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript
 
 ## Repository
 
-`crates/` cdp · browser · forms · memory · mcp · cli · fixtures · bench. `fixtures/` test pages. Docs: [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md).
+`crates/` cdp · browser · forms · memory · mcp · cli · fixtures · bench. `crates/ostler-fixtures/fixtures/` test pages. Docs: [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md).
 
 ## License
 

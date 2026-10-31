@@ -5,7 +5,7 @@ Thanks for looking. This project values **evidence over claims**: a change that 
 ## Setup
 
 ```sh
-rustup toolchain install stable        # Rust 1.82+
+rustup toolchain install stable        # Rust 1.89+
 # Chrome or Chromium must be installed (or set OSTLER_CHROME)
 cargo test --workspace                 # browser tests skip politely if Chrome is missing
 OSTLER_REQUIRE_CHROME=1 cargo test  # ...or fail instead (what CI does)

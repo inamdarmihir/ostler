@@ -27,6 +27,14 @@ pub enum BrowserError {
     Other(String),
 }
 
+/// A human-verification wall on the current page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Challenge {
+    pub vendor: String,
+    /// True when the challenge replaced the page ("Just a moment..."), false for an embedded widget.
+    pub interstitial: bool,
+}
+
 pub type Result<T> = std::result::Result<T, BrowserError>;
 
 #[derive(Default)]
@@ -36,6 +44,8 @@ struct Shared {
     committed: AtomicU64,
     same_doc: AtomicU64,
     loaded: AtomicU64,
+    /// Count of `settle` calls that hit their time limit with work still pending.
+    unsettled: AtomicU64,
     dialogs: Mutex<Vec<String>>,
     /// `--require-confirm-submit`: block every non-GET request unless a confirmed `form_submit` is running.
     gate: AtomicBool,
@@ -247,9 +257,23 @@ impl Page {
     // ------------------------------------------------------------------ evaluation
 
     /// Evaluate an expression in the page, retrying across navigations.
+    ///
+    /// Only for expressions that are safe to run twice (reads). When the page is replaced mid-call
+    /// the whole expression is run again on the new page, so anything with side effects must use
+    /// [`Page::eval_once`].
     pub async fn eval(&self, expression: &str) -> Result<Value> {
+        self.eval_attempts(expression, 8).await
+    }
+
+    /// Evaluate at most once. If the page is replaced while the script runs, the script may or may not
+    /// have finished, so report that instead of replaying it on whatever page came next.
+    pub async fn eval_once(&self, expression: &str) -> Result<Value> {
+        self.eval_attempts(expression, 1).await
+    }
+
+    async fn eval_attempts(&self, expression: &str, attempts: u32) -> Result<Value> {
         let mut last = String::new();
-        for attempt in 0..8 {
+        for attempt in 0..attempts {
             if attempt > 0 {
                 sleep(Duration::from_millis(60)).await;
             }
@@ -296,20 +320,48 @@ impl Page {
             }
             return Ok(res["result"].get("value").cloned().unwrap_or(Value::Null));
         }
+        if attempts == 1 {
+            return Err(BrowserError::Navigation(format!(
+                "the page changed while the action was running ({last}); it may or may not have completed"
+            )));
+        }
         Err(BrowserError::Js(format!("page kept navigating: {last}")))
     }
 
-    /// Call a function on the injected runtime: `__wm.name(args...)`.
-    pub async fn rt(&self, name: &str, args: &[Value]) -> Result<Value> {
+    fn rt_expr(name: &str, args: &[Value]) -> String {
         let argv = args
             .iter()
             .map(Value::to_string)
             .collect::<Vec<_>>()
             .join(",");
-        let expr = format!(
+        format!(
             "(typeof __wm==='undefined'?(()=>{{throw new Error('page runtime unavailable on this page')}})():__wm.{name}({argv}))"
-        );
-        self.eval(&expr).await
+        )
+    }
+
+    /// Call a read-only function on the injected runtime: `__wm.name(args...)`. Retried across navigations.
+    pub async fn rt(&self, name: &str, args: &[Value]) -> Result<Value> {
+        self.eval(&Self::rt_expr(name, args)).await
+    }
+
+    /// A human-verification wall (CAPTCHA widget or "verify you are human" interstitial) that blocks
+    /// this page right now. Ostler reports these; it never tries to solve or evade them.
+    pub async fn challenge(&self) -> Result<Option<Challenge>> {
+        let v = self.rt("challenge", &[]).await?;
+        Ok(v.as_object().map(|o| Challenge {
+            vendor: o
+                .get("vendor")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            interstitial: o.get("kind").and_then(Value::as_str) == Some("interstitial"),
+        }))
+    }
+
+    /// Call a runtime function that changes the page (click, write, pick). Never retried: refs are
+    /// per-document, so a replay after a navigation would act on a different element or fail confusingly.
+    pub async fn rt_effect(&self, name: &str, args: &[Value]) -> Result<Value> {
+        self.eval_once(&Self::rt_expr(name, args)).await
     }
 
     /// Skip downloading images, video, audio and fonts. Forms rarely need them and they dominate bytes on real sites.
@@ -376,9 +428,19 @@ impl Page {
     }
 
     pub async fn settle(&self, max_ms: u64, quiet_ms: u64) -> Value {
-        self.rt("settle", &[json!(max_ms), json!(quiet_ms)])
+        let v = self
+            .rt("settle", &[json!(max_ms), json!(quiet_ms)])
             .await
-            .unwrap_or(Value::Null)
+            .unwrap_or(Value::Null);
+        if v.get("settled").and_then(Value::as_bool) == Some(false) {
+            self.shared.unsettled.fetch_add(1, Ordering::SeqCst);
+        }
+        v
+    }
+
+    /// Number of timed-out settles so far; fill_form diffs this to report unstable pages.
+    pub(crate) fn unsettled_count(&self) -> u64 {
+        self.shared.unsettled.load(Ordering::SeqCst)
     }
 
     /// Run `action`, then wait for whatever it caused (navigation or in-page updates) to finish.
@@ -579,7 +641,11 @@ impl Page {
                             info["covered_by"].as_str().unwrap_or("another element")
                         ));
                     }
-                    self.rt("jsClick", &[json!(r)]).await?;
+                    match self.rt_effect("jsClick", &[json!(r)]).await {
+                        // The click replaced the page it was running in: that is the click working.
+                        Ok(_) | Err(BrowserError::Navigation(_)) => {}
+                        Err(e) => return Err(e),
+                    }
                 } else {
                     self.mouse_click(info["x"].as_f64().unwrap_or(0.0), info["y"].as_f64().unwrap_or(0.0)).await?;
                 }
@@ -622,7 +688,7 @@ impl Page {
             return Err(BrowserError::Other(format!("{r} is read-only")));
         }
         if text.is_empty() {
-            self.rt("setNative", &[json!(r), json!("")]).await?;
+            self.rt_effect("setNative", &[json!(r), json!("")]).await?;
         } else {
             self.session
                 .call("Input.insertText", json!({ "text": text }))
@@ -638,7 +704,7 @@ impl Page {
                 if submit {
                     self.press_raw("Enter").await?;
                 } else {
-                    self.rt("finish", &[json!(r)]).await?;
+                    self.rt_effect("finish", &[json!(r)]).await?;
                 }
                 Ok(())
             })

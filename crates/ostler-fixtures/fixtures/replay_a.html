@@ -1,0 +1,4 @@
+<!doctype html><meta charset=utf-8><title>Replay A</title><style>body{font:15px system-ui;margin:2rem}#go{position:absolute;left:40px;top:80px;padding:.5rem 1rem}#cover{position:absolute;left:30px;top:70px;width:140px;height:60px;background:rgba(0,0,0,.05)}</style>
+<h1>Page A</h1>
+<button id="go" onclick="fetch('/submit',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({hit:'A'})});location.href='/replay_b.html'">Go</button>
+<div id="cover"></div>

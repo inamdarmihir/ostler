@@ -242,6 +242,158 @@ async fn custom_combobox_picks_the_option() {
 }
 
 #[tokio::test]
+async fn datetime_local_is_verified_not_assumed() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/datetime.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Start": "2001-03-05 3:30 PM"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    // The page rewrites this one after we write it: that must be a failure, not "verified".
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Clamped slot": "2001-03-05T15:30"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn combobox_that_diverges_from_the_request_fails() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/combobox_diverge.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Country": "United States"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    // Unrelated exact options still verify.
+    b.page()
+        .navigate(&srv.url("/combobox_diverge.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Country": "Uruguay"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn an_action_that_navigates_is_not_replayed_on_the_next_page() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/replay_a.html")).await.unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let r = snap
+        .text
+        .lines()
+        .find(|l| l.contains("button \"Go\""))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .unwrap_or_else(|| panic!("Go button in snapshot: {}", snap.text))
+        .to_string();
+    // The button is under an overlay, so this takes the script-click path. The click posts once and
+    // navigates; the page that replaces it has a button with the same look and must not be clicked.
+    b.page()
+        .click(&r)
+        .await
+        .expect("click that navigates succeeds");
+    srv.wait_for(1, Duration::from_secs(3));
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let hits: Vec<_> = srv.submissions().iter().map(|s| s["hit"].clone()).collect();
+    assert_eq!(
+        hits,
+        vec![json!("A")],
+        "replayed on the next page: {hits:?}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn eval_that_loses_its_page_is_replayed_but_eval_once_is_not() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // Posts a hit, schedules a navigation, then keeps awaiting: the page is replaced mid-evaluation.
+    let js = "(async()=>{fetch('/submit',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({hit:'js'})});setTimeout(()=>{location.href='/replay_b.html'},20);await new Promise(r=>setTimeout(r,3000));return 1})()";
+    b.page().navigate(&srv.url("/replay_a.html")).await.unwrap();
+    let _ = b.page().eval_once(js).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        srv.submissions().len(),
+        1,
+        "eval_once must run the script at most once"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn verification_walls_are_detected_but_not_over_reported() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // An embedded widget blocks the form.
+    b.page()
+        .navigate(&srv.url("/captcha_widget.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("widget detected");
+    assert_eq!((c.vendor.as_str(), c.interstitial), ("reCAPTCHA", false));
+    // The person solves it; the wall is gone.
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let solve = snap
+        .text
+        .lines()
+        .find(|l| l.contains("Simulate the person"))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .unwrap_or_else(|| panic!("solve button: {}", snap.text))
+        .to_string();
+    b.page().click(&solve).await.unwrap();
+    assert!(b.page().challenge().await.unwrap().is_none());
+
+    // A page that replaces the site with a check.
+    b.page()
+        .navigate(&srv.url("/captcha_interstitial.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("interstitial detected");
+    assert!(c.interstitial, "{c:?}");
+
+    // Not walls: an invisible-v3 badge, a plain form, a long page that merely mentions verification.
+    for page in ["/captcha_badge_only.html", "/basic.html", "/longform.html"] {
+        b.page().navigate(&srv.url(page)).await.unwrap();
+        assert_eq!(b.page().challenge().await.unwrap(), None, "{page}");
+    }
+    b.close().await;
+}
+
+#[tokio::test]
 async fn shadow_dom_form() {
     let Some((srv, b)) = setup().await else {
         return;

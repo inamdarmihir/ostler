@@ -1,10 +1,13 @@
 [package]
 name = "ostler-browser"
-description = "Ostler: browser component"
+description = "Page engine for Ostler: injected runtime, verified form filling, policy (internal crate)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
 rust-version.workspace = true
 
 [lints]

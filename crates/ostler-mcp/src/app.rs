@@ -10,7 +10,7 @@ use ostler_browser::{
     SnapshotOpts, SubmitStatus, Suggester, Suggestion,
 };
 use ostler_forms::Field;
-use ostler_memory::{FieldQuery, Memory, PlaybookField};
+use ostler_memory::{FieldOutcome, FieldQuery, Memory};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
@@ -176,7 +176,8 @@ struct LastFill {
     host: String,
     fingerprint: String,
     headings: Vec<String>,
-    fields: Vec<PlaybookField>,
+    /// Every field's verified outcome: wins reinforce mappings, failures demote them.
+    outcomes: Vec<FieldOutcome>,
     provided: Vec<(String, Value, bool)>,
     problems: Vec<(String, String, String)>,
 }
@@ -425,6 +426,47 @@ impl App {
             },
         };
         let mut out = out;
+        // A verification wall changes what the agent should do next, so say so right where it looks.
+        if matches!(
+            name,
+            "navigate"
+                | "snapshot"
+                | "click"
+                | "type"
+                | "press"
+                | "back"
+                | "form_inspect"
+                | "form_fill"
+                | "form_submit"
+                | "fill_field"
+        ) {
+            if let Ok(guard) = self.browser.try_lock() {
+                if let Some(b) = guard.as_ref() {
+                    if let Ok(Some(c)) = b.page().challenge().await {
+                        let what = if c.interstitial {
+                            format!(
+                                "{} verification page is shown instead of the site",
+                                c.vendor
+                            )
+                        } else {
+                            format!("{} challenge is on this page", c.vendor)
+                        };
+                        let next = if self.cfg.launch.headless {
+                            "The browser is headless, so the user cannot see it: tell them, or restart with --headed."
+                        } else {
+                            "Ask the user to complete it in the browser window, then call wait_for_human."
+                        };
+                        let line = format!(
+                            "CHALLENGE: {what}. Ostler does not solve or bypass these. Do not retry or click around it. {next}"
+                        );
+                        match out.content.first_mut() {
+                            Some(Content::Text(t)) => *t = format!("{line}\n{t}"),
+                            _ => out.content.insert(0, Content::Text(line)),
+                        }
+                    }
+                }
+            }
+        }
         // Things that happened on their own while we worked (a popup opened as a new tab).
         if let Ok(guard) = self.browser.try_lock() {
             if let Some(b) = guard.as_ref() {
@@ -640,6 +682,49 @@ impl App {
                     })
                 })
             }
+            "wait_for_human" => {
+                let timeout = Duration::from_secs(
+                    a.get("timeout_s")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(120)
+                        .clamp(1, 600),
+                );
+                let headless = self.cfg.launch.headless;
+                br!(self, b, {
+                    let Some(first) = b.page().challenge().await.map_err(|e| e.to_string())? else {
+                        return Ok(ToolOutput::text(
+                            "No verification challenge is blocking this page.",
+                        ));
+                    };
+                    if headless {
+                        return Ok(ToolOutput::err(format!(
+                            "A {} challenge is blocking the page, but the browser is headless so the user cannot see it. Restart the server with --headed, or use another route.",
+                            first.vendor
+                        )));
+                    }
+                    let deadline = Instant::now() + timeout;
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(750)).await;
+                        match b.page().challenge().await {
+                            // Navigation while the person solves it can briefly leave no runtime; keep waiting.
+                            Ok(Some(_)) | Err(_) if Instant::now() < deadline => continue,
+                            Ok(None) => {
+                                b.page().settle(2000, 150).await;
+                                return Ok(ToolOutput::text(
+                                    "The challenge is cleared. Continue; take a snapshot to see the page.",
+                                ));
+                            }
+                            _ => {
+                                return Ok(ToolOutput::err(format!(
+                                    "Still blocked by {} after {}s. Ask the user to finish it in the browser window, then call wait_for_human again.",
+                                    first.vendor,
+                                    timeout.as_secs()
+                                )))
+                            }
+                        }
+                    }
+                })
+            }
             "look" => {
                 let max = a.get("max").and_then(Value::as_u64).unwrap_or(40) as usize;
                 br!(self, b, {
@@ -686,10 +771,37 @@ impl App {
                             let fp = f.fingerprint(&host);
                             let mut n = String::new();
                             if let Ok(Some(pb)) = mem.playbook(&fp).await {
+                                let trusted = pb.fields.iter().filter(|f| f.trusted()).count();
                                 n.push_str(&format!(
-                                    "  memory: this form was filled successfully {}x before.\n",
-                                    pb.uses
+                                    "  memory: this form was filled successfully {}x before ({} rejected); {} field mappings trusted.\n",
+                                    pb.wins.max(pb.uses), pb.losses, trusted
                                 ));
+                            } else {
+                                // A redesign or a sibling form: say what can transfer.
+                                let labels: Vec<&str> =
+                                    f.fields.iter().map(|x| x.label.as_str()).collect();
+                                if let Ok(sim) =
+                                    mem.similar_playbooks(&host, &fp, &[], &labels, 1).await
+                                {
+                                    if let Some((pb, _)) = sim.first() {
+                                        let shared = pb
+                                            .fields
+                                            .iter()
+                                            .filter(|pf| {
+                                                pf.trusted()
+                                                    && labels
+                                                        .iter()
+                                                        .any(|l| l.eq_ignore_ascii_case(&pf.label))
+                                            })
+                                            .count();
+                                        if shared > 0 {
+                                            n.push_str(&format!(
+                                                "  memory: new form, but a similar form on this site was learned ({} wins); {} field mappings will be reused and re-verified.\n",
+                                                pb.wins.max(pb.uses), shared
+                                            ));
+                                        }
+                                    }
+                                }
                             }
                             if let Ok(eps) = mem.episodes(&fp, 3).await {
                                 for e in eps {
@@ -860,23 +972,24 @@ impl App {
     }
 
     fn remember_fill(&self, rep: &FillReport, provided: &BTreeMap<String, Value>) {
-        let fields: Vec<PlaybookField> = rep
+        let outcomes: Vec<FieldOutcome> = rep
             .fields
             .iter()
-            .filter(|f| f.status != FillStatus::Failed)
-            .map(|f| PlaybookField {
+            .map(|f| FieldOutcome {
                 label: f.label.clone(),
                 kind: serde_json::to_value(f.kind)
                     .ok()
                     .and_then(|v| v.as_str().map(String::from))
                     .unwrap_or_default(),
-                // Only mappings that were confirmed by an exact signal persist. A semantic guess that
-                // happened to be accepted once must not become a 0.95-confidence rule.
-                profile_key: f
-                    .profile_key
-                    .clone()
-                    .filter(|_| matches!(f.via.as_deref(), Some("playbook" | "autocomplete"))),
-                required: false,
+                // Only mappings that came from an exact or transferred signal are learned. A semantic
+                // guess that happened to be accepted once must not become a high-confidence rule.
+                profile_key: f.profile_key.clone().filter(|_| {
+                    matches!(
+                        f.via.as_deref(),
+                        Some("playbook" | "autocomplete" | "similar_form")
+                    )
+                }),
+                ok: f.status != FillStatus::Failed,
             })
             .collect();
         let problems: Vec<(String, String, String)> = rep
@@ -907,7 +1020,7 @@ impl App {
             host: rep.host.clone(),
             fingerprint: rep.fingerprint.clone(),
             headings: vec![],
-            fields,
+            outcomes,
             provided: prov,
             problems,
         });
@@ -1035,6 +1148,27 @@ impl App {
                 b.page().navigate(url).await.map_err(|e| e.to_string())
             })?;
         }
+        // A verification wall needs a person. Hand that back to the delegating agent instead of failing
+        // to find a form or filling one that a CAPTCHA will reject.
+        let wall = br!(self, b, {
+            Ok::<_, String>(b.page().challenge().await.ok().flatten())
+        })?;
+        if let Some(c) = wall {
+            let what = if c.interstitial {
+                format!(
+                    "{} verification page is shown instead of the site",
+                    c.vendor
+                )
+            } else {
+                format!("{} challenge is on the page", c.vendor)
+            };
+            return Ok(FormTaskResult::input_required(
+                format!(
+                    "A {what}. Ostler does not solve or bypass these; a person has to complete it in the browser window, then send this task again."
+                ),
+                json!({ "challenge": { "vendor": c.vendor, "interstitial": c.interstitial } }),
+            ));
+        }
         // Nothing to fill and nothing to submit: describe the form.
         if t.values.is_empty() && t.auto.is_none() && !t.submit {
             let ir = br!(self, b, {
@@ -1144,12 +1278,38 @@ impl App {
         self.spawn_memory_write(async move {
             match status {
                 SubmitStatus::Submitted | SubmitStatus::Advanced => {
-                    let _ = mem
-                        .record_success(
+                    // If this form had no playbook of its own, note which similar form taught it.
+                    let learned_from = if mem
+                        .playbook(&last.fingerprint)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_none()
+                    {
+                        let labels: Vec<&str> =
+                            last.outcomes.iter().map(|o| o.label.as_str()).collect();
+                        mem.similar_playbooks(
                             &last.host,
                             &last.fingerprint,
                             &last.headings,
-                            last.fields.clone(),
+                            &labels,
+                            1,
+                        )
+                        .await
+                        .ok()
+                        .and_then(|v| v.into_iter().next())
+                        .map(|(p, _)| p.fingerprint)
+                    } else {
+                        None
+                    };
+                    let _ = mem
+                        .record_outcome(
+                            &last.host,
+                            &last.fingerprint,
+                            &last.headings,
+                            last.outcomes.clone(),
+                            true,
+                            learned_from.as_deref(),
                         )
                         .await;
                     if learn {
@@ -1162,6 +1322,40 @@ impl App {
                     }
                 }
                 SubmitStatus::ValidationFailed => {
+                    // The page rejected these fields: count it against whatever mapping filled them,
+                    // but only on a form we already have a skill for (no skills made from failures).
+                    if mem
+                        .playbook(&last.fingerprint)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some()
+                    {
+                        let rejected: Vec<FieldOutcome> = last
+                            .outcomes
+                            .iter()
+                            .filter(|o| {
+                                !o.ok
+                                    || errors
+                                        .iter()
+                                        .any(|e| e.label.eq_ignore_ascii_case(&o.label))
+                            })
+                            .map(|o| FieldOutcome {
+                                ok: false,
+                                ..o.clone()
+                            })
+                            .collect();
+                        let _ = mem
+                            .record_outcome(
+                                &last.host,
+                                &last.fingerprint,
+                                &last.headings,
+                                rejected,
+                                false,
+                                None,
+                            )
+                            .await;
+                    }
                     for e in &errors {
                         let _ = mem
                             .record_episode(

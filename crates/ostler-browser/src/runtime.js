@@ -775,7 +775,8 @@
     if (!options.length) return { picked: null, available: [] };
     const labels = options.map((o) => clean(o.textContent));
     let idx = labels.findIndex((l) => norm(l) === w);
-    if (idx < 0) { const hits = labels.map((l, i) => [l, i]).filter(([l]) => norm(l).includes(w) || w.includes(norm(l))); if (hits.length === 1) idx = hits[0][1]; }
+    // Exact (normalized) match only: a partial pick would diverge from the request, and the verifier
+    // refuses substring equivalence. Misses return the available labels so the caller can choose.
     if (idx < 0) return { picked: null, available: labels.slice(0, 15) };
     clickEl(options[idx]);
     return { picked: labels[idx], available: [] };
@@ -934,9 +935,51 @@
   }
   function unmark() { const h = document.getElementById('__wm_marks'); if (h) h.remove(); return true; }
 
+  // ---------------------------------------------------------------- human-verification challenges
+  // Ostler never solves these. It reports them so the agent stops retrying and hands off to the user.
+  // Only walls that block the page count: the invisible reCAPTCHA badge and hidden widgets do not.
+  const CHALLENGE_SRC = [
+    [/google\.com\/recaptcha|recaptcha\.net/i, 'reCAPTCHA'],
+    [/hcaptcha\.com/i, 'hCaptcha'],
+    [/challenges\.cloudflare\.com/i, 'Cloudflare Turnstile'],
+    [/arkoselabs\.com|funcaptcha\.com/i, 'Arkose'],
+    [/captcha-delivery\.com/i, 'DataDome'],
+  ];
+  const CHALLENGE_BOX = [
+    ['.g-recaptcha', 'reCAPTCHA'], ['.h-captcha', 'hCaptcha'], ['.cf-turnstile', 'Cloudflare Turnstile'],
+  ];
+  function bigVisible(el) {
+    if (!rendered(el)) return false;
+    if (el.closest && el.closest('.grecaptcha-badge')) return false; // the invisible-v3 badge
+    const r = el.getBoundingClientRect();
+    return r.width >= 200 && r.height >= 50;
+  }
+  function challenge() {
+    for (const f of deepQueryAll(document.documentElement, 'iframe')) {
+      const src = f.getAttribute('src') || '';
+      const hit = CHALLENGE_SRC.find(([re]) => re.test(src));
+      if (hit && bigVisible(f)) return { vendor: hit[1], kind: 'widget' };
+    }
+    for (const [sel, vendor] of CHALLENGE_BOX) {
+      for (const el of deepQueryAll(document.documentElement, sel)) if (bigVisible(el)) return { vendor, kind: 'widget' };
+    }
+    // Interstitials replace the whole page, so they are short and say so in the title or body.
+    const text = (document.body && document.body.innerText || '').trim();
+    const title = document.title || '';
+    if (text.length < 2500) {
+      // A real wall has no ordinary content: a page with a form on it that merely mentions verification is not one.
+      const hasInputs = deepQueryAll(document.documentElement, 'input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select').some(rendered);
+      if (/^(just a moment|attention required|verifying you are human|are you a robot|robot check|security check)/i.test(title)
+        || (!hasInputs && /(verify(ing)? (that )?you are (a )?human|checking if the site connection is secure|unusual traffic from your computer|confirm you are not a robot|press (&|and) hold)/i.test(text))) {
+        return { vendor: /cloudflare/i.test(text + title) ? 'Cloudflare' : 'unknown', kind: 'interstitial' };
+      }
+    }
+    return null;
+  }
+
   window.__wm = {
     snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
-    settle, textPresent, selectorPresent,
+    settle, textPresent, selectorPresent, challenge,
     el: (ref) => elOf(ref),
     pending: pendingDeep,
     version: 1,

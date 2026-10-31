@@ -450,6 +450,16 @@ enum MemoryCmd {
     Forget {
         key: String,
     },
+    /// What Ostler has learned: per-form skills, with wins, losses and trusted field mappings.
+    Skills {
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Forget stale, unproven skills and old episodes (not verified for this many days).
+    Prune {
+        #[arg(long, default_value_t = 90)]
+        days: u64,
+    },
     /// Delete everything saved for this tenant.
     Wipe {
         #[arg(long)]
@@ -671,6 +681,51 @@ async fn main() -> Result<()> {
                         "no such fact"
                     }
                 ),
+                MemoryCmd::Skills { limit } => {
+                    let skills = m.skills(limit).await?;
+                    if skills.is_empty() {
+                        println!("Nothing learned yet. Skills appear after a form you filled is accepted.");
+                    }
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    for p in skills {
+                        let age_days = now.saturating_sub(p.verified_ts) / 86_400;
+                        let mapped: Vec<String> = p
+                            .fields
+                            .iter()
+                            .filter(|f| f.trusted())
+                            .map(|f| {
+                                format!("{} <- {}", f.label, f.profile_key.as_deref().unwrap_or(""))
+                            })
+                            .collect();
+                        println!(
+                            "{} [{}]  {} won / {} lost ({:.0}%), verified {}{}",
+                            p.host,
+                            &p.fingerprint[..p.fingerprint.len().min(8)],
+                            p.wins.max(p.uses),
+                            p.losses,
+                            p.win_rate() * 100.0,
+                            if p.verified_ts == 0 {
+                                "never".to_string()
+                            } else {
+                                format!("{age_days}d ago")
+                            },
+                            p.learned_from
+                                .as_deref()
+                                .map(|f| format!(", learned from [{}]", &f[..f.len().min(8)]))
+                                .unwrap_or_default()
+                        );
+                        for m in mapped {
+                            println!("    {m}");
+                        }
+                    }
+                }
+                MemoryCmd::Prune { days } => {
+                    let n = m.prune(days * 86_400).await?;
+                    println!("pruned {n} stale records");
+                }
                 MemoryCmd::Wipe { yes } => {
                     if !yes {
                         bail!(
@@ -732,11 +787,21 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
             Err(e) => {
                 ok = false;
                 println!("Memory: FAILED: {e}");
+                let msg = e.to_string();
+                if msg.contains("error sending request") || msg.contains("connect") {
+                    println!("  fix: Qdrant is not reachable. Check the URL with `ostler config show`, or start a local one: docker run -p 6333:6333 qdrant/qdrant");
+                } else if msg.contains("401") || msg.contains("403") {
+                    println!("  fix: Qdrant rejected the API key. Re-run `ostler init`, or `ostler config set qdrant_api_key <key>`.");
+                } else if msg.contains("-dim vectors") {
+                    println!("  fix: this collection was created with a different embedding model; use the same `--embedding-model`, or a different tenant/cluster.");
+                }
             }
         },
     }
-    println!("\nNext: `ostler setup claude|codex|cursor|vscode|json` prints the exact config for your client.");
-    if !ok {
+    if ok {
+        println!("\nAll good. Next: `ostler setup claude --apply` (or codex | cursor | vscode | json) to connect your agent.");
+    } else {
+        println!("\nFix the items above and run `ostler doctor` again. Chrome is required; memory is optional (unset QDRANT_URL to run without it).");
         std::process::exit(1);
     }
     Ok(())

@@ -23,8 +23,8 @@
 | `ostler-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
 | `ostler-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
 | `ostler-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors) and `InMemoryStore`; `Memory` API for one tenant. |
-| `ostler-mcp` | JSON-RPC loop, 19 tools in 3 profiles (including `tabs` and `context`), lazy browser, per-tool metrics, background memory writes. |
-| `ostler-cli` | `serve`, `doctor`, `inspect`, `memory`, `fixtures`. |
+| `ostler-mcp` | JSON-RPC loop, 21 tools in 3 profiles (including `tabs` and `context`), lazy browser, per-tool metrics, background memory writes. |
+| `ostler` (`crates/ostler-cli`) | `serve`, `doctor`, `inspect`, `memory`, `fixtures`. |
 | `ostler-fixtures` | The 11 test pages and a recording HTTP server. |
 | `ostler-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |
 
@@ -42,7 +42,7 @@ Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
 
 **Observation is part of the action.** `navigate` returns an interactive snapshot; `click`/`type`/`press` return a delta snapshot. Saves a tool call per step and keeps the context small. `observe: none` opts out.
 
-**Memory as three kinds, one tenant filter.** *Profile* (facts about the user), *playbooks* (structure of forms that worked: field labels and which fact fed them, **never values**), *episodes* (validation errors and failures, deduplicated with a count). Retrieval prefers the most reliable signal first: playbook mapping → the field's `autocomplete` token matched against facts (payload filter, no vectors) → semantic vector search. Writes happen in the background, never on the response path. Every point carries `tenant`, indexed with `is_tenant`.
+**Memory as three kinds, one tenant filter.** *Profile* (facts about the user), *playbooks* (structure of forms that worked: field labels and which fact fed them, **never values**), *episodes* (validation errors and failures, deduplicated with a count). Retrieval prefers the most reliable signal first: the form's own playbook mapping → the field's `autocomplete` token matched against facts (payload filter, no vectors) → a trusted mapping from a similar form on the same host, ranked in Qdrant by a score-boosting formula over similarity, win rate and recency → semantic vector search. Every fill outcome patches the playbook: wins reinforce a mapping, failures demote it, and `prune` forgets stale, unproven skills ([ADR-0008](adr/0008-learning-loop.md)). Writes happen in the background, never on the response path. Every point carries `tenant`, indexed with `is_tenant`.
 
 **One Qdrant API, two vector sources.** With Qdrant Cloud Inference the client sends `{text, model}` and Qdrant embeds server-side. A client-side embedder exists for tests and for development against open-source Qdrant. The deterministic hash embedder used there is explicitly **not** semantic.
 
@@ -53,7 +53,7 @@ Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
 - Chrome/Chromium only (Lightpanda/other CDP engines are a planned pluggable backend, see ADR-0001; not implemented).
 - One page per server. No tabs or popups.
 - Cross-origin iframes and closed shadow roots are invisible to the runtime.
-- No CAPTCHA, 2FA, anti-bot or login-state management beyond `--profile-dir`.
+- No CAPTCHA solving, 2FA, anti-bot evasion or login-state management beyond `--profile-dir`. Verification walls are *detected and handed to a person* (`CHALLENGE:` notice, `wait_for_human`, A2A `input-required`); this is deliberate, see [ADR-0009](adr/0009-challenges-are-handed-off.md).
 - Custom date-picker widgets are filled by typing; calendar-click widgets are not special-cased.
 - stdio transport only (no HTTP transport yet).
 - Linux and Windows are untested locally; CI covers Linux.

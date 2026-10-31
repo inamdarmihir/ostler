@@ -60,6 +60,8 @@ fn defs() -> Vec<Def> {
             props: json!({"key":{"type":"string"},"observe":observe()}) },
         Def { name: "wait_for", desc: "Wait until text appears/disappears or a CSS selector shows.", min: Profile::Core, required: &[],
             props: json!({"text":{"type":"string"},"text_gone":{"type":"string"},"selector":{"type":"string"},"timeout_ms":{"type":"integer"}}) },
+        Def { name: "wait_for_human", desc: "A CAPTCHA/verification wall is blocking the page: wait for the user to complete it in the browser window (needs --headed). Ostler never solves these itself.", min: Profile::Core, required: &[],
+            props: json!({"timeout_s":{"type":"integer","description":"default 120, max 600"}}) },
         Def { name: "screenshot", desc: "Capture a PNG of the page or one element.", min: Profile::Core, required: &[],
             props: json!({"ref":{"type":"string"},"full_page":{"type":"boolean"}}) },
         Def { name: "look", desc: "See where to click: a screenshot with every clickable element boxed and numbered by its ref, plus a legend saying what each does (type here, submits the form, error…). Use refs with click/type/fill_field.", min: Profile::Core, required: &[],

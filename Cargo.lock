@@ -1040,6 +1040,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
+name = "ostler"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ostler-a2a",
+ "ostler-browser",
+ "ostler-cdp",
+ "ostler-fixtures",
+ "ostler-mcp",
+ "ostler-memory",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "ostler-a2a"
 version = "0.2.0"
 dependencies = [
@@ -1109,24 +1127,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
-]
-
-[[package]]
-name = "ostler-cli"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "clap",
- "ostler-a2a",
- "ostler-browser",
- "ostler-cdp",
- "ostler-fixtures",
- "ostler-mcp",
- "ostler-memory",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
 ]
 
 [[package]]

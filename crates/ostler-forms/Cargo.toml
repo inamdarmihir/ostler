@@ -1,10 +1,13 @@
 [package]
 name = "ostler-forms"
-description = "Ostler: forms component"
+description = "Typed form model, field matching and value normalization for Ostler (internal crate)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
 rust-version.workspace = true
 
 [lints]

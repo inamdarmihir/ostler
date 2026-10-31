@@ -23,27 +23,109 @@ impl Kind {
     pub const ALL: [Kind; 3] = [Kind::Profile, Kind::Playbook, Kind::Episode];
 }
 
-/// Conjunction of payload equality conditions. Every query carries the tenant.
+/// Conjunction of payload conditions. Every query carries the tenant.
+///
+/// Equality on an array payload matches if any element is equal (Qdrant semantics), so a
+/// playbook's `labels_norm` list can be filtered by a single label.
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
     pub must: Vec<(String, Value)>,
+    /// Numeric `key < value` conditions.
+    pub below: Vec<(String, f64)>,
 }
 
 impl Filter {
     pub fn tenant(t: &str) -> Self {
         Self {
             must: vec![("tenant".into(), json!(t))],
+            below: vec![],
         }
+    }
+    pub fn below(mut self, key: &str, value: f64) -> Self {
+        self.below.push((key.into(), value));
+        self
     }
     pub fn and(mut self, key: &str, value: Value) -> Self {
         self.must.push((key.into(), value));
         self
     }
     pub fn to_qdrant(&self) -> Value {
-        json!({ "must": self.must.iter().map(|(k, v)| json!({"key": k, "match": {"value": v}})).collect::<Vec<_>>() })
+        let mut must: Vec<Value> = self
+            .must
+            .iter()
+            .map(|(k, v)| json!({"key": k, "match": {"value": v}}))
+            .collect();
+        must.extend(
+            self.below
+                .iter()
+                .map(|(k, v)| json!({"key": k, "range": {"lt": v}})),
+        );
+        json!({ "must": must })
     }
     fn matches(&self, payload: &Value) -> bool {
-        self.must.iter().all(|(k, v)| &payload[k.as_str()] == v)
+        self.must.iter().all(|(k, v)| match &payload[k.as_str()] {
+            Value::Array(a) => a.contains(v),
+            other => other == v,
+        }) && self
+            .below
+            .iter()
+            .all(|(k, v)| payload[k.as_str()].as_f64().is_some_and(|x| x < *v))
+    }
+}
+
+/// How to rank learned records beyond raw similarity: the Qdrant score-boosting formula
+///
+/// `similarity + success_weight * (wins+1)/(wins+losses+2) + recency_weight * decay(age)`
+///
+/// where `decay` halves every `half_life_secs`. Reads payload keys `wins`, `losses`, `verified_ts`.
+/// The success term is a Laplace-smoothed win rate, so an untested record starts at 0.5.
+#[derive(Debug, Clone, Copy)]
+pub struct Rank {
+    pub now: u64,
+    pub success_weight: f32,
+    pub recency_weight: f32,
+    pub half_life_secs: u64,
+    /// Candidates below this raw similarity are discarded before boosting.
+    pub min_similarity: f32,
+}
+
+impl Rank {
+    /// The same formula, evaluated client-side (in-memory store, and for tests to pin the maths).
+    pub fn score(&self, similarity: f32, payload: &Value) -> f32 {
+        let wins = payload["wins"].as_f64().unwrap_or(0.0) as f32;
+        let losses = payload["losses"].as_f64().unwrap_or(0.0) as f32;
+        let ts = payload["verified_ts"].as_f64().unwrap_or(0.0);
+        let rate = (wins + 1.0) / (wins + losses + 2.0);
+        let age = (self.now as f64 - ts).abs();
+        let decay = (0.5f64.ln() / self.half_life_secs.max(1) as f64 * age).exp() as f32;
+        similarity + self.success_weight * rate + self.recency_weight * decay
+    }
+
+    /// Qdrant Query API body: vector prefetch (with the similarity floor), then formula rescoring.
+    pub fn to_qdrant_query(&self, vector: Value, filter: &Filter, limit: usize) -> Value {
+        json!({
+            "prefetch": {
+                "query": vector,
+                "filter": filter.to_qdrant(),
+                "limit": (limit * 4).max(16),
+                "score_threshold": self.min_similarity,
+            },
+            "query": { "formula": {
+                "sum": [
+                    "$score",
+                    { "mult": [ self.success_weight, { "div": {
+                        "left": { "sum": ["wins", 1.0] },
+                        "right": { "sum": ["wins", "losses", 2.0] },
+                    } } ] },
+                    { "mult": [ self.recency_weight, { "exp_decay": {
+                        "x": "verified_ts", "target": self.now,
+                        "scale": self.half_life_secs.max(1), "midpoint": 0.5,
+                    } } ] },
+                ]
+            }, "defaults": { "wins": 0, "losses": 0, "verified_ts": 0 } },
+            "limit": limit,
+            "with_payload": true,
+        })
     }
 }
 
@@ -65,6 +147,15 @@ pub trait Store: Send + Sync {
         text: &str,
         filter: &Filter,
         limit: usize,
+    ) -> Result<Vec<Hit>>;
+    /// Similarity search re-ranked by evidence (wins, losses, recency). See [`Rank`].
+    async fn search_ranked(
+        &self,
+        kind: Kind,
+        text: &str,
+        filter: &Filter,
+        limit: usize,
+        rank: &Rank,
     ) -> Result<Vec<Hit>>;
     async fn scroll(&self, kind: Kind, filter: &Filter, limit: usize) -> Result<Vec<Hit>>;
     async fn delete(&self, kind: Kind, id: &str) -> Result<()>;
@@ -140,6 +231,29 @@ impl Store for InMemoryStore {
                 id: p.id.clone(),
                 score: cosine(&q, &p.vector),
                 payload: p.payload.clone(),
+            })
+            .collect();
+        hits.sort_by(|a, b| b.score.total_cmp(&a.score));
+        hits.truncate(limit);
+        Ok(hits)
+    }
+
+    async fn search_ranked(
+        &self,
+        kind: Kind,
+        text: &str,
+        filter: &Filter,
+        limit: usize,
+        rank: &Rank,
+    ) -> Result<Vec<Hit>> {
+        let mut hits: Vec<Hit> = self
+            .search(kind, text, filter, usize::MAX)
+            .await?
+            .into_iter()
+            .filter(|h| h.score >= rank.min_similarity)
+            .map(|mut h| {
+                h.score = rank.score(h.score, &h.payload);
+                h
             })
             .collect();
         hits.sort_by(|a, b| b.score.total_cmp(&a.score));

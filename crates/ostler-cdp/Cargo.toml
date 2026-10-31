@@ -1,10 +1,13 @@
 [package]
 name = "ostler-cdp"
-description = "Ostler: cdp component"
+description = "Minimal Chrome DevTools Protocol client and Chrome launcher (internal crate of Ostler)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
 rust-version.workspace = true
 
 [lints]

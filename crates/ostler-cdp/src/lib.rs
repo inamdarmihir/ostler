@@ -23,8 +23,14 @@ use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CdpError {
-    #[error("could not find a Chrome/Chromium binary (set OSTLER_CHROME or pass --chrome-path)")]
+    #[error(
+        "could not find Chrome or Chromium. Install one \
+         (macOS: `brew install --cask google-chrome`; Debian/Ubuntu: `sudo apt install chromium`; \
+         Windows: https://www.google.com/chrome) or point Ostler at it with OSTLER_CHROME=/path/to/chrome"
+    )]
     ChromeNotFound,
+    #[error("the Chrome path {0:?} (from --chrome-path or OSTLER_CHROME) does not exist; fix it or unset it to auto-detect")]
+    ChromePathMissing(String),
     #[error("failed to launch browser: {0}")]
     Launch(String),
     #[error("websocket error: {0}")]
