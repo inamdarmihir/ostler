@@ -1,6 +1,6 @@
 # Benchmarks
 
-Everything below was measured by `waymarker-bench` on one machine and is reproducible with the commands at the end. The harness prints its own assumptions with every table. If a number here disagrees with what you measure, trust yours and open an issue.
+Everything below was measured by `ostler-bench` on one machine and is reproducible with the commands at the end. The harness prints its own assumptions with every table. If a number here disagrees with what you measure, trust yours and open an issue.
 
 **Machine:** Apple M2, 8 cores, 8 GB RAM, macOS 26.6, Chrome 156, Qdrant (latest release binary at the time), single machine, everything over localhost.
 **Date:** 2026-10-30. **Commit:** see `git log`.
@@ -93,11 +93,11 @@ Real Qdrant server, multi-tenant (`tenant` keyword payload index with `is_tenant
 ## 5. Reproduce
 
 ```sh
-cargo build --release -p waymarker-bench -p waymarker-cli
-./target/release/waymarker-bench --json out/forms.json forms --reps 3
-./target/release/waymarker-bench --json out/footprint.json footprint
-./target/release/waymarker-bench --json out/concurrency.json concurrency --sessions 1,2,4,8 --lean
-WAYMARKER_QDRANT_BIN=/path/to/qdrant ./target/release/waymarker-bench --json out/memory.json memory --sizes 1000x20,10000x20
+cargo build --release -p ostler-bench -p ostler-cli
+./target/release/ostler-bench --json out/forms.json forms --reps 3
+./target/release/ostler-bench --json out/footprint.json footprint
+./target/release/ostler-bench --json out/concurrency.json concurrency --sessions 1,2,4,8 --lean
+OSTLER_QDRANT_BIN=/path/to/qdrant ./target/release/ostler-bench --json out/memory.json memory --sizes 1000x20,10000x20
 # Cost knobs: --price-in --price-out --llm-turn-secs --base-context   (forms)
 #             --vcpu-hour-usd --gib-hour-usd                          (concurrency)
 ```

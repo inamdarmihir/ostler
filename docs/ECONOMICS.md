@@ -12,7 +12,7 @@ For a typical form task (measured on fixtures; LLM price is an illustrative $3 /
 | Browser compute | ~$0.000006 | ~0.03% | measured 0.5 CPU-s + 0.5 GiB for ~1 s, illustrative cloud price |
 | Qdrant (memory ops) | ~2 requests, sub-ms | negligible | measured; Cloud Inference model cost not measured |
 
-**Implication:** the browser is not the cost center, the model is. A browser that is 2x faster or cheaper to run changes the bill by nothing. A browser that makes the agent take fewer turns and read fewer tokens changes it a lot: on a 20-field form we measure **5.0x lower LLM cost and 5.4x lower latency** than a per-field interaction pattern. Waymarker's economic claim is therefore "fewer turns and fewer tokens per completed form", not "faster browser".
+**Implication:** the browser is not the cost center, the model is. A browser that is 2x faster or cheaper to run changes the bill by nothing. A browser that makes the agent take fewer turns and read fewer tokens changes it a lot: on a 20-field form we measure **5.0x lower LLM cost and 5.4x lower latency** than a per-field interaction pattern. Ostler's economic claim is therefore "fewer turns and fewer tokens per completed form", not "faster browser".
 
 ## 2. Is the saving real, or an artefact of the baseline?
 
@@ -62,14 +62,14 @@ What can erode it: competitors adding memory (it is not hard in principle), and 
 
 | aspect | what we test | where | status |
 |---|---|---|---|
-| **Correctness** | 21 browser e2e tests assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/waymarker-browser/tests` | passing |
-| **Form logic** | key->field matching (ambiguity reported, never guessed), option/date/time normalisation, sensitive-field detection, fingerprints | `waymarker-forms` unit tests (14) | passing |
-| **Protocol** | real binary over MCP stdio: initialize, tools, memory learning loop, confirm gate, domain policy, profiles | `crates/waymarker-cli/tests` | passing |
-| **Memory** | store semantics on a real Qdrant: roundtrip, isolation, upsert, dimension mismatch, 20 concurrent tenants; Cloud Inference request shape via mock | `waymarker-memory` tests (11 + 3 real) | passing |
-| **Cost** | tool calls and tokens per task, LLM cost model (unit-tested) | `waymarker-bench forms`, `cost.rs` tests | measured |
+| **Correctness** | 21 browser e2e tests assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/ostler-browser/tests` | passing |
+| **Form logic** | key->field matching (ambiguity reported, never guessed), option/date/time normalisation, sensitive-field detection, fingerprints | `ostler-forms` unit tests (14) | passing |
+| **Protocol** | real binary over MCP stdio: initialize, tools, memory learning loop, confirm gate, domain policy, profiles | `crates/ostler-cli/tests` | passing |
+| **Memory** | store semantics on a real Qdrant: roundtrip, isolation, upsert, dimension mismatch, 20 concurrent tenants; Cloud Inference request shape via mock | `ostler-memory` tests (11 + 3 real) | passing |
+| **Cost** | tool calls and tokens per task, LLM cost model (unit-tested) | `ostler-bench forms`, `cost.rs` tests | measured |
 | **Latency** | per-task tool time, cold start; regression found and fixed (3 s to 160 ms) | bench + e2e | measured |
-| **Scale** | parallel sessions, memory per session, CPU per task, Qdrant at 200k points | `waymarker-bench concurrency/memory/footprint` | measured (one machine) |
-| **Context cost** | tool schema size capped by a unit test (under 7 KB) | `waymarker-mcp` tests | enforced |
+| **Scale** | parallel sessions, memory per session, CPU per task, Qdrant at 200k points | `ostler-bench concurrency/memory/footprint` | measured (one machine) |
+| **Context cost** | tool schema size capped by a unit test (under 7 KB) | `ostler-mcp` tests | enforced |
 | **Security** | domain allowlist (suffix-attack cases), scheme blocking, confirm gate, secret refusal, untrusted-content marking | policy + MCP tests | passing; no external audit |
 | **Not yet covered** | real-site success rate; Linux/Windows; cross-origin iframes; long-running leak soak; Cloud Inference live; fuzzing the JSON-RPC layer | roadmap | open |
 

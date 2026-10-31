@@ -1,0 +1,32 @@
+[package]
+name = "ostler-bench"
+description = "Ostler benchmark harness: forms, memory scale, concurrency, cost model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "ostler-bench"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.5.61", features = ["derive"] }
+libc = "0.2.191"
+reqwest = { version = "0.13.3", default-features = false, features = ["json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "process", "sync"] }
+uuid = { version = "1.20.0", features = ["v4"] }
+ostler-browser = { version = "0.2.0", path = "../ostler-browser" }
+ostler-cdp = { version = "0.2.0", path = "../ostler-cdp" }
+ostler-fixtures = { version = "0.2.0", path = "../ostler-fixtures" }
+ostler-mcp = { version = "0.2.0", path = "../ostler-mcp" }
+ostler-memory = { version = "0.2.0", path = "../ostler-memory" }

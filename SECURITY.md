@@ -1,6 +1,6 @@
 # Security
 
-Waymarker lets an AI agent drive a real browser and stores some user data. Treat it like any tool that can act on your behalf.
+Ostler lets an AI agent drive a real browser and stores some user data. Treat it like any tool that can act on your behalf.
 
 ## Reporting a vulnerability
 
@@ -28,4 +28,4 @@ Not audited. No security review has been done by a third party.
 - Disk: nothing by default; a Chrome profile only if you pass `--profile-dir`.
 - Telemetry: none.
 
-`waymarker memory wipe --yes` deletes everything for a tenant.
+`ostler memory wipe --yes` deletes everything for a tenant.

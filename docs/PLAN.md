@@ -1,6 +1,6 @@
-# Waymarker: a Rust headless browser for coding agents, with Qdrant-native memory
+# Ostler: a Rust headless browser for coding agents, with Qdrant-native memory
 
-Name: **Waymarker** (a trail marker; crates.io, npm and GitHub availability verified 2026-10-30; bare `quill` was taken). License: Apache-2.0.
+Name: **Ostler** (an ostler tends travellers' horses, which is what this does for agents; crates.io, npm and GitHub availability verified 2026-10-30; bare `quill` was taken). License: Apache-2.0.
 Directory `/Users/sonic3022/Downloads/Browser` is empty, so this is a greenfield build.
 
 ## 1. Context
@@ -12,7 +12,7 @@ Goal: a research-grade, production-quality open-source project that is the refer
 Decisions already made with the user:
 - **Engine**: whichever is fast and reliable, so a pluggable CDP backend. Chrome is the reliable default. Lightpanda is an opt-in fast path with automatic fallback to Chrome. No custom engine.
 - **Embeddings**: Qdrant Cloud Inference only in v1. Memory needs a Qdrant Cloud cluster and key. Risk: this adds setup friction for new users and weakens the "zero config" pitch. Mitigation: an `Embedder` trait, so a local backend can be added in v1.1 without touching callers. Offline, memory-free mode still works for all non-memory tools.
-- **Name/license**: Waymarker, Apache-2.0. The repo is public from day one, by the user's choice.
+- **Name/license**: Ostler, Apache-2.0. The repo is public from day one, by the user's choice.
 
 ## 2. Competitive research (what exists, what it lacks)
 
@@ -49,16 +49,16 @@ Evidence that forms are the unsolved problem: Online-Mind2Web reports frontier a
 Cargo workspace:
 
 ```
-waymarker/
+ostler/
   crates/
-    waymarker-cdp/        # thin async CDP client (evaluate chromiumoxide vs own, see Decisions)
-    waymarker-engine/     # Backend trait: Chrome, Lightpanda; routing + fallback
-    waymarker-dom/        # accessibility tree + DOM extraction, delta snapshots, shadow DOM, iframes
-    waymarker-forms/      # Form IR extractor, field typing, fill planner, verifier, wizard state machine
-    waymarker-memory/     # Embedder trait (CloudInference impl), Qdrant collections, schemas, retrieval, write policy
-    waymarker-mcp/        # MCP server (stdio + streamable HTTP), tool definitions, profiles
-    waymarker-cli/        # `waymarker` binary: serve, doctor, bench, memory inspect/export/wipe
-    waymarker-bench/      # benchmark + eval harness
+    ostler-cdp/        # thin async CDP client (evaluate chromiumoxide vs own, see Decisions)
+    ostler-engine/     # Backend trait: Chrome, Lightpanda; routing + fallback
+    ostler-dom/        # accessibility tree + DOM extraction, delta snapshots, shadow DOM, iframes
+    ostler-forms/      # Form IR extractor, field typing, fill planner, verifier, wizard state machine
+    ostler-memory/     # Embedder trait (CloudInference impl), Qdrant collections, schemas, retrieval, write policy
+    ostler-mcp/        # MCP server (stdio + streamable HTTP), tool definitions, profiles
+    ostler-cli/        # `ostler` binary: serve, doctor, bench, memory inspect/export/wipe
+    ostler-bench/      # benchmark + eval harness
   site/               # portfolio site (GitHub Pages)
   docs/               # ADRs, design docs, research notes
   fixtures/           # local form test pages (wizards, date pickers, shadow DOM, iframes, validation)
@@ -66,7 +66,7 @@ waymarker/
 
 Key flows:
 - **Observe → plan → act → verify**: `form_inspect` returns Form IR; `form_fill` takes `{field_id: value}` or `auto: true`, which asks memory for values and returns only the unresolved fields to the agent.
-- **Memory write policy**: write a playbook only after post-submit verification succeeds. Store failures with the error text. Never store secrets, only references, because passwords and payment data go through a separate local vault/redaction path and never into Qdrant. Every memory item has TTL/decay and is user-inspectable and deletable (`waymarker memory ...`).
+- **Memory write policy**: write a playbook only after post-submit verification succeeds. Store failures with the error text. Never store secrets, only references, because passwords and payment data go through a separate local vault/redaction path and never into Qdrant. Every memory item has TTL/decay and is user-inspectable and deletable (`ostler memory ...`).
 - **Safety**: a domain allowlist, a per-session confirmation gate for irreversible submits (configurable), prompt-injection hygiene (page text is marked as untrusted in tool outputs), and no arbitrary JS tool by default.
 
 ## 5. MCP integration
@@ -96,9 +96,9 @@ Key flows:
 
 ## 7. Repo and portfolio site
 
-- GitHub repo `waymarker` with: README (one GIF, a 3-line install, a comparison table that is honest about competitors), `ARCHITECTURE.md`, `docs/adr/`, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, good-first-issue labels, CI badges.
+- GitHub repo `ostler` with: README (one GIF, a 3-line install, a comparison table that is honest about competitors), `ARCHITECTURE.md`, `docs/adr/`, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, good-first-issue labels, CI badges.
 - CI (GitHub Actions): `cargo fmt`/`clippy -D warnings`/`test`, `cargo deny`, fixture e2e against Chrome, release builds for macOS arm64/x64 and Linux, benchmark job that tracks regressions.
-- Site: static (Astro or plain HTML/CSS) deployed through Actions to `<user-or-org>.github.io/waymarker`. Sections: Why, Architecture, **Engineering decisions (ADR-driven: choice, alternatives rejected, why)**, Benchmarks (interactive charts with downloadable raw data), Memory deep dive, Install per client, Research notes. Needs the GitHub account or org name that will own the repo.
+- Site: static (Astro or plain HTML/CSS) deployed through Actions to `<user-or-org>.github.io/ostler`. Sections: Why, Architecture, **Engineering decisions (ADR-driven: choice, alternatives rejected, why)**, Benchmarks (interactive charts with downloadable raw data), Memory deep dive, Install per client, Research notes. Needs the GitHub account or org name that will own the repo.
 - Creating the repo and pushing is outward-facing, so I will confirm owner/org and visibility before doing it.
 
 ## 8. Risks
@@ -113,10 +113,10 @@ Key flows:
 ## 9. Verification (how we know it works)
 
 - Unit tests per crate. Fixture suite: ≥30 local form pages covering the failure modes listed in section 2, all run in CI.
-- E2E: start `waymarker serve`, connect real Claude Code and Codex, complete a multi-step form; run it twice and show the second run uses memory (fewer tool calls/tokens).
-- Benchmarks: same tasks across Waymarker, Playwright MCP, agent-browser; report success rate, latency, tokens, and tool calls with variance.
+- E2E: start `ostler serve`, connect real Claude Code and Codex, complete a multi-step form; run it twice and show the second run uses memory (fewer tool calls/tokens).
+- Benchmarks: same tasks across Ostler, Playwright MCP, agent-browser; report success rate, latency, tokens, and tool calls with variance.
 - Memory: recall precision on a labelled field-matching set; confirm secrets never appear in Qdrant payloads (automated test).
-- `waymarker doctor` validates the Chrome install, Qdrant connectivity and MCP handshake.
+- `ostler doctor` validates the Chrome install, Qdrant connectivity and MCP handshake.
 
 ## 10. Open items needing the user later
 

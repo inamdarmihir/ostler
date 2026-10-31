@@ -1040,6 +1040,145 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
+name = "ostler-a2a"
+version = "0.2.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "ostler-browser",
+ "ostler-cdp",
+ "ostler-fixtures",
+ "ostler-mcp",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "uuid",
+]
+
+[[package]]
+name = "ostler-bench"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "ostler-browser",
+ "ostler-cdp",
+ "ostler-fixtures",
+ "ostler-mcp",
+ "ostler-memory",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ostler-browser"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "futures-util",
+ "ostler-cdp",
+ "ostler-fixtures",
+ "ostler-forms",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tiny_http",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "ostler-cdp"
+version = "0.2.0"
+dependencies = [
+ "base64 0.23.1",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+]
+
+[[package]]
+name = "ostler-cli"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ostler-a2a",
+ "ostler-browser",
+ "ostler-cdp",
+ "ostler-fixtures",
+ "ostler-mcp",
+ "ostler-memory",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+]
+
+[[package]]
+name = "ostler-fixtures"
+version = "0.2.0"
+dependencies = [
+ "serde_json",
+ "tiny_http",
+ "url",
+]
+
+[[package]]
+name = "ostler-forms"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "ostler-mcp"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "ostler-browser",
+ "ostler-forms",
+ "ostler-memory",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "ostler-memory"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2106,145 +2245,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "waymarker-a2a"
-version = "0.2.0"
-dependencies = [
- "axum",
- "futures-util",
- "reqwest",
- "serde_json",
- "tokio",
- "tokio-stream",
- "uuid",
- "waymarker-browser",
- "waymarker-cdp",
- "waymarker-fixtures",
- "waymarker-mcp",
-]
-
-[[package]]
-name = "waymarker-bench"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "clap",
- "libc",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "uuid",
- "waymarker-browser",
- "waymarker-cdp",
- "waymarker-fixtures",
- "waymarker-mcp",
- "waymarker-memory",
-]
-
-[[package]]
-name = "waymarker-browser"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "base64 0.23.1",
- "futures-util",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tiny_http",
- "tokio",
- "tracing",
- "url",
- "waymarker-cdp",
- "waymarker-fixtures",
- "waymarker-forms",
-]
-
-[[package]]
-name = "waymarker-cdp"
-version = "0.2.0"
-dependencies = [
- "base64 0.23.1",
- "futures-util",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "tracing",
-]
-
-[[package]]
-name = "waymarker-cli"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "clap",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
- "waymarker-a2a",
- "waymarker-browser",
- "waymarker-cdp",
- "waymarker-fixtures",
- "waymarker-mcp",
- "waymarker-memory",
-]
-
-[[package]]
-name = "waymarker-fixtures"
-version = "0.2.0"
-dependencies = [
- "serde_json",
- "tiny_http",
- "url",
-]
-
-[[package]]
-name = "waymarker-forms"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "waymarker-mcp"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "base64 0.23.1",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "url",
- "waymarker-browser",
- "waymarker-forms",
- "waymarker-memory",
-]
-
-[[package]]
-name = "waymarker-memory"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "uuid",
- "wiremock",
 ]
 
 [[package]]

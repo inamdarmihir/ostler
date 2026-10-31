@@ -13,4 +13,4 @@ Status: accepted (2026-10-30)
 - Showed the lean profile saves 37% memory at no latency cost.
 
 ## Decision
-Benchmarks (`waymarker-bench`) are part of the product: flags expose every assumption, results are committed under `bench-results/`, the docs state what is measured versus assumed, and a CI job reproduces them on Linux.
+Benchmarks (`ostler-bench`) are part of the product: flags expose every assumption, results are committed under `bench-results/`, the docs state what is measured versus assumed, and a CI job reproduces them on Linux.

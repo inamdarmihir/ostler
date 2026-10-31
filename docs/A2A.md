@@ -1,13 +1,13 @@
 # Agent2Agent (A2A)
 
-Waymarker can be driven by another agent over [A2A](https://a2a-protocol.org) (v1.0, JSON-RPC over HTTP, SSE streaming), as well as by a coding agent over MCP. Use MCP when one agent owns the browser; use A2A when another agent (or service) should be able to hand Waymarker a form as a task.
+Ostler can be driven by another agent over [A2A](https://a2a-protocol.org) (v1.0, JSON-RPC over HTTP, SSE streaming), as well as by a coding agent over MCP. Use MCP when one agent owns the browser; use A2A when another agent (or service) should be able to hand Ostler a form as a task.
 
 ```sh
-waymarker a2a --allow-domain example.com          # http://127.0.0.1:8765
+ostler a2a --allow-domain example.com          # http://127.0.0.1:8765
 curl http://127.0.0.1:8765/.well-known/agent-card.json
 ```
 
-Waymarker is a **tool, not a language model**. It understands structured requests, not free text. It tells a client so (it answers chatter with a message that shows the expected shape).
+Ostler is a **tool, not a language model**. It understands structured requests, not free text. It tells a client so (it answers chatter with a message that shows the expected shape).
 
 ## Sending work
 
@@ -44,7 +44,7 @@ Each task has two artifacts: `result` (compact text) and `data` (the same inform
 
 ## Conversations share state
 
-One A2A `contextId` is one Waymarker session: its own Chrome, its own **tabs**, and its own shared **context** notes. Messages with the same `contextId` (or the same `taskId`) continue where the last one stopped, e.g. the form that was filled is still open when `{"confirm": true}` arrives. Different `contextId`s can never see each other's pages.
+One A2A `contextId` is one Ostler session: its own Chrome, its own **tabs**, and its own shared **context** notes. Messages with the same `contextId` (or the same `taskId`) continue where the last one stopped, e.g. the form that was filled is still open when `{"confirm": true}` arrives. Different `contextId`s can never see each other's pages.
 
 Each conversation is a Chrome process (about 400-650 MiB), so it is capped: `--max-contexts` (default 4), idle ones are closed after `--idle-secs` (default 300).
 
@@ -58,7 +58,7 @@ Each conversation is a Chrome process (about 400-650 MiB), so it is capped: `--m
 
 An A2A endpoint lets a network client steer a browser that can log in to things. Defaults are conservative:
 
-- Binds **127.0.0.1**. Binding anything else **requires `--a2a-token`** (or `WAYMARKER_A2A_TOKEN`); the server refuses to start otherwise.
+- Binds **127.0.0.1**. Binding anything else **requires `--a2a-token`** (or `OSTLER_A2A_TOKEN`); the server refuses to start otherwise.
 - With a token, the RPC endpoint needs `Authorization: Bearer …` (compared in constant time). The Agent Card stays public, as the protocol expects, and advertises the scheme but never the token.
 - Requests carrying an `Origin` header (a web page in a browser) are refused, and the `Host` header must be a loopback name or one you list with `--allowed-host`/`--public-url`. This blocks drive-by and DNS-rebinding attacks from a page open on the same machine.
 - **Always set `--allow-domain`.** Without it, any remote agent can send this browser to any website. The server warns at startup. The allowlist is enforced inside the browser for every conversation.
@@ -67,6 +67,6 @@ An A2A endpoint lets a network client steer a browser that can log in to things.
 
 ## Verified against
 
-The official A2A Python SDK (`a2a-sdk` 1.3.0) resolved the card, selected the JSON-RPC interface, streamed a three-turn conversation (input-required, input-required, completed) and received artifacts on every turn against the real binary. That was a manual check; the repository's own tests (`crates/waymarker-a2a/tests`) use plain HTTP.
+The official A2A Python SDK (`a2a-sdk` 1.3.0) resolved the card, selected the JSON-RPC interface, streamed a three-turn conversation (input-required, input-required, completed) and received artifacts on every turn against the real binary. That was a manual check; the repository's own tests (`crates/ostler-a2a/tests`) use plain HTTP.
 
 Not implemented: gRPC and REST bindings, push notifications, extended cards, signed cards, and the v0.3 wire format.

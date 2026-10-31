@@ -4,29 +4,29 @@
   agent (Claude Code, Codex, Cursor, …)
         │  MCP / JSON-RPC over stdio
         ▼
-  waymarker-mcp ── tool catalogue, profiles, safety gates, metrics, memory glue
+  ostler-mcp ── tool catalogue, profiles, safety gates, metrics, memory glue
         │                                  │
         ▼                                  ▼
-  waymarker-browser                  waymarker-memory ──► Qdrant (REST)
+  ostler-browser                  ostler-memory ──► Qdrant (REST)
    Page / fill engine / snapshots      profile · playbooks · episodes
         │         │
-        │         └─ waymarker-forms (form IR, key→field matching, value normalisation)
+        │         └─ ostler-forms (form IR, key→field matching, value normalisation)
         ▼
-  waymarker-cdp ── async CDP over one WebSocket, Chrome launcher
+  ostler-cdp ── async CDP over one WebSocket, Chrome launcher
         ▼
   Chrome (headless)  ◄── runtime.js injected into every document
 ```
 
 | crate | responsibility |
 |---|---|
-| `waymarker-cdp` | One WebSocket to the browser, id-matched requests, broadcast events, flattened target sessions, Chrome discovery/launch, process-tree memory measurement. ~650 lines, no browser-automation dependency. |
-| `waymarker-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
-| `waymarker-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
-| `waymarker-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors) and `InMemoryStore`; `Memory` API for one tenant. |
-| `waymarker-mcp` | JSON-RPC loop, 19 tools in 3 profiles (including `tabs` and `context`), lazy browser, per-tool metrics, background memory writes. |
-| `waymarker-cli` | `serve`, `doctor`, `inspect`, `memory`, `fixtures`. |
-| `waymarker-fixtures` | The 11 test pages and a recording HTTP server. |
-| `waymarker-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |
+| `ostler-cdp` | One WebSocket to the browser, id-matched requests, broadcast events, flattened target sessions, Chrome discovery/launch, process-tree memory measurement. ~650 lines, no browser-automation dependency. |
+| `ostler-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
+| `ostler-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
+| `ostler-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors) and `InMemoryStore`; `Memory` API for one tenant. |
+| `ostler-mcp` | JSON-RPC loop, 19 tools in 3 profiles (including `tabs` and `context`), lazy browser, per-tool metrics, background memory writes. |
+| `ostler-cli` | `serve`, `doctor`, `inspect`, `memory`, `fixtures`. |
+| `ostler-fixtures` | The 11 test pages and a recording HTTP server. |
+| `ostler-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |
 
 ## The decisions that matter, and why
 

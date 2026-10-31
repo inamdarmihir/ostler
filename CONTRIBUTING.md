@@ -6,15 +6,15 @@ Thanks for looking. This project values **evidence over claims**: a change that 
 
 ```sh
 rustup toolchain install stable        # Rust 1.82+
-# Chrome or Chromium must be installed (or set WAYMARKER_CHROME)
+# Chrome or Chromium must be installed (or set OSTLER_CHROME)
 cargo test --workspace                 # browser tests skip politely if Chrome is missing
-WAYMARKER_REQUIRE_CHROME=1 cargo test  # ...or fail instead (what CI does)
+OSTLER_REQUIRE_CHROME=1 cargo test  # ...or fail instead (what CI does)
 ```
 
 Memory tests against a real Qdrant: download a Qdrant release binary, then
 
 ```sh
-WAYMARKER_QDRANT_BIN=/path/to/qdrant cargo test -p waymarker-memory --test qdrant_real
+OSTLER_QDRANT_BIN=/path/to/qdrant cargo test -p ostler-memory --test qdrant_real
 # or point at a running server: QDRANT_URL=http://localhost:6333
 ```
 
@@ -28,10 +28,10 @@ cargo test --workspace
 
 ## How to add support for a new form pattern
 
-1. Reproduce it as a small page in `fixtures/` (register it in `crates/waymarker-fixtures/src/lib.rs`). Make the page submit via `fetch('/submit', …)` so tests assert on what the *server received*.
-2. Add a failing test in `crates/waymarker-browser/tests/forms_e2e.rs`.
-3. Fix it in `runtime.js` (in-page behaviour) or `fill.rs` / `waymarker-forms` (planning and value handling).
-4. If it changes cost or latency, run `waymarker-bench forms` and update `docs/BENCHMARKS.md` honestly, including any row that got worse.
+1. Reproduce it as a small page in `fixtures/` (register it in `crates/ostler-fixtures/src/lib.rs`). Make the page submit via `fetch('/submit', …)` so tests assert on what the *server received*.
+2. Add a failing test in `crates/ostler-browser/tests/forms_e2e.rs`.
+3. Fix it in `runtime.js` (in-page behaviour) or `fill.rs` / `ostler-forms` (planning and value handling).
+4. If it changes cost or latency, run `ostler-bench forms` and update `docs/BENCHMARKS.md` honestly, including any row that got worse.
 
 ## Principles
 

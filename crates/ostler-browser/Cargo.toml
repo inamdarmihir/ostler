@@ -1,0 +1,29 @@
+[package]
+name = "ostler-browser"
+description = "Ostler: browser component"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tiny_http = "0.12.0"
+ostler-fixtures = { path = "../ostler-fixtures" }
+
+[dependencies]
+async-trait = "0.1.92"
+base64 = "0.23.1"
+futures-util = "0.3.34"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tracing = "0.1.44"
+url = "2.5.8"
+ostler-cdp = { version = "0.2.0", path = "../ostler-cdp" }
+ostler-forms = { version = "0.2.0", path = "../ostler-forms" }

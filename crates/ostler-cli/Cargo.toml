@@ -1,0 +1,35 @@
+[package]
+name = "ostler-cli"
+description = "Headless browser for AI coding agents: MCP server with Qdrant-backed memory and reliable form filling"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["mcp", "browser", "qdrant", "ai-agents", "automation"]
+categories = ["command-line-utilities", "web-programming"]
+
+[[bin]]
+name = "ostler"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.5.61", features = ["derive", "env"] }
+serde_json = "1.0.154"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "signal", "time"] }
+toml = "1.0.7"
+ostler-a2a = { version = "0.2.0", path = "../ostler-a2a" }
+ostler-browser = { version = "0.2.0", path = "../ostler-browser" }
+ostler-cdp = { version = "0.2.0", path = "../ostler-cdp" }
+ostler-fixtures = { version = "0.2.0", path = "../ostler-fixtures" }
+ostler-mcp = { version = "0.2.0", path = "../ostler-mcp" }
+ostler-memory = { version = "0.2.0", path = "../ostler-memory" }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.53.3", features = ["process", "io-util", "macros", "rt-multi-thread", "time"] }
+ostler-cdp = { path = "../ostler-cdp" }

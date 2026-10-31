@@ -2,7 +2,7 @@ name: Benchmarks
 # Manual: runs the harness on a Linux runner (PSS-based memory numbers) and uploads raw results.
 on: workflow_dispatch
 env:
-  WAYMARKER_NO_SANDBOX: "1"
+  OSTLER_NO_SANDBOX: "1"
 jobs:
   bench:
     runs-on: ubuntu-latest
@@ -17,15 +17,15 @@ jobs:
           mkdir -p "$RUNNER_TEMP/qdrant" && cd "$RUNNER_TEMP/qdrant"
           curl -sSfL -o q.tgz https://github.com/qdrant/qdrant/releases/latest/download/qdrant-x86_64-unknown-linux-gnu.tar.gz
           tar xzf q.tgz
-          echo "WAYMARKER_QDRANT_BIN=$RUNNER_TEMP/qdrant/qdrant" >> "$GITHUB_ENV"
-          echo "WAYMARKER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
-      - run: cargo build --release -p waymarker-bench -p waymarker-cli
+          echo "OSTLER_QDRANT_BIN=$RUNNER_TEMP/qdrant/qdrant" >> "$GITHUB_ENV"
+          echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
+      - run: cargo build --release -p ostler-bench -p ostler-cli
       - run: |
           mkdir -p out
-          ./target/release/waymarker-bench --json out/forms.json forms --reps 3
-          ./target/release/waymarker-bench --json out/footprint.json footprint
-          ./target/release/waymarker-bench --json out/concurrency.json concurrency --sessions 1,2,4 --lean
-          ./target/release/waymarker-bench --json out/memory.json memory --sizes 1000x20,10000x20
+          ./target/release/ostler-bench --json out/forms.json forms --reps 3
+          ./target/release/ostler-bench --json out/footprint.json footprint
+          ./target/release/ostler-bench --json out/concurrency.json concurrency --sessions 1,2,4 --lean
+          ./target/release/ostler-bench --json out/memory.json memory --sizes 1000x20,10000x20
           nproc; free -m; google-chrome --version || true
       - uses: actions/upload-artifact@v4
         with: { name: bench-linux, path: out }

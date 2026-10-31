@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Waymarker: a headless browser for AI agents that remembers</title>
+<title>Ostler: a headless browser for AI agents that remembers</title>
 <meta name="description" content="Rust headless browser for AI coding agents. MCP server, Qdrant-backed memory, and a form engine that fills a 20-field form in 3 tool calls instead of 22. Measured, with the caveats.">
 <style>
 :root{--bg:#fbfaf7;--fg:#1c1b19;--mut:#6b675f;--line:#e4e0d6;--card:#fff;--accent:#c2410c;--accent2:#0f766e;--bar-a:#c2410c;--bar-b:#9ca3af;--code:#f1eee6}
@@ -45,16 +45,16 @@ footer{padding:40px 0 70px;color:var(--mut);font-size:14px;border-top:1px solid 
 </head>
 <body>
 <header class="top"><div class="wrap">
-<b>Waymarker</b><a href="#how" class="hide">How it works</a><a href="#choices" class="hide">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare" class="hide">Compare</a><a href="https://github.com/inamdarmihir/waymarker">GitHub</a>
+<b>Ostler</b><a href="#how" class="hide">How it works</a><a href="#choices" class="hide">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare" class="hide">Compare</a><a href="https://github.com/inamdarmihir/ostler">GitHub</a>
 </div></header>
 
 <main class="wrap">
 <div class="hero">
 <span class="pill">Rust</span><span class="pill">MCP</span><span class="pill">Qdrant memory</span><span class="pill">Apache-2.0</span>
 <h1>A browser for AI agents that fills forms and remembers.</h1>
-<p class="lead">Waymarker is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It fills a whole form in one call, checks every value it wrote, and uses Qdrant to remember what worked, so the next visit is better than the first.</p>
-<pre><code>cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
-claude mcp add waymarker -- waymarker serve</code></pre>
+<p class="lead">Ostler is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It fills a whole form in one call, checks every value it wrote, and uses Qdrant to remember what worked, so the next visit is better than the first.</p>
+<pre><code>cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+claude mcp add ostler -- ostler serve</code></pre>
 <div class="status"><b>v0.2, early.</b> Tested end to end against real Chrome and a real Qdrant server. Evaluated on local fixtures built to reproduce known form-filling failures, <b>not yet on the open web</b>. This page says what we measured, how, and what we do not know.</div>
 </div>
 
@@ -129,7 +129,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <p class="sub">One machine (Apple M2, 8 cores, Chrome 156), local fixtures, localhost Qdrant. Every assumption is a flag on the harness; raw data is in <code>bench-results/</code>.</p>
 
 <figure>
-<div class="legend"><span><i style="background:var(--bar-a)"></i>Waymarker form engine</span><span><i style="background:var(--bar-b)"></i>one call per field (same engine)</span></div>
+<div class="legend"><span><i style="background:var(--bar-a)"></i>Ostler form engine</span><span><i style="background:var(--bar-b)"></i>one call per field (same engine)</span></div>
 <svg viewBox="0 0 900 330" width="100%" role="img" aria-label="Agent tool calls per scenario, engine versus per-field">
 <g class="m"><text x="0" y="14">Agent tool calls per task (lower is better)</text></g>
 <g font-size="13">
@@ -172,7 +172,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <figcaption>Memory is measured as physical footprint (macOS) or PSS (Linux), not summed RSS.</figcaption>
 </figure>
 </div>
-<div class="caveat"><b>Read before quoting:</b> fixtures, not real sites. One laptop. Illustrative prices and turn latency. Qdrant Cloud Inference was not run against a live cluster (request shape is pinned by tests). Raw results, harness and flags: <a href="https://github.com/inamdarmihir/waymarker/blob/main/docs/BENCHMARKS.md">BENCHMARKS.md</a>.</div>
+<div class="caveat"><b>Read before quoting:</b> fixtures, not real sites. One laptop. Illustrative prices and turn latency. Qdrant Cloud Inference was not run against a live cluster (request shape is pinned by tests). Raw results, harness and flags: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/BENCHMARKS.md">BENCHMARKS.md</a>.</div>
 </section>
 
 <section id="economics">
@@ -184,7 +184,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <div class="card"><h3>The moat is not Rust</h3><p>agent-browser is already a native Rust CLI with ~45k stars. What can compound is per-user memory, a corpus of form playbooks, and benchmarks others must match. Competitors can add memory; model vendors can ship first-party browsers.</p></div>
 <div class="card"><h3>The biggest gap</h3><p>Real-site success rate. Until that evaluation is published, treat "reliable" as "reliable on the failure modes in our fixtures".</p></div>
 </div>
-<p><a href="https://github.com/inamdarmihir/waymarker/blob/main/docs/ECONOMICS.md">Full write-up: unit economics, scaling limits, risks, and the test matrix →</a></p>
+<p><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/ECONOMICS.md">Full write-up: unit economics, scaling limits, risks, and the test matrix →</a></p>
 </section>
 
 <section id="compare">
@@ -193,7 +193,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <div class="scroll"><table>
 <thead><tr><th></th><th>Language</th><th>Form handling</th><th>Memory</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td><b>Waymarker</b></td><td>Rust</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.2; fixtures only; Chrome only</td></tr>
+<tr><td><b>Ostler</b></td><td>Rust</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.2; fixtures only; Chrome only</td></tr>
 <tr><td>agent-browser (Vercel)</td><td>Rust CLI</td><td><code>fill</code> / <code>select</code> / <code>check</code>, command batching</td><td>Cookie/storage state, auth vault</td><td>Larger and more mature. Closest competitor.</td></tr>
 <tr><td>Playwright MCP (Microsoft)</td><td>Node</td><td>Accessibility snapshots, batch <code>browser_fill_form</code></td><td>Browser profile</td><td>Mature and broad</td></tr>
 <tr><td>chrome-devtools-mcp (Google)</td><td>Node</td><td>Automation plus debugging and performance tooling</td><td>None</td><td>Built for debugging</td></tr>
@@ -211,17 +211,17 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 
 <section id="start">
 <h2>Try it</h2>
-<pre><code>cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
-waymarker doctor
-claude mcp add waymarker -- waymarker serve --lean
+<pre><code>cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+ostler doctor
+claude mcp add ostler -- ostler serve --lean
 
 # with Qdrant memory
 export QDRANT_URL=https://&lt;cluster&gt;.cloud.qdrant.io:6333 QDRANT_API_KEY=…
-claude mcp add waymarker -- waymarker serve --learn --lean</code></pre>
-<p>Setup for Codex, Cursor and others: <a href="https://github.com/inamdarmihir/waymarker/blob/main/docs/CLIENTS.md">docs/CLIENTS.md</a>.</p>
+claude mcp add ostler -- ostler serve --learn --lean</code></pre>
+<p>Setup for Codex, Cursor and others: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md">docs/CLIENTS.md</a>.</p>
 </section>
 </main>
 
-<footer><div class="wrap">Waymarker is Apache-2.0 open source. Benchmarks measured 2026-10-30 on an Apple M2. Read the <a href="https://github.com/inamdarmihir/waymarker/blob/main/docs/ARCHITECTURE.md">architecture</a>, the <a href="https://github.com/inamdarmihir/waymarker/tree/main/docs/adr">decision records</a>, and the <a href="https://github.com/inamdarmihir/waymarker/blob/main/SECURITY.md">security notes</a>.</div></footer>
+<footer><div class="wrap">Ostler is Apache-2.0 open source. Benchmarks measured 2026-10-30 on an Apple M2. Read the <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/ARCHITECTURE.md">architecture</a>, the <a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr">decision records</a>, and the <a href="https://github.com/inamdarmihir/ostler/blob/main/SECURITY.md">security notes</a>.</div></footer>
 </body>
 </html>
