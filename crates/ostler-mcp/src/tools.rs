@@ -62,6 +62,8 @@ fn defs() -> Vec<Def> {
             props: json!({"text":{"type":"string"},"text_gone":{"type":"string"},"selector":{"type":"string"},"timeout_ms":{"type":"integer"}}) },
         Def { name: "screenshot", desc: "Capture a PNG of the page or one element.", min: Profile::Core, required: &[],
             props: json!({"ref":{"type":"string"},"full_page":{"type":"boolean"}}) },
+        Def { name: "look", desc: "See where to click: a screenshot with every clickable element boxed and numbered by its ref, plus a legend saying what each does (type here, submits the form, error…). Use refs with click/type/fill_field.", min: Profile::Core, required: &[],
+            props: json!({"max":{"type":"integer"}}) },
         Def { name: "back", desc: "Go back in history.", min: Profile::Core, required: &[], props: json!({}) },
         Def { name: "tabs", desc: "Manage tabs (they share cookies and the context tool). list | new [url] | switch tab | close tab. Popups open as new tabs.", min: Profile::Core, required: &["action"],
             props: json!({"action":{"type":"string","enum":["list","new","switch","close"]},"tab":{"type":"string","description":"tab id, e.g. t2"},"url":{"type":"string"}}) },

@@ -640,6 +640,19 @@ impl App {
                     })
                 })
             }
+            "look" => {
+                let max = a.get("max").and_then(Value::as_u64).unwrap_or(40) as usize;
+                br!(self, b, {
+                    let (png, list) = b.page().look(max).await.map_err(|e| e.to_string())?;
+                    Ok(ToolOutput {
+                        content: vec![
+                            Content::Text(crate::render::targets(&list)),
+                            Content::Image { png },
+                        ],
+                        is_error: false,
+                    })
+                })
+            }
             "screenshot" => {
                 let r = arg_str(a, "ref").map(String::from);
                 let full = a.get("full_page").and_then(Value::as_bool).unwrap_or(false);

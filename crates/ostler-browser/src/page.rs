@@ -826,6 +826,17 @@ impl Page {
             .map_err(|e| BrowserError::Other(e.to_string()))
     }
 
+    /// "Where to click": a viewport screenshot with every clickable thing boxed and labelled by its
+    /// ref, plus the same list as data. Marks are drawn from DOM geometry and removed afterwards.
+    pub async fn look(&self, max: usize) -> Result<(Vec<u8>, Value)> {
+        self.guard().await?;
+        let list = self.rt("targets", &[json!(max)]).await?;
+        self.rt("mark", std::slice::from_ref(&list)).await?;
+        let shot = self.screenshot(None, false, false).await;
+        let _ = self.rt("unmark", &[]).await;
+        Ok((shot?, list))
+    }
+
     // ------------------------------------------------------------------ forms
 
     pub async fn forms(&self) -> Result<FormIr> {

@@ -903,3 +903,54 @@ async fn visual_only_error_cues_are_reported() {
     assert_eq!(srv.last().unwrap()["phone"], "+1 415 555 0100");
     b.close().await;
 }
+
+#[tokio::test]
+async fn look_lists_click_targets_and_cleans_up_its_overlay() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/visual.html")).await.unwrap();
+    // Trigger the error state so the legend has to carry it.
+    b.page().submit(None, None).await.unwrap();
+    let (png, list) = b.page().look(40).await.unwrap();
+    assert!(png.starts_with(b"\x89PNG"), "not a PNG");
+    let items = list["items"].as_array().unwrap();
+    let find = |name: &str| {
+        items
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing: {list}"))
+    };
+    assert_eq!(find("Send")["purpose"], "submits the form");
+    assert_eq!(find("Email")["purpose"], "type here");
+    let email_state = find("Email")["state"].to_string();
+    assert!(email_state.contains("error"), "{email_state}");
+    assert_eq!(list["covered"], 0);
+    // Boxes are removed again, so later snapshots and screenshots are clean.
+    let left = b
+        .page()
+        .eval("document.getElementById('__wm_marks') === null")
+        .await
+        .unwrap();
+    assert_eq!(left, json!(true));
+    b.close().await;
+}
+
+#[tokio::test]
+async fn look_skips_elements_hidden_under_an_overlay() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/overlay.html")).await.unwrap();
+    let (_, list) = b.page().look(40).await.unwrap();
+    let names: Vec<String> = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap_or("").to_string())
+        .collect();
+    // Only the dialog's button is reachable; the form behind it is reported as covered.
+    assert_eq!(names, vec!["Accept all"], "{list}");
+    assert_eq!(list["covered"], 2, "{list}");
+    b.close().await;
+}

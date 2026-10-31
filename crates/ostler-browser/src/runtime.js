@@ -869,8 +869,73 @@
   }
   function selectorPresent(sel) { try { return deepQueryAll(document.documentElement, sel).some(rendered); } catch { return false; } }
 
+  // ---------------------------------------------------------------- where to click
+  const TARGET_SEL = 'a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=radio],[role=switch],[role=combobox],[role=option],[onclick],[tabindex]:not([tabindex="-1"]),[contenteditable=""],[contenteditable=true]';
+  function targets(max) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const out = [];
+    let covered = 0;
+    const seen = new Set();
+    for (const el of deepQueryAll(document.documentElement, TARGET_SEL)) {
+      if (el.ownerDocument !== document || seen.has(el) || !visibleControl(el)) continue;
+      seen.add(el);
+      // A visually hidden native checkbox/radio is operated through its label.
+      const box = rendered(el) ? el : ((el.labels && [...el.labels].find(rendered)) || el);
+      const r = box.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.right < 0 || r.top > vh || r.left > vw) continue;
+      const cx = Math.min(vw - 1, Math.max(0, r.left + r.width / 2)), cy = Math.min(vh - 1, Math.max(0, r.top + r.height / 2));
+      const top = deepElementFromPoint(document, cx, cy);
+      if (top && top !== box && !box.contains(top) && !top.contains(box) && !(top.closest && top.closest('label') && top.closest('label').control === el)) { covered++; continue; }
+      const role = roleOf(el) || 'clickable';
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      const name = nameOf(el) || clean(el.getAttribute('placeholder') || '') || clean(el.getAttribute('title') || '');
+      let purpose;
+      if (['textbox', 'searchbox', 'spinbutton'].includes(role) || el.tagName === 'TEXTAREA') purpose = 'type here';
+      else if (['combobox', 'listbox'].includes(role)) purpose = 'choose an option';
+      else if (['checkbox', 'radio', 'switch'].includes(role)) purpose = 'toggle';
+      else if (role === 'file') purpose = 'attach a file';
+      else if (role === 'link') purpose = el.closest('nav,header,footer,[role=navigation]') ? 'navigation link' : 'link';
+      else if (role === 'tab' || role === 'menuitem') purpose = 'switch view';
+      else if (role === 'button') {
+        const sub = (el.form || el.closest('form')) && (type === 'submit' || (el.tagName === 'BUTTON' && !type));
+        purpose = sub ? (NEXT_RE.test(name) && !/submit|send|pay|place order|confirm/i.test(name) ? 'next step' : 'submits the form') : 'button';
+        if (NOT_SUBMIT_RE.test(name)) purpose = 'dismiss/secondary';
+      } else purpose = 'clickable';
+      const state = [];
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') state.push('disabled');
+      if (el.required || el.getAttribute('aria-required') === 'true') state.push('required');
+      if (el.checked === true || el.getAttribute('aria-checked') === 'true') state.push('checked');
+      const err = ['textbox', 'searchbox', 'spinbutton', 'combobox'].includes(role) ? errorText(el) : null;
+      if (err) state.push('error: ' + err.slice(0, 80));
+      const val = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !['button', 'submit', 'checkbox', 'radio', 'file', 'password'].includes(type) ? el.value : '';
+      out.push({ ref: refOf(el), role, name: name.slice(0, 60), purpose, state, value: val ? val.slice(0, 40) : '', x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+    }
+    out.sort((a, b) => (Math.round(a.y / 12) - Math.round(b.y / 12)) || (a.x - b.x));
+    return { viewport: { w: vw, h: vh }, items: out.slice(0, max || 40), total: out.length, covered };
+  }
+  function mark(list) {
+    unmark();
+    const host = document.createElement('div');
+    host.id = '__wm_marks';
+    host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647';
+    const color = (t) => t.state.some((x) => x.startsWith('error')) ? '#d32f2f' : t.purpose === 'submits the form' || t.purpose === 'next step' ? '#2e7d32' : t.purpose === 'type here' || t.purpose === 'choose an option' ? '#1565c0' : t.purpose.includes('link') || t.purpose === 'link' ? '#6a1b9a' : '#ef6c00';
+    for (const t of list.items) {
+      const c = color(t);
+      const b = document.createElement('div');
+      b.style.cssText = `position:absolute;left:${t.x}px;top:${t.y}px;width:${t.w}px;height:${t.h}px;outline:2px solid ${c};outline-offset:1px;box-sizing:border-box`;
+      const tag = document.createElement('span');
+      tag.textContent = t.ref;
+      tag.style.cssText = `position:absolute;left:0;top:${t.y < 16 ? '0' : '-16px'};background:${c};color:#fff;font:bold 11px/14px system-ui,sans-serif;padding:0 4px;border-radius:3px;white-space:nowrap`;
+      b.appendChild(tag);
+      host.appendChild(b);
+    }
+    document.documentElement.appendChild(host);
+    return list.items.length;
+  }
+  function unmark() { const h = document.getElementById('__wm_marks'); if (h) h.remove(); return true; }
+
   window.__wm = {
-    snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect,
+    snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
     settle, textPresent, selectorPresent,
     el: (ref) => elOf(ref),
     pending: pendingDeep,

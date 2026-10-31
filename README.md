@@ -174,7 +174,7 @@ Extra serve flags go after `--`: `ostler setup claude --apply -- --lean --tools 
 
 | group | tools |
 |---|---|
-| browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `screenshot` `back` |
+| browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `look` `screenshot` `back` |
 | tabs | `tabs` (list, new, switch, close; popups arrive as tabs) · `context` (notes shared by every tab) |
 | forms | `form_inspect` `form_fill` `form_submit` `fill_field` |
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |

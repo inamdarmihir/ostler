@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 use ostler_browser::{FillReport, FillStatus, SubmitOutcome, SubmitStatus};
 use ostler_forms::{Field, FieldKind, FormIr};
+use serde_json::Value;
 
 fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
@@ -312,6 +313,53 @@ pub fn submit(o: &SubmitOutcome, verbose: bool) -> String {
     }
     if let (SubmitStatus::Advanced, Some(f)) = (o.status, &o.next_form) {
         let _ = writeln!(out, "Next: form_inspect (form {f}).");
+    }
+    out
+}
+
+/// Legend for `look`: one line per boxed element, in reading order.
+pub fn targets(list: &Value) -> String {
+    let items = list["items"].as_array().cloned().unwrap_or_default();
+    let mut out = format!(
+        "{} clickable in view ({}x{}); boxes on the image carry these refs. Green = submits, blue = input, purple = link, orange = other, red = has an error.\n",
+        list["total"], list["viewport"]["w"], list["viewport"]["h"]
+    );
+    for t in &items {
+        let name = t["name"].as_str().unwrap_or("");
+        let _ = write!(
+            out,
+            "{} {} {}",
+            t["ref"].as_str().unwrap_or("?"),
+            t["role"].as_str().unwrap_or(""),
+            if name.is_empty() {
+                "(unnamed)".to_string()
+            } else {
+                q(name)
+            }
+        );
+        let _ = write!(out, " -> {}", t["purpose"].as_str().unwrap_or(""));
+        if let Some(v) = t["value"].as_str().filter(|v| !v.is_empty()) {
+            let _ = write!(out, " value={}", q(v));
+        }
+        for s in t["state"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            let _ = write!(out, " [{s}]");
+        }
+        out.push('\n');
+    }
+    let total = list["total"].as_u64().unwrap_or(0) as usize;
+    if total > items.len() {
+        let _ = writeln!(out, "(+{} more; scroll or raise max)", total - items.len());
+    }
+    if let Some(c) = list["covered"].as_u64().filter(|c| *c > 0) {
+        let _ = writeln!(
+            out,
+            "{c} more are hidden under an overlay (dialog, banner, sticky bar); close it first."
+        );
     }
     out
 }

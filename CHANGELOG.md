@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`look` tool: where to click.** A viewport screenshot with every clickable element boxed and labelled by its ref (green submits, blue inputs, purple links, red has an error), plus a legend of what each does. Boxes come from DOM geometry; elements under a modal or sticky bar are left out and counted. Overlay is removed afterwards.
 - **Visual error cues.** Fields marked invalid only by colour (red border/outline/glow, red message text with no ARIA or class) and floating toasts/banners are now reported as field and page errors. Leftover errors on fields just filled are tagged as possibly stale.
 Fixes from the [design review](docs/REVIEW-2026-10.md) (status table there), plus three features.
 
