@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
@@ -132,6 +133,8 @@ pub struct App {
     last_fill: StdMutex<Option<LastFill>>,
     /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
     notice: StdMutex<Option<String>>,
+    /// Notes the agent keeps for itself, shared by every tab and kept across browser restarts.
+    context: StdMutex<BTreeMap<String, String>>,
     pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
     started: Instant,
 }
@@ -264,6 +267,7 @@ impl App {
             metrics: StdMutex::default(),
             last_fill: StdMutex::default(),
             notice: StdMutex::default(),
+            context: StdMutex::default(),
             pending: StdMutex::default(),
             started: Instant::now(),
         }
@@ -346,10 +350,7 @@ impl App {
                 .await
                 .map_err(|e| e.to_string())?;
             if self.cfg.require_confirm_submit {
-                b.page
-                    .set_submit_gate(true)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                b.set_submit_gate(true).await.map_err(|e| e.to_string())?;
             }
             *guard = Some(b);
         }
@@ -369,6 +370,24 @@ impl App {
             },
         };
         let mut out = out;
+        // Things that happened on their own while we worked (a popup opened as a new tab).
+        if let Ok(guard) = self.browser.try_lock() {
+            if let Some(b) = guard.as_ref() {
+                let notes = b.take_notes();
+                if !notes.is_empty() {
+                    let mut n = self.notice.lock().unwrap();
+                    let joined = notes
+                        .iter()
+                        .map(|s| format!("Note: {s}."))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    *n = Some(match n.take() {
+                        Some(prev) => format!("{prev}\n{joined}"),
+                        None => joined,
+                    });
+                }
+            }
+        }
         if let Some(n) = self.notice.lock().unwrap().take() {
             match out.content.first_mut() {
                 Some(Content::Text(t)) => *t = format!("{n}\n{t}"),
@@ -402,7 +421,7 @@ impl App {
             _ => default,
         };
         let s = b
-            .page
+            .page()
             .snapshot(SnapshotOpts {
                 mode,
                 max_chars: Some(if mode == SnapshotMode::Full {
@@ -438,7 +457,7 @@ impl App {
                 let url = need_str(a, "url")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page.navigate(&url).await.map_err(|e| e.to_string())?;
+                    let o = b.page().navigate(&url).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text("Navigated", &o);
                     t.push_str(
                         &self
@@ -448,6 +467,8 @@ impl App {
                     Ok(ToolOutput::text(t))
                 })
             }
+            "tabs" => self.tabs_tool(a).await,
+            "context" => self.context_tool(a),
             "snapshot" => {
                 let mode = match arg_str(a, "mode") {
                     Some("delta") => SnapshotMode::Delta,
@@ -461,7 +482,7 @@ impl App {
                     .map(|n| n as usize);
                 br!(self, b, {
                     let s = b
-                        .page
+                        .page()
                         .snapshot(SnapshotOpts {
                             mode,
                             scope,
@@ -483,7 +504,7 @@ impl App {
                 let r = need_str(a, "ref")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page.click(&r).await.map_err(|e| e.to_string())?;
+                    let o = b.page().click(&r).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text(&format!("Clicked {r}"), &o);
                     let default = if o.navigated {
                         SnapshotMode::Interactive
@@ -501,7 +522,7 @@ impl App {
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
                     let o = b
-                        .page
+                        .page()
                         .type_text(&r, &text, submit)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -519,7 +540,7 @@ impl App {
                 let key = need_str(a, "key")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page.press(&key).await.map_err(|e| e.to_string())?;
+                    let o = b.page().press(&key).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text(&format!("Pressed {key}"), &o);
                     let default = if o.navigated {
                         SnapshotMode::Interactive
@@ -532,7 +553,7 @@ impl App {
             }
             "back" => {
                 br!(self, b, {
-                    let o = b.page.back().await.map_err(|e| e.to_string())?;
+                    let o = b.page().back().await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text("Went back", &o);
                     t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
                     Ok(ToolOutput::text(t))
@@ -553,7 +574,7 @@ impl App {
                 );
                 br!(self, b, {
                     let ok = b
-                        .page
+                        .page()
                         .wait_for(text.as_deref(), gone.as_deref(), sel.as_deref(), timeout)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -569,7 +590,7 @@ impl App {
                 let full = a.get("full_page").and_then(Value::as_bool).unwrap_or(false);
                 br!(self, b, {
                     let png = b
-                        .page
+                        .page()
                         .screenshot(r.as_deref(), full, false)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -582,8 +603,8 @@ impl App {
             "form_inspect" => {
                 let want = arg_str(a, "form").map(String::from);
                 br!(self, b, {
-                    b.page.guard().await.map_err(|e| e.to_string())?;
-                    let mut ir = b.page.forms().await.map_err(|e| e.to_string())?;
+                    b.page().guard().await.map_err(|e| e.to_string())?;
+                    let mut ir = b.page().forms().await.map_err(|e| e.to_string())?;
                     if let Some(w) = &want {
                         ir.forms.retain(|f| f.r#ref == w.trim_start_matches('@'));
                     }
@@ -630,7 +651,7 @@ impl App {
                     let mut values = BTreeMap::new();
                     values.insert(r, value);
                     let rep = b
-                        .page
+                        .page()
                         .fill_form(
                             FillRequest {
                                 values,
@@ -752,7 +773,7 @@ impl App {
         };
         let suggester = self.cfg.memory.clone().map(MemorySuggester);
         let rep = br!(self, b, {
-            b.page
+            b.page()
                 .fill_form(req, suggester.as_ref().map(|s| s as &dyn Suggester))
                 .await
                 .map_err(|e| e.to_string())
@@ -818,6 +839,113 @@ impl App {
         });
     }
 
+    async fn tabs_tool(&self, a: &Value) -> Result<ToolOutput, String> {
+        let action = need_str(a, "action")?.to_string();
+        let tab = arg_str(a, "tab").map(String::from);
+        let url = arg_str(a, "url").map(String::from);
+        br!(self, b, {
+            match action.as_str() {
+                "list" => {
+                    let mut t = String::new();
+                    for x in b.tabs().await {
+                        let _ = writeln!(
+                            t,
+                            "{} {} {} — {}",
+                            if x.active { "*" } else { " " },
+                            x.id,
+                            inert(&x.title),
+                            inert(&x.url)
+                        );
+                    }
+                    let keys: Vec<String> = self.context.lock().unwrap().keys().cloned().collect();
+                    if !keys.is_empty() {
+                        let _ = writeln!(t, "shared context: {}", keys.join(", "));
+                    }
+                    Ok(ToolOutput::text(wrap(&t)))
+                }
+                "new" => {
+                    let id = b.new_tab(url.as_deref()).await.map_err(|e| e.to_string())?;
+                    let mut t = format!("Opened tab {id}.\n");
+                    if url.is_some() {
+                        t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
+                    }
+                    Ok(ToolOutput::text(t))
+                }
+                "switch" => {
+                    let id = tab.ok_or("missing required argument \"tab\"")?;
+                    b.switch_tab(&id).await.map_err(|e| e.to_string())?;
+                    // Show the tab we landed on; switching blind would force an extra snapshot call.
+                    let mut t = format!("Active tab {id}.\n");
+                    t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
+                    Ok(ToolOutput::text(t))
+                }
+                "close" => {
+                    let id = tab.ok_or("missing required argument \"tab\"")?;
+                    b.close_tab(&id).await.map_err(|e| e.to_string())?;
+                    Ok(ToolOutput::text(format!(
+                        "Closed {id}. Active tab: {}.",
+                        b.active_tab()
+                    )))
+                }
+                other => Err(format!("unknown action {other:?} (list|new|switch|close)")),
+            }
+        })
+    }
+
+    fn context_tool(&self, a: &Value) -> Result<ToolOutput, String> {
+        const MAX_ENTRIES: usize = 50;
+        const MAX_VALUE: usize = 4000;
+        let action = need_str(a, "action")?;
+        let mut ctx = self.context.lock().unwrap();
+        let text = match action {
+            "list" => {
+                if ctx.is_empty() {
+                    "No shared context yet.".to_string()
+                } else {
+                    ctx.iter()
+                        .map(|(k, v)| format!("{k}: {}", v.chars().take(80).collect::<String>()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+            }
+            "get" => {
+                let k = need_str(a, "key")?;
+                ctx.get(k)
+                    .cloned()
+                    .ok_or_else(|| format!("no context key {k:?}"))?
+            }
+            "set" => {
+                let k = need_str(a, "key")?.trim();
+                let v = need_str(a, "value")?;
+                if k.is_empty() || k.chars().count() > 64 {
+                    return Err("key must be 1-64 characters".into());
+                }
+                if v.chars().count() > MAX_VALUE {
+                    return Err(format!(
+                        "value is over {MAX_VALUE} characters; keep notes short"
+                    ));
+                }
+                if !ctx.contains_key(k) && ctx.len() >= MAX_ENTRIES {
+                    return Err(format!(
+                        "context is full ({MAX_ENTRIES} keys); delete one first"
+                    ));
+                }
+                ctx.insert(k.to_string(), v.to_string());
+                format!("saved {k}")
+            }
+            "delete" => {
+                let k = need_str(a, "key")?;
+                if ctx.remove(k).is_some() {
+                    format!("deleted {k}")
+                } else {
+                    format!("no context key {k:?}")
+                }
+            }
+            other => return Err(format!("unknown action {other:?} (get|set|delete|list)")),
+        };
+        Ok(ToolOutput::text(text))
+    }
+
     async fn form_submit(&self, a: &Value) -> Result<ToolOutput, String> {
         if self.cfg.require_confirm_submit
             && a.get("confirm").and_then(Value::as_bool) != Some(true)
@@ -830,7 +958,7 @@ impl App {
         let form = arg_str(a, "form").map(String::from);
         let ctl = arg_str(a, "control").map(String::from);
         let out = br!(self, b, {
-            b.page
+            b.page()
                 .submit(form.as_deref(), ctl.as_deref())
                 .await
                 .map_err(|e| e.to_string())

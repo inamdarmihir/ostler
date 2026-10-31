@@ -214,10 +214,10 @@ pub async fn footprint(reps: usize) -> Result<Value> {
                 Policy::default(),
             )
             .await?;
-            b.page.navigate("about:blank").await?;
+            b.page().navigate("about:blank").await?;
             starts.push(t.elapsed().as_secs_f64() * 1000.0);
             let t = Instant::now();
-            b.page.navigate(&srv.url("/longform.html")).await?;
+            b.page().navigate(&srv.url("/longform.html")).await?;
             let values = [
                 ("First name", "Ada"),
                 ("Last name", "Lovelace"),
@@ -229,7 +229,7 @@ pub async fn footprint(reps: usize) -> Result<Value> {
             .map(|(k, v)| (k.to_string(), json!(v)))
             .collect();
             let rep = b
-                .page
+                .page()
                 .fill_form(
                     FillRequest {
                         values,
@@ -238,7 +238,7 @@ pub async fn footprint(reps: usize) -> Result<Value> {
                     None,
                 )
                 .await?;
-            let sub = b.page.submit(None, None).await?;
+            let sub = b.page().submit(None, None).await?;
             tasks.push(t.elapsed().as_secs_f64() * 1000.0);
             if rep.failed() == 0 && matches!(sub.status, waymarker_browser::SubmitStatus::Submitted)
             {

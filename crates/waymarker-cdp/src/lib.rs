@@ -215,6 +215,11 @@ impl Session {
             .as_str()
             .ok_or_else(|| CdpError::Unexpected("no targetId".into()))?
             .to_string();
+        Self::attach(conn, target_id).await
+    }
+
+    /// Attach to an existing page target (e.g. a popup the page opened).
+    pub async fn attach(conn: Arc<Connection>, target_id: String) -> Result<Self> {
         let attached = conn
             .call(
                 "Target.attachToTarget",

@@ -108,6 +108,10 @@ const CONTEXT_GONE: [&str; 4] = [
 ];
 
 impl Page {
+    pub fn target_id(&self) -> &str {
+        &self.session.target_id
+    }
+
     pub async fn attach(session: Session, policy: Policy) -> Result<Self> {
         let page = Self {
             session,

@@ -1,4 +1,4 @@
-//! Browser control for agents: launch Chrome, drive a page, and fill forms reliably.
+//! Browser control for agents: launch Chrome, drive pages, and fill forms reliably.
 
 mod fill;
 mod page;
@@ -14,15 +14,72 @@ pub use page::{
 pub use policy::Policy;
 pub use waymarker_cdp::LaunchOptions;
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 
+use serde::Serialize;
 use waymarker_cdp::{Chrome, Connection, Session};
 
-/// A running browser with one page.
+struct Tab {
+    id: String,
+    page: Page,
+}
+
+#[derive(Default)]
+struct Tabs {
+    list: Vec<Tab>,
+    active: usize,
+    next: u32,
+}
+
+impl Tabs {
+    fn push(&mut self, page: Page) -> String {
+        self.next += 1;
+        let id = format!("t{}", self.next);
+        self.list.push(Tab {
+            id: id.clone(),
+            page,
+        });
+        id
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TabInfo {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub active: bool,
+}
+
+/// State every tab needs in order to be created identically (so a popup obeys the same rules as the first page).
+#[derive(Clone)]
+struct TabSetup {
+    policy: Policy,
+    lean: bool,
+    gate: Arc<AtomicBool>,
+}
+
+impl TabSetup {
+    async fn page_for(&self, session: Session) -> page::Result<Page> {
+        let page = Page::attach(session, self.policy.clone()).await?;
+        if self.lean {
+            page.block_media().await?;
+        }
+        if self.gate.load(Ordering::SeqCst) {
+            page.set_submit_gate(true).await?;
+        }
+        Ok(page)
+    }
+}
+
+/// A running browser. All tabs live in one browser context, so cookies and storage are shared between them.
 pub struct Browser {
     chrome: Chrome,
     conn: Arc<Connection>,
-    pub page: Page,
+    setup: TabSetup,
+    tabs: Arc<Mutex<Tabs>>,
+    notes: Arc<Mutex<Vec<String>>>,
 }
 
 impl Browser {
@@ -30,12 +87,219 @@ impl Browser {
         let lean = opts.lean;
         let chrome = Chrome::launch(opts).await?;
         let conn = chrome.connect().await?;
-        let session = Session::new_page(conn.clone()).await?;
-        let page = Page::attach(session, policy).await?;
-        if lean {
-            page.block_media().await?;
+        let setup = TabSetup {
+            policy,
+            lean,
+            gate: Arc::default(),
+        };
+        let first = setup
+            .page_for(Session::new_page(conn.clone()).await?)
+            .await?;
+        let tabs = Arc::new(Mutex::new(Tabs::default()));
+        tabs.lock().unwrap().push(first);
+        let notes = Arc::new(Mutex::new(Vec::new()));
+        Self::watch_popups(
+            Arc::downgrade(&conn),
+            setup.clone(),
+            tabs.clone(),
+            notes.clone(),
+        )
+        .await?;
+        Ok(Self {
+            chrome,
+            conn,
+            setup,
+            tabs,
+            notes,
+        })
+    }
+
+    /// Pages opened by the page itself (`window.open`, `target=_blank`) become tabs under the same policy,
+    /// instead of loading unseen and unchecked.
+    async fn watch_popups(
+        conn: Weak<Connection>,
+        setup: TabSetup,
+        tabs: Arc<Mutex<Tabs>>,
+        notes: Arc<Mutex<Vec<String>>>,
+    ) -> page::Result<()> {
+        let Some(c) = conn.upgrade() else {
+            return Ok(());
+        };
+        let mut rx = c.subscribe();
+        c.call(
+            "Target.setDiscoverTargets",
+            serde_json::json!({ "discover": true }),
+            None,
+            waymarker_cdp::DEFAULT_TIMEOUT,
+        )
+        .await?;
+        drop(c);
+        tokio::spawn(async move {
+            loop {
+                let ev = match rx.recv().await {
+                    Ok(ev) => ev,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                };
+                if ev.method != "Target.targetCreated" {
+                    continue;
+                }
+                let info = &ev.params["targetInfo"];
+                // Only targets a page opened carry an opener; ones we create ourselves do not.
+                let opened_by_page = info["type"] == "page"
+                    && info["openerId"].as_str().is_some_and(|s| !s.is_empty());
+                let Some(target_id) = info["targetId"].as_str().filter(|_| opened_by_page) else {
+                    continue;
+                };
+                let Some(conn) = conn.upgrade() else { break };
+                let attached = match Session::attach(conn, target_id.to_string()).await {
+                    Ok(s) => setup.page_for(s).await,
+                    Err(e) => Err(e.into()),
+                };
+                match attached {
+                    Ok(page) => {
+                        let id = tabs.lock().unwrap().push(page);
+                        notes.lock().unwrap().push(format!(
+                            "a popup opened as tab {id}; use tabs to switch to it"
+                        ));
+                    }
+                    Err(e) => notes
+                        .lock()
+                        .unwrap()
+                        .push(format!("a popup opened but could not be attached: {e}")),
+                }
+            }
+        });
+        Ok(())
+    }
+
+    /// The active tab.
+    pub fn page(&self) -> Page {
+        let t = self.tabs.lock().unwrap();
+        t.list[t.active].page.clone()
+    }
+
+    pub fn active_tab(&self) -> String {
+        let t = self.tabs.lock().unwrap();
+        t.list[t.active].id.clone()
+    }
+
+    /// Things that happened to tabs on their own (popups) since the last call.
+    pub fn take_notes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notes.lock().unwrap())
+    }
+
+    pub async fn tabs(&self) -> Vec<TabInfo> {
+        let snapshot: Vec<(String, Page, bool)> = {
+            let t = self.tabs.lock().unwrap();
+            t.list
+                .iter()
+                .enumerate()
+                .map(|(i, tab)| (tab.id.clone(), tab.page.clone(), i == t.active))
+                .collect()
+        };
+        let mut out = Vec::with_capacity(snapshot.len());
+        for (id, page, active) in snapshot {
+            let info = page.info().await.ok();
+            out.push(TabInfo {
+                id,
+                url: info.as_ref().map(|i| i.url.clone()).unwrap_or_default(),
+                title: info.map(|i| i.title).unwrap_or_default(),
+                active,
+            });
         }
-        Ok(Self { chrome, conn, page })
+        out
+    }
+
+    /// Open a new tab, make it active, and optionally load `url` (checked against the policy first).
+    pub async fn new_tab(&self, url: Option<&str>) -> page::Result<String> {
+        if let Some(u) = url {
+            self.setup.policy.check(u).map_err(BrowserError::Policy)?;
+        }
+        let page = self
+            .setup
+            .page_for(Session::new_page(self.conn.clone()).await?)
+            .await?;
+        let id = {
+            let mut t = self.tabs.lock().unwrap();
+            let id = t.push(page.clone());
+            t.active = t.list.len() - 1;
+            id
+        };
+        if let Some(u) = url {
+            page.navigate(u).await?;
+        }
+        Ok(id)
+    }
+
+    pub async fn switch_tab(&self, id: &str) -> page::Result<()> {
+        let target = {
+            let mut t = self.tabs.lock().unwrap();
+            let idx = t
+                .list
+                .iter()
+                .position(|x| x.id == id)
+                .ok_or_else(|| BrowserError::Other(format!("no tab {id:?}")))?;
+            t.active = idx;
+            t.list[idx].page.target_id().to_string()
+        };
+        // Bring it to the front so focus-dependent page behaviour matches what the agent now sees.
+        self.conn
+            .call(
+                "Target.activateTarget",
+                serde_json::json!({ "targetId": target }),
+                None,
+                waymarker_cdp::DEFAULT_TIMEOUT,
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Close a tab. Closing the last one leaves a fresh blank tab so there is always a page to act on.
+    pub async fn close_tab(&self, id: &str) -> page::Result<()> {
+        let (target, was_last) = {
+            let mut t = self.tabs.lock().unwrap();
+            let idx = t
+                .list
+                .iter()
+                .position(|x| x.id == id)
+                .ok_or_else(|| BrowserError::Other(format!("no tab {id:?}")))?;
+            let tab = t.list.remove(idx);
+            if t.active >= idx && t.active > 0 {
+                t.active -= 1;
+            }
+            (tab.page.target_id().to_string(), t.list.is_empty())
+        };
+        let _ = self
+            .conn
+            .call(
+                "Target.closeTarget",
+                serde_json::json!({ "targetId": target }),
+                None,
+                waymarker_cdp::DEFAULT_TIMEOUT,
+            )
+            .await;
+        if was_last {
+            self.new_tab(None).await?;
+        }
+        Ok(())
+    }
+
+    /// Apply `--require-confirm-submit` to every tab, including ones opened later.
+    pub async fn set_submit_gate(&self, on: bool) -> page::Result<()> {
+        self.setup.gate.store(on, Ordering::SeqCst);
+        let pages: Vec<Page> = self
+            .tabs
+            .lock()
+            .unwrap()
+            .list
+            .iter()
+            .map(|t| t.page.clone())
+            .collect();
+        for p in pages {
+            p.set_submit_gate(on).await?;
+        }
+        Ok(())
     }
 
     /// CDP round-trips so far: a proxy for browser-side work per task.

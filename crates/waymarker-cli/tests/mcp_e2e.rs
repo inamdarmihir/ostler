@@ -327,3 +327,96 @@ async fn server_recovers_when_chrome_is_killed() {
     drop(c.stdin);
     let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
 }
+
+#[tokio::test]
+async fn tabs_share_cookies_and_context_and_popups_become_tabs() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    // Tab 1 sets a cookie and a shared note.
+    let (err, nav) = c
+        .tool("navigate", json!({"url": srv.url("/popup.html")}))
+        .await;
+    assert!(!err, "{nav}");
+    c.tool(
+        "context",
+        json!({"action": "set", "key": "applicant", "value": "Ada Lovelace"}),
+    )
+    .await;
+
+    // A page-opened popup arrives as a tab, and the agent is told.
+    let link = nav
+        .lines()
+        .find(|l| l.contains("Open the form in a new tab"))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|s| s.split(']').next())
+        .expect("link ref")
+        .to_string();
+    let (_, clicked) = c
+        .tool("click", json!({"ref": link, "observe": "none"}))
+        .await;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let (_, list) = c.tool("tabs", json!({"action": "list"})).await;
+    assert!(
+        list.contains("t2"),
+        "popup should be a tab: {clicked}\n{list}"
+    );
+    assert!(list.contains("shared context: applicant"), "{list}");
+
+    // A new tab shares cookies with the first (same browser context) and sees the same context.
+    let (err, opened) = c
+        .tool(
+            "tabs",
+            json!({"action": "new", "url": srv.url("/basic.html")}),
+        )
+        .await;
+    assert!(!err, "{opened}");
+    let (_, note) = c
+        .tool("context", json!({"action": "get", "key": "applicant"}))
+        .await;
+    assert_eq!(note, "Ada Lovelace");
+    // The cookie tab 1 set is visible from a different tab: they share one browser context.
+    let (_, seen) = c
+        .tool(
+            "tabs",
+            json!({"action": "new", "url": srv.url("/cookie.html")}),
+        )
+        .await;
+    assert!(
+        seen.contains("shared=from-first-tab"),
+        "cookies were not shared: {seen}"
+    );
+    c.tool("tabs", json!({"action": "close", "tab": "t4"}))
+        .await;
+
+    // Switching changes which page the other tools act on.
+    let (_, sw) = c
+        .tool("tabs", json!({"action": "switch", "tab": "t1"}))
+        .await;
+    assert!(
+        sw.contains("Active tab t1") && sw.contains("Open the form"),
+        "{sw}"
+    );
+    let (_, sw) = c
+        .tool("tabs", json!({"action": "switch", "tab": "t3"}))
+        .await;
+    assert!(sw.contains("Full name"), "{sw}");
+    let (err, bad) = c
+        .tool("tabs", json!({"action": "switch", "tab": "t99"}))
+        .await;
+    assert!(err && bad.contains("no tab"), "{bad}");
+
+    // Closing the active tab falls back to another; closing everything leaves a blank one.
+    let (_, closed) = c
+        .tool("tabs", json!({"action": "close", "tab": "t3"}))
+        .await;
+    assert!(closed.contains("Closed t3"), "{closed}");
+    for t in ["t1", "t2"] {
+        c.tool("tabs", json!({"action": "close", "tab": t})).await;
+    }
+    let (err, list) = c.tool("tabs", json!({"action": "list"})).await;
+    assert!(!err && list.contains("about:blank"), "{list}");
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}

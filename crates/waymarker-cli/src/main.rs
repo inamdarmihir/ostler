@@ -558,8 +558,8 @@ async fn main() -> Result<()> {
                 Policy::default(),
             )
             .await?;
-            b.page.navigate(&url).await?;
-            let ir = b.page.forms().await?;
+            b.page().navigate(&url).await?;
+            let ir = b.page().forms().await?;
             println!("{}", serde_json::to_string_pretty(&ir)?);
             b.close().await;
         }
@@ -620,7 +620,7 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
             match Browser::launch(LaunchOptions::default(), Policy::default()).await {
                 Ok(b) => {
                     let t = std::time::Instant::now();
-                    let r = b.page.navigate("about:blank").await;
+                    let r = b.page().navigate("about:blank").await;
                     println!(
                         "launches ({}ms round-trip) {}",
                         t.elapsed().as_millis(),

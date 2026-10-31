@@ -37,6 +37,8 @@ pub const PAGES: &[(&str, &str)] = &[
     ),
     ("remount", include_str!("../../../fixtures/remount.html")),
     ("payment", include_str!("../../../fixtures/payment.html")),
+    ("popup", include_str!("../../../fixtures/popup.html")),
+    ("cookie", include_str!("../../../fixtures/cookie.html")),
     ("aria", include_str!("../../../fixtures/aria.html")),
     (
         "conditional",

