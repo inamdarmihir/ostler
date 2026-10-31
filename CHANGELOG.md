@@ -4,6 +4,7 @@
 
 Fixes from the [design review](docs/REVIEW-2026-10.md) (status table there), plus three features.
 
+- **Renamed Waymarker to Ostler** (crates `ostler-*`, binary `ostler`, env vars `OSTLER_*`, config `~/.config/ostler/config.toml`). Move an existing `~/.config/waymarker` directory to `~/.config/ostler` and rename `WAYMARKER_*` variables.
 - **Tool output is terse by default.** Verified fields are named once instead of one line each, form names no longer include the form's whole text, and fingerprints, timings and repeated page titles are gone. About 30% less text on a four-call form flow (1.5 KB to 1.0 KB). `--verbose` (or `verbose = true` in the config) restores the detail.
 - **Tabs and shared context.** New `tabs` tool (list, new, switch, close). All tabs share one browser context, so cookies carry across; popups open as tabs under the same policy; new `context` tool is a notepad every tab and later call can read, kept across browser restarts.
 - **A2A.** `ostler a2a` serves Agent2Agent v1.0 (JSON-RPC, SSE streaming): Agent Card, `SendMessage`, `SendStreamingMessage`, `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`. Tasks move to `input-required` for missing values, rejected input and submit confirmation. Per-conversation browsers; loopback by default; bearer token to listen elsewhere; `Origin`/`Host` checks. Verified with the official A2A Python SDK. See [docs/A2A.md](docs/A2A.md).
@@ -32,6 +33,3 @@ Known limits of the new pieces: the date picker is heuristic (month header text 
 ## 0.1.0
 
 First public MVP. See the README.
-
-### Changed
-- **Renamed Waymarker to Ostler** (crates `ostler-*`, binary `ostler`, env vars `OSTLER_*`, config `~/.config/ostler/config.toml`). Move an existing `~/.config/waymarker` directory to `~/.config/ostler` and rename `WAYMARKER_*` variables.
