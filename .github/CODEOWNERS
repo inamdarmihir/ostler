@@ -1,0 +1,11 @@
+# Maintainers. Every pull request needs an approving review from a code owner (enforced by the
+# `main` ruleset). Add a maintainer by listing their GitHub username here.
+* @inamdarmihir
+
+# These change what gets published or how releases are built: always owner-reviewed.
+/.github/ @inamdarmihir
+/scripts/ @inamdarmihir
+/npm/ @inamdarmihir
+/site/install.sh @inamdarmihir
+/Cargo.toml @inamdarmihir
+/docs/RELEASING.md @inamdarmihir
