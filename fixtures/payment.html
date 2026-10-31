@@ -1,0 +1,8 @@
+<!doctype html><meta charset=utf-8><title>Payment</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Payment</h1>
+<form id="f" onsubmit="return false">
+  <label for="nm">Name on card</label><input id="nm" name="holder">
+  <label for="cn">Card number</label><input id="cn" name="cardnumber" autocomplete="cc-number">
+  <label for="pw">Account PIN</label><input id="pw" name="secret_pin" type="text">
+  <button type="submit">Pay</button>
+</form>

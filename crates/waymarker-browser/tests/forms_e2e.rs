@@ -646,3 +646,122 @@ async fn calendar_date_picker_readonly_input() {
     assert_eq!(got["guests"], "2");
     b.close().await;
 }
+
+#[tokio::test]
+async fn ambiguous_key_stays_ambiguous_after_its_rival_is_filled() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/ambiguous.html")).await.unwrap();
+    // "phone" fits both fields equally. It must not win Shipping just because Billing got filled first.
+    let rep = b
+        .page
+        .fill_form(req(json!({"Billing phone": "111", "phone": "222"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.fields.len(), 1, "{rep:#?}");
+    assert_eq!(rep.unmatched.len(), 1, "{rep:#?}");
+    assert_eq!(rep.unmatched[0].key, "phone");
+    assert!(!rep.ok(), "an unmatched key must make the report not ok");
+    b.page.submit(None, None).await.unwrap();
+    let got = srv.last().unwrap();
+    assert_eq!(got["billing"], "111");
+    assert_eq!(
+        got["shipping"], "",
+        "the ambiguous value must not be typed anywhere: {got}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn form_remounted_mid_fill_is_followed_not_abandoned() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/remount.html")).await.unwrap();
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({"Name": "Ada", "Plan": "Team", "Seats": 5})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    assert_eq!(rep.fields.len(), 3, "{rep:#?}");
+    b.page.submit(None, None).await.unwrap();
+    let got = srv.last().unwrap();
+    assert_eq!(got["name"], "Ada", "{got}");
+    assert_eq!(got["plan"], "team");
+    assert_eq!(got["seats"], "5");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn keys_are_reported_when_the_form_disappears() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/remount.html")).await.unwrap();
+    // Remove the form as soon as the plan is chosen; "Seats" can never be filled.
+    b.page
+        .eval(
+            "document.getElementById('p').addEventListener('change',()=>setTimeout(()=>{document.getElementById('root').innerHTML='<p>Gone</p>'},0))",
+        )
+        .await
+        .unwrap();
+    let rep = b
+        .page
+        .fill_form(req(json!({"Plan": "Team", "Seats": 5})), None)
+        .await
+        .unwrap();
+    assert!(!rep.ok(), "{rep:#?}");
+    assert!(
+        rep.unmatched.iter().any(|u| u.key == "Seats"),
+        "a dropped key must be reported: {rep:#?}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn secrets_do_not_come_back_through_reports_or_snapshots() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/payment.html")).await.unwrap();
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({"Name on card": "Ada Lovelace", "Card number": "4111111111111111", "Account PIN": "9876"})),
+            None,
+        )
+        .await
+        .unwrap();
+    // Report: masked, including any note text.
+    let dump = format!("{rep:?}");
+    assert!(
+        !dump.contains("4111111111111111") && !dump.contains("9876"),
+        "{dump}"
+    );
+    // Snapshot: the same page, read back later, must not echo them either.
+    let snap = b
+        .page
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Full,
+            scope: None,
+            max_chars: None,
+        })
+        .await
+        .unwrap();
+    assert!(
+        !snap.text.contains("4111111111111111") && !snap.text.contains("9876"),
+        "{}",
+        snap.text
+    );
+    assert!(
+        snap.text.contains("Ada Lovelace"),
+        "ordinary values stay visible: {}",
+        snap.text
+    );
+    b.close().await;
+}

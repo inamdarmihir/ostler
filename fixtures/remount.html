@@ -1,0 +1,24 @@
+<!doctype html><meta charset=utf-8><title>Plan</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Choose a plan</h1>
+<div id="root"></div>
+<script>
+// Framework-style render: choosing a plan throws away the whole <form> and builds a new one.
+const st={name:'',plan:'',seats:''};
+function render(){
+ const root=document.getElementById('root');
+ root.innerHTML=`<form id="f" onsubmit="return false">
+  <label for="n">Name</label><input id="n" name="name" value="${st.name}">
+  <label for="p">Plan</label><select id="p" name="plan"><option value="">Choose</option><option value="solo">Solo</option><option value="team">Team</option></select>
+  ${st.plan==='team'?`<label for="s">Seats</label><input id="s" name="seats" type="number" value="${st.seats}">`:''}
+  <button type="submit" id="go">Continue</button></form>`;
+ const f=root.firstChild;
+ f.querySelector('#p').value=st.plan;
+ f.querySelector('#n').addEventListener('input',e=>st.name=e.target.value);
+ const s=f.querySelector('#s'); if(s) s.addEventListener('input',e=>st.seats=e.target.value);
+ f.querySelector('#p').addEventListener('change',e=>{st.plan=e.target.value;render()});
+ f.querySelector('#go').addEventListener('click',async()=>{
+  await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(st)});
+  document.body.innerHTML='<h1>Done</h1>'});
+}
+render();
+</script>

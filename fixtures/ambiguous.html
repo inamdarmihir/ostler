@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Contact numbers</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Contact numbers</h1>
+<form id="f" onsubmit="return false">
+  <label for="bp">Billing phone</label><input id="bp" name="billing_phone">
+  <label for="sp">Shipping phone</label><input id="sp" name="shipping_phone">
+  <button type="submit" id="go">Save</button>
+</form>
+<script>
+document.getElementById('go').addEventListener('click',async()=>{
+ const o={billing:document.getElementById('bp').value,shipping:document.getElementById('sp').value};
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});
+ document.body.innerHTML='<h1>Saved</h1>'});
+</script>

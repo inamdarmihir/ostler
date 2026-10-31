@@ -153,6 +153,14 @@
   // ---------------------------------------------------------------- roles / names
   const HEADING = /^H[1-6]$/;
   const LANDMARK = { MAIN: 'main', NAV: 'navigation', HEADER: 'banner', FOOTER: 'contentinfo', ASIDE: 'complementary', DIALOG: 'dialog' };
+  // Mirrors Field::is_sensitive in waymarker-forms: a typed secret must not come back in a snapshot.
+  const SECRET_RE = /password|passcode|card.?number|cvv|cvc|security code|\bssn\b|social security|pin code|secret|iban|routing number|one-time|\botp\b/i;
+  function looksSecret(el, label) {
+    const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
+    if (ac.includes('password') || ac.includes('cc-') || ac.includes('one-time-code')) return true;
+    return SECRET_RE.test([label || '', el.name || '', el.id || ''].join(' '));
+  }
+
   function roleOf(el) {
     const ar = el.getAttribute('role');
     if (ar) return ar.split(/\s+/)[0];
@@ -252,7 +260,7 @@
       } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
         const ty = (el.type || '').toLowerCase();
         if (!['button', 'submit', 'reset', 'image', 'file', 'checkbox', 'radio'].includes(ty)) {
-          const v = ty === 'password' ? (el.value ? '•••' : '') : el.value;
+          const v = (ty === 'password' || looksSecret(el, name)) ? (el.value ? '•••' : '') : el.value;
           if (v) attrs.push(`value=${q(v.length > 80 ? v.slice(0, 80) + '…' : v)}`);
           if (el.placeholder) attrs.push(`placeholder=${q(el.placeholder)}`);
           if (ty && !['text', 'textarea'].includes(ty)) attrs.push(`type=${ty}`);

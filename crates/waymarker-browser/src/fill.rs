@@ -26,6 +26,10 @@ pub struct Suggestion {
     /// Human-readable provenance, e.g. "memory:email".
     pub source: String,
     pub confidence: f32,
+    /// The remembered fact this value came from, and how it was found ("playbook", "autocomplete",
+    /// "semantic"). Kept structured so callers never have to parse `source`.
+    pub profile_key: Option<String>,
+    pub via: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -66,6 +70,10 @@ pub struct FieldResult {
     pub requested: Value,
     pub observed: Value,
     pub source: String,
+    #[serde(skip)]
+    pub profile_key: Option<String>,
+    #[serde(skip)]
+    pub via: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -114,7 +122,10 @@ impl FillReport {
             .count()
     }
     pub fn ok(&self) -> bool {
-        self.failed() == 0 && self.missing_required.is_empty() && self.field_errors.is_empty()
+        self.failed() == 0
+            && self.unmatched.is_empty()
+            && self.missing_required.is_empty()
+            && self.field_errors.is_empty()
     }
 }
 
@@ -174,6 +185,22 @@ fn pick_form<'a>(
         .or(forms.first())
 }
 
+/// The form to work on. If the page re-rendered and our form's ref is gone (React/Vue re-mounts),
+/// fall back to the best match for the pending keys instead of silently giving up.
+fn find_form<'a>(
+    forms: &'a [Form],
+    want: Option<&str>,
+    values: &BTreeMap<String, Value>,
+) -> Option<&'a Form> {
+    pick_form(forms, want, values).or_else(|| {
+        if want.is_some() && !forms.is_empty() {
+            pick_form(forms, None, values)
+        } else {
+            None
+        }
+    })
+}
+
 fn text_of(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
@@ -214,7 +241,7 @@ impl Page {
         for _ in 0..max_rounds {
             let ir = self.forms().await?;
             host = host_of(&ir.url);
-            let Some(form) = pick_form(&ir.forms, form_ref.as_deref(), &pending) else {
+            let Some(form) = find_form(&ir.forms, form_ref.as_deref(), &pending) else {
                 if form_ref.is_none() && results.is_empty() {
                     return Err(BrowserError::Other(
                         "no form fields found on this page".into(),
@@ -224,17 +251,30 @@ impl Page {
             };
             form_ref = Some(form.r#ref.clone());
             fingerprint = form.fingerprint(&host);
-            let candidates: Vec<Field> = form
+            // Resolve against every visible field, including ones already filled. If a key was
+            // ambiguous when its rivals were still empty, it must stay ambiguous once they are filled;
+            // otherwise the last remaining rival would silently win by elimination.
+            let all_fields: Vec<Field> = form
                 .fields
                 .iter()
-                .filter(|f| !f.hidden && !f.disabled && !attempted.contains(&f.r#ref))
+                .filter(|f| !f.hidden && !f.disabled)
+                .cloned()
+                .collect();
+            let candidates: Vec<Field> = all_fields
+                .iter()
+                .filter(|f| !attempted.contains(&f.r#ref))
                 .cloned()
                 .collect();
 
             // 1. Explicit values from the agent, in document order.
-            let res = resolve_values(&candidates, &pending);
-            if let Some((idx, key, value)) = res.matched.first().cloned() {
-                let field = candidates[idx].clone();
+            let res = resolve_values(&all_fields, &pending);
+            let next = res
+                .matched
+                .iter()
+                .find(|(i, _, _)| !attempted.contains(&all_fields[*i].r#ref))
+                .cloned();
+            if let Some((idx, key, value)) = next {
+                let field = all_fields[idx].clone();
                 attempted.insert(field.r#ref.clone());
                 pending.remove(&key);
                 results.push(self.fill_one(&field, &value, "provided").await);
@@ -278,7 +318,10 @@ impl Page {
                     if let Some((field, s)) = next {
                         attempted.insert(field.r#ref.clone());
                         let src = format!("{} ({:.2})", s.source, s.confidence);
-                        results.push(self.fill_one(&field, &s.value, &src).await);
+                        let mut r = self.fill_one(&field, &s.value, &src).await;
+                        r.profile_key = s.profile_key.clone();
+                        r.via = Some(s.via.clone());
+                        results.push(r);
                         self.settle(1500, 80).await;
                         continue;
                     }
@@ -289,7 +332,7 @@ impl Page {
 
         // Final read of the page to report what is still wrong.
         let ir = self.forms().await?;
-        let form = pick_form(&ir.forms, form_ref.as_deref(), &BTreeMap::new());
+        let form = find_form(&ir.forms, form_ref.as_deref(), &pending);
         let (mut unmatched, mut missing, mut errors, mut page_errors, mut submit, mut step) =
             (vec![], vec![], vec![], vec![], vec![], None);
         if let Some(form) = form {
@@ -336,6 +379,16 @@ impl Page {
             page_errors = form.errors.clone();
             submit = form.submit.clone();
             step = form.step.clone();
+        } else {
+            // The form vanished (page navigated or re-rendered without it). Never drop keys silently.
+            for key in pending.keys() {
+                unmatched.push(Unmatched {
+                    key: key.clone(),
+                    reason: "the form is no longer on the page (it navigated or re-rendered)"
+                        .into(),
+                    candidates: vec![],
+                });
+            }
         }
         // Surface each result's current page error too.
         for r in &mut results {
@@ -367,6 +420,8 @@ impl Page {
             requested: value.clone(),
             observed: Value::Null,
             source: source.to_string(),
+            profile_key: None,
+            via: None,
             note: None,
             error: None,
         };
@@ -382,9 +437,13 @@ impl Page {
             }
         }
         if planned.is_sensitive() {
-            // Never echo secrets back into transcripts or logs.
+            // Never echo secrets back into transcripts or logs. Notes can quote the value
+            // ("page shows X after filling; expected Y"), so they are hidden as well.
             result.requested = json!("***");
             result.observed = json!("***");
+            if result.note.is_some() {
+                result.note = Some("details hidden: this is a sensitive field".into());
+            }
         }
         result
     }
@@ -529,7 +588,7 @@ impl Page {
 
         // Verify by reading the field back.
         let after = self
-            .field(r)
+            .read_back(&live)
             .await
             .map_err(|e| (e.to_string(), Value::Null))?;
         let mut verdict = verify(&live, value, &after.value);
@@ -551,6 +610,30 @@ impl Page {
             }
         }
         finish_verdict(verdict, after.value, note, value)
+    }
+
+    /// Re-read a field after filling it. Frameworks often re-mount the control in response to the very
+    /// change we made (choosing a plan rebuilds the form), which makes our ref stale. Follow it by
+    /// label to its replacement instead of reporting a failure for a fill that worked.
+    async fn read_back(&self, planned: &Field) -> Result<Field> {
+        match self.field(&planned.r#ref).await {
+            Ok(f) => Ok(f),
+            Err(e) if e.to_string().contains("stale") => {
+                self.settle(1500, 80).await;
+                let ir = self.forms().await?;
+                let label = planned.display();
+                let mut hits = ir
+                    .forms
+                    .iter()
+                    .flat_map(|f| f.fields.iter())
+                    .filter(|f| f.kind == planned.kind && f.display() == label);
+                match (hits.next(), hits.next()) {
+                    (Some(f), None) => Ok(f.clone()),
+                    _ => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn set_native(&self, r: &str, v: &str) -> Result<Option<String>> {

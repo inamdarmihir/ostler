@@ -31,6 +31,12 @@ pub const PAGES: &[(&str, &str)] = &[
     ("types", include_str!("../../../fixtures/types.html")),
     ("masked", include_str!("../../../fixtures/masked.html")),
     ("longform", include_str!("../../../fixtures/longform.html")),
+    (
+        "ambiguous",
+        include_str!("../../../fixtures/ambiguous.html"),
+    ),
+    ("remount", include_str!("../../../fixtures/remount.html")),
+    ("payment", include_str!("../../../fixtures/payment.html")),
     ("aria", include_str!("../../../fixtures/aria.html")),
     (
         "conditional",

@@ -177,6 +177,33 @@ pub struct Episode {
     pub last_seen: u64,
 }
 
+/// Minimum lead the best semantic hit needs over the second best.
+const SEMANTIC_MARGIN: f32 = 0.05;
+
+fn mentions_other_person(label_norm: &str) -> bool {
+    const OTHERS: &[&str] = &[
+        "spouse",
+        "partner",
+        "friend",
+        "referr",
+        "emergency",
+        "reference",
+        "guardian",
+        "parent",
+        "mother",
+        "father",
+        "colleague",
+        "manager",
+        "supervisor",
+        "beneficiary",
+        "relative",
+        "next of kin",
+        "recipient",
+        "sponsor",
+    ];
+    OTHERS.iter().any(|w| label_norm.contains(w))
+}
+
 fn norm(s: &str) -> String {
     s.to_lowercase()
         .split(|c: char| !c.is_alphanumeric())
@@ -426,6 +453,19 @@ impl Memory {
         Ok(v)
     }
 
+    /// Save a value observed on a page. Unlike [`Memory::remember`] this never replaces a fact the
+    /// user supplied: page labels are chosen by the page ("Email" on a refer-a-friend form), not by the user.
+    pub async fn learn(&self, key: &str, value: Value) -> Result<Option<Fact>> {
+        if let Some(existing) = self.fact(key).await? {
+            if existing.source != "learned" {
+                return Ok(None);
+            }
+        }
+        self.remember(key, value, None, None, "learned")
+            .await
+            .map(Some)
+    }
+
     // ---------------------------------------------------------------- filling
 
     /// Best remembered value for a form field, preferring exact signals over semantic ones.
@@ -476,10 +516,22 @@ impl Memory {
         if query.trim().is_empty() {
             return Ok(None);
         }
+        // Labels about another person must never pull in the user's own facts.
+        if mentions_other_person(&norm(q.label)) {
+            return Ok(None);
+        }
         let hits = self
             .store
-            .search(Kind::Profile, &query, &Filter::tenant(&self.tenant), 1)
+            .search(Kind::Profile, &query, &Filter::tenant(&self.tenant), 2)
             .await?;
+        // Short labels in one category ("first name", "last name") embed close together. If the runner-up is
+        // nearly as good we cannot tell which fact belongs here, and a wrong value typed confidently is worse
+        // than an empty field.
+        if let (Some(a), Some(b)) = (hits.first(), hits.get(1)) {
+            if a.score - b.score < SEMANTIC_MARGIN {
+                return Ok(None);
+            }
+        }
         Ok(hits
             .first()
             .filter(|h| h.score >= min_semantic)
@@ -657,5 +709,71 @@ mod tests {
         let eps = m.episodes("fp", 10).await.unwrap();
         assert_eq!(eps.len(), 1);
         assert_eq!(eps[0].count, 2);
+    }
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+
+    fn mem() -> Memory {
+        let store: Arc<dyn Store> = Arc::new(InMemoryStore::new(Arc::new(HashEmbedder::default())));
+        Memory::new(store, "t1")
+    }
+
+    #[tokio::test]
+    async fn learned_values_never_overwrite_user_facts() {
+        let m = mem();
+        m.remember("email", json!("me@example.com"), None, None, "user")
+            .await
+            .unwrap();
+        assert!(m
+            .learn("Email", json!("friend@example.com"))
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            m.fact("email").await.unwrap().unwrap().value,
+            json!("me@example.com")
+        );
+        // A previously learned value may be refreshed.
+        m.learn("company", json!("Acme")).await.unwrap();
+        m.learn("company", json!("Acme Inc")).await.unwrap();
+        assert_eq!(
+            m.fact("company").await.unwrap().unwrap().value,
+            json!("Acme Inc")
+        );
+    }
+
+    #[tokio::test]
+    async fn labels_about_someone_else_do_not_pull_in_the_users_facts() {
+        let m = mem();
+        m.remember("email", json!("me@example.com"), None, None, "user")
+            .await
+            .unwrap();
+        for label in [
+            "Spouse email",
+            "Emergency contact email",
+            "Reference email",
+            "Friend's email",
+        ] {
+            let q = FieldQuery {
+                host: "x.com",
+                fingerprint: "none",
+                label,
+                name: None,
+                kind: "email",
+                placeholder: None,
+                autocomplete: None,
+            };
+            assert!(m.suggest(&q, 0.0).await.unwrap().is_none(), "{label}");
+        }
+    }
+
+    #[test]
+    fn other_person_detection() {
+        assert!(mentions_other_person("emergency contact phone"));
+        assert!(!mentions_other_person("email address"));
+        assert!(!mentions_other_person("company name"));
     }
 }
