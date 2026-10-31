@@ -1956,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1976,7 +1976,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-browser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1996,7 +1996,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-cdp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "futures-util",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2027,7 +2027,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-fixtures"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde_json",
  "tiny_http",
@@ -2036,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-forms"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2045,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -2061,7 +2061,7 @@ dependencies = [
 
 [[package]]
 name = "waymarker-memory"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "reqwest",

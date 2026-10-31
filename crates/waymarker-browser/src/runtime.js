@@ -426,15 +426,18 @@
     const near = nearbyText(members[0].closest('label') || members[0].parentElement || members[0]);
     return stripLabel(near || fallback || '');
   }
+  const isOn = (m) => (m.tagName === 'INPUT' ? m.checked : m.getAttribute('aria-checked') === 'true');
+  const valOf = (m) => (m.tagName === 'INPUT' ? m.value : (m.getAttribute('data-value') || m.getAttribute('value') || clean(m.textContent)));
+  const labOf = (m) => (m.tagName === 'INPUT' ? stripLabel(labelFor(m)).text : clean(m.getAttribute('aria-label') || m.textContent));
   function buildGroup(members, type) {
     const f = baseField(members[0]);
     const lab = groupLabel(members, members[0].getAttribute('name'));
     f.label = lab.text;
     f.required = members.some((m) => m.required) || lab.required;
     f.kind = type === 'radio' ? 'radio' : 'multi_select';
-    f.options = members.map((m) => ({ value: m.value, label: stripLabel(labelFor(m)).text || m.value, selected: m.checked, disabled: m.disabled }));
-    f.value = type === 'radio' ? ((members.find((m) => m.checked) || {}).value || '') : members.filter((m) => m.checked).map((m) => m.value);
-    f.disabled = members.every((m) => m.disabled);
+    f.options = members.map((m) => ({ value: valOf(m), label: labOf(m) || valOf(m), selected: isOn(m), disabled: !!m.disabled || m.getAttribute('aria-disabled') === 'true' }));
+    f.value = type === 'radio' ? ((members.find(isOn) && valOf(members.find(isOn))) || '') : members.filter(isOn).map(valOf);
+    f.disabled = f.options.every((o) => o.disabled);
     f.error = members.map(errorText).find(Boolean) || null;
     groups.set(f.ref, members);
     return f;
@@ -523,6 +526,15 @@
             continue;
           }
         }
+        if (el.tagName !== 'INPUT' && el.getAttribute('role') === 'radio') {
+          const grp = el.closest('[role=radiogroup]');
+          const key = 'aria-radio|' + (grp ? refOf(grp) : 'none');
+          if (seenGroup.has(key)) continue;
+          seenGroup.add(key);
+          const members = c.controls.filter((m) => m.tagName !== 'INPUT' && m.getAttribute('role') === 'radio' && m.closest('[role=radiogroup]') === grp && visibleControl(m));
+          fields.push(buildGroup(members, 'radio'));
+          continue;
+        }
         fields.push(buildField(el));
       }
       if (!fields.length) continue;
@@ -548,7 +560,7 @@
     const el = elOf(ref);
     const members = groups.get(ref);
     if (members) {
-      const ty = (members[0].type || '').toLowerCase();
+      const ty = members[0].tagName === 'INPUT' ? (members[0].type || '').toLowerCase() : 'radio';
       return buildGroup(members, ty);
     }
     return buildField(el);
@@ -617,7 +629,7 @@
       const members = groups.get(ref) || [el];
       const m = members[payload];
       if (!m) throw new Error('radio option index out of range');
-      if (!m.checked) clickEl(m);
+      if (!isOn(m)) clickEl(m);
       return true;
     }
     if (kind === 'checkbox' || kind === 'switch') {
@@ -626,6 +638,46 @@
       return true;
     }
     throw new Error('apply: unsupported kind ' + kind);
+  }
+
+  // Calendar widgets on read-only inputs: open the popup, navigate to the month, click the day.
+  async function pickDate(ref, iso) {
+    const [Y, Mo, D] = iso.split('-').map(Number);
+    const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const el = elOf(ref);
+    scrollInto(el);
+    clickEl(el);
+    const header = (root) => {
+      const m = clean(root.textContent).toLowerCase().match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(\d{4})/);
+      return m ? { y: +m[2], m: MONTHS.findIndex((n) => n.startsWith(m[1])) } : null;
+    };
+    const POP = '[role=dialog],[role=grid],[class*=calendar i],[class*=datepicker i],[class*=date-picker i],[class*=picker i],[class*=flatpickr i]';
+    const find = () => deepQueryAll(document.documentElement, POP).filter((p) => rendered(p) && header(p)).sort((a, b) => a.querySelectorAll('*').length - b.querySelectorAll('*').length)[0];
+    let pop = null;
+    for (let i = 0; i < 20 && !(pop = find()); i++) await sleep(50);
+    if (!pop) return { ok: false, why: 'no calendar popup appeared' };
+    const btns = () => [...pop.querySelectorAll('button,[role=button],a,span,div')].filter((b) => rendered(b) && b.children.length === 0 || b.tagName === 'BUTTON');
+    for (let i = 0; i < 48; i++) {
+      const h = header(pop);
+      const diff = (Y * 12 + Mo - 1) - (h.y * 12 + h.m);
+      if (diff === 0) break;
+      const want = diff > 0 ? /next|forward|›|»|>|→/i : /prev|back|‹|«|<|←/i;
+      const b = btns().find((x) => want.test((x.getAttribute('aria-label') || '') + ' ' + (x.getAttribute('title') || '')) || want.test(clean(x.textContent)) && clean(x.textContent).length <= 2);
+      if (!b) return { ok: false, why: 'cannot find month navigation' };
+      clickEl(b);
+      await sleep(30);
+      pop = find() || pop;
+    }
+    const mname = MONTHS[Mo - 1];
+    const dayRe = new RegExp('\\b' + D + '\\b');
+    const cells = [...pop.querySelectorAll('button,[role=gridcell],[role=button],td,a,span,div')].filter((c) => rendered(c) && !(c.children.length > 1));
+    const bad = (c) => c.disabled || c.getAttribute('aria-disabled') === 'true' || /outside|disabled|other-month|prevMonth|nextMonth|muted/i.test(c.className || '');
+    let cell = cells.find((c) => !bad(c) && (c.getAttribute('aria-label') || '').toLowerCase().includes(mname) && dayRe.test(c.getAttribute('aria-label')));
+    if (!cell) cell = cells.find((c) => !bad(c) && clean(c.textContent) === String(D));
+    if (!cell) return { ok: false, why: 'day ' + D + ' not selectable in that month' };
+    clickEl(cell);
+    await sleep(60);
+    return { ok: true };
   }
 
   async function comboPick(ref, wanted, timeoutMs) {
@@ -741,7 +793,7 @@
   function selectorPresent(sel) { try { return deepQueryAll(document.documentElement, sel).some(rendered); } catch { return false; } }
 
   window.__wm = {
-    snapshot, forms, field, prepare, finish, setNative, apply, comboPick, clickInfo, jsClick, rect,
+    snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect,
     settle, textPresent, selectorPresent,
     el: (ref) => elOf(ref),
     pending: pendingDeep,

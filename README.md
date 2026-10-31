@@ -4,7 +4,7 @@
 
 Plug it into Claude Code, Codex, Cursor, or anything that speaks [MCP](https://modelcontextprotocol.io). Site and write-up: <https://inamdarmihir.github.io/waymarker/>
 
-> **Status: v0.1, early.** It works end to end and is tested against real Chrome and a real Qdrant server, but it has only been evaluated on local fixtures, not the open web. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it.
+> **Status: v0.2, early.** It works end to end and is tested against real Chrome and a real Qdrant server, but it has only been evaluated on local fixtures, not the open web. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it.
 
 ## Why it exists
 
@@ -64,7 +64,7 @@ Honest summary from each project's README (see [research](docs/research/landscap
 
 | | language | form handling | memory | notes |
 |---|---|---|---|---|
-| **Waymarker** | Rust | typed form model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes | Qdrant: profile, playbooks, episodes | v0.1; fixtures-only evaluation; Chrome only |
+| **Waymarker** | Rust | typed form model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes | Qdrant: profile, playbooks, episodes | v0.2; fixtures-only evaluation; Chrome only |
 | agent-browser (Vercel) | Rust CLI | `fill`/`select`/`check` primitives, batching | cookie/storage state, auth vault | larger, more mature; closest competitor |
 | Playwright MCP (Microsoft) | Node | accessibility snapshots, `browser_fill_form` batch fill | browser profile | mature, broad |
 | chrome-devtools-mcp (Google) | Node | automation + debugging/perf tooling | none | built for debugging |

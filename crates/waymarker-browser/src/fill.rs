@@ -489,6 +489,21 @@ impl Page {
                     Ok(None)
                 }
                 FieldKind::Combobox => self.fill_combobox(&live, &text_of(value)).await,
+                _ if live.readonly && !live.disabled => {
+                    // Read-only text inputs are usually fronted by a calendar popup.
+                    let text = text_of(value);
+                    let iso = waymarker_forms::normalize_date(&text).map_err(|_| {
+                        BrowserError::Other(format!("{r} is read-only and the value is not a date"))
+                    })?;
+                    let res = self.rt("pickDate", &[json!(r), json!(iso)]).await?;
+                    if res["ok"].as_bool() != Some(true) {
+                        return Err(BrowserError::Other(format!(
+                            "{r} is read-only; calendar: {}",
+                            res["why"].as_str().unwrap_or("failed")
+                        )));
+                    }
+                    Ok(None)
+                }
                 _ => {
                     let text = text_of(value);
                     if let Some(max) = live.maxlength {

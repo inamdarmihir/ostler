@@ -1,0 +1,26 @@
+<!doctype html><meta charset=utf-8><title>Preferences (custom widgets)</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}[role=radio],[role=checkbox],[role=switch]{display:inline-block;padding:.3rem .6rem;border:1px solid #888;margin:.2rem;cursor:pointer;user-select:none}[aria-checked=true]{background:#cde}#bio{border:1px solid #888;min-height:3rem;padding:.4rem}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Preferences</h1>
+<form id="f" onsubmit="return false">
+  <div id="l1">Contact method</div>
+  <div role="radiogroup" aria-labelledby="l1">
+    <div role="radio" aria-checked="false" tabindex="0" data-v="email">Email</div>
+    <div role="radio" aria-checked="false" tabindex="0" data-v="phone">Phone</div>
+    <div role="radio" aria-checked="false" tabindex="0" data-v="post">Post</div>
+  </div>
+  <div role="switch" aria-checked="false" tabindex="0" aria-label="Weekly digest" id="digest">Weekly digest</div>
+  <div role="checkbox" aria-checked="false" tabindex="0" aria-label="I agree to the terms" id="tos">I agree to the terms</div>
+  <div id="l2" style="margin-top:1rem">Short bio</div>
+  <div id="bio" contenteditable="true" role="textbox" aria-labelledby="l2"></div>
+  <button type="submit" id="go">Save</button>
+</form>
+<script>
+const st={contact:'',digest:false,tos:false,bio:''};
+function flip(el){const on=el.getAttribute('aria-checked')!=='true';el.setAttribute('aria-checked',on)}
+document.querySelectorAll('[role=radio]').forEach(r=>{const pick=()=>{document.querySelectorAll('[role=radio]').forEach(x=>x.setAttribute('aria-checked','false'));r.setAttribute('aria-checked','true')};r.addEventListener('click',pick);r.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();pick()}})});
+for(const id of ['digest','tos']){const el=document.getElementById(id);el.addEventListener('click',()=>flip(el));el.addEventListener('keydown',e=>{if(e.key===' '){e.preventDefault();flip(el)}})}
+document.getElementById('go').addEventListener('click',async()=>{
+ const sel=document.querySelector('[role=radio][aria-checked=true]');
+ const o={contact:sel?sel.dataset.v:'',digest:document.getElementById('digest').getAttribute('aria-checked')==='true',tos:document.getElementById('tos').getAttribute('aria-checked')==='true',bio:document.getElementById('bio').innerText.trim()};
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});
+ document.body.innerHTML='<h1>Saved</h1>'});
+</script>

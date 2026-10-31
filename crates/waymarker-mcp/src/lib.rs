@@ -214,4 +214,40 @@ mod tests {
             .unwrap()
             .contains("confirm"));
     }
+
+    #[tokio::test]
+    async fn hostile_arguments_never_panic_or_hang() {
+        let a = app();
+        let junk = [
+            json!(null),
+            json!(5),
+            json!("str"),
+            json!([1, 2]),
+            json!({"url": 5, "ref": [], "text": {}, "values": "x", "key": null}),
+            json!({"values": {"a": {"b": {"c": [1, [2, [3]]]}}}}),
+        ];
+        for t in tools::list(Profile::All) {
+            let name = t["name"].as_str().unwrap();
+            for (n, args) in junk.iter().enumerate() {
+                let msg = json!({"jsonrpc":"2.0","id":n,"method":"tools/call","params":{"name":name,"arguments":args}});
+                let r = tokio::time::timeout(std::time::Duration::from_secs(20), handle(&a, &msg))
+                    .await
+                    .unwrap_or_else(|_| panic!("{name} hung on {args}"))
+                    .expect("response");
+                assert!(
+                    r.get("result").is_some() || r.get("error").is_some(),
+                    "{name}: {r}"
+                );
+            }
+        }
+        // Garbage framing at the JSON-RPC level.
+        for m in [
+            json!({}),
+            json!({"method": 5, "id": 1}),
+            json!({"method":"nope","id":"x"}),
+            json!([]),
+        ] {
+            let _ = handle(&a, &m).await;
+        }
+    }
 }

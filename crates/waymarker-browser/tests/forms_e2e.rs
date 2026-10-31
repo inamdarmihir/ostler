@@ -540,3 +540,109 @@ async fn actions_settle_quickly() {
     );
     b.close().await;
 }
+
+#[tokio::test]
+async fn custom_aria_widgets_and_contenteditable() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/aria.html")).await.unwrap();
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({"Contact method": "Phone", "Weekly digest": true, "I agree to the terms": true, "Short bio": "Rust and browsers"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.unmatched.is_empty(), "{rep:#?}");
+    assert_eq!(rep.failed(), 0, "{rep:#?}");
+    b.page.submit(None, None).await.unwrap();
+    let got = srv.last().unwrap();
+    assert_eq!(got["contact"], "phone", "{got}");
+    assert_eq!(got["digest"], true, "{got}");
+    assert_eq!(got["tos"], true, "{got}");
+    assert_eq!(got["bio"], "Rust and browsers", "{got}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn conditional_fields_appear_and_are_filled_in_order() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page
+        .navigate(&srv.url("/conditional.html"))
+        .await
+        .unwrap();
+    // Fields for "Bug report" do not exist until the type is chosen; the caller passes them anyway.
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({"Request type": "Bug report", "Steps to reproduce": "Click save", "Severity": "High",
+                       "I want to add contact details": true, "Email": "a@b.co"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.unmatched.is_empty(), "{rep:#?}");
+    assert_eq!(rep.failed(), 0, "{rep:#?}");
+    assert_eq!(
+        b.page.submit(None, None).await.unwrap().status,
+        SubmitStatus::Submitted
+    );
+    let got = srv.last().unwrap();
+    assert_eq!(got["kind"], "bug");
+    assert_eq!(got["steps"], "Click save");
+    assert_eq!(got["severity"], "high");
+    assert_eq!(got["email"], "a@b.co");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn hidden_branch_is_not_filled_and_validation_reports_page_message() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page
+        .navigate(&srv.url("/conditional.html"))
+        .await
+        .unwrap();
+    b.page
+        .fill_form(
+            req(json!({"Request type": "Billing", "Invoice number": "12"})),
+            None,
+        )
+        .await
+        .unwrap();
+    let out = b.page.submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::ValidationFailed, "{out:#?}");
+    assert!(
+        format!("{out:?}").contains("INV-1234"),
+        "page message should be surfaced: {out:#?}"
+    );
+    assert!(srv.last().is_none());
+    b.close().await;
+}
+
+#[tokio::test]
+async fn calendar_date_picker_readonly_input() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.navigate(&srv.url("/datepicker.html")).await.unwrap();
+    let rep = b
+        .page
+        .fill_form(
+            req(json!({"Check-in date": "2026-12-24", "Guests": 2})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 0, "{rep:#?}");
+    b.page.submit(None, None).await.unwrap();
+    let got = srv.last().unwrap();
+    assert_eq!(got["checkin"], "2026-12-24", "{got}");
+    assert_eq!(got["guests"], "2");
+    b.close().await;
+}

@@ -1,0 +1,28 @@
+<!doctype html><meta charset=utf-8><title>Book a room</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}#cal{border:1px solid #888;padding:.5rem;width:260px;margin-top:.3rem}#cal button{margin:0;padding:.2rem .4rem}#grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}#grid button{width:100%}[hidden]{display:none}</style>
+<h1>Book a room</h1>
+<form id="f" onsubmit="return false">
+  <label for="d">Check-in date</label>
+  <input id="d" name="checkin" readonly placeholder="Pick a date" aria-haspopup="dialog">
+  <div id="cal" role="dialog" aria-label="Choose date" hidden>
+    <div><button type="button" id="prev" aria-label="Previous month">&lt;</button> <strong id="title" aria-live="polite"></strong> <button type="button" id="next" aria-label="Next month">&gt;</button></div>
+    <div id="grid" role="grid"></div>
+  </div>
+  <label for="n">Guests</label><input id="n" name="guests" type="number" min="1" max="6">
+  <button type="submit" id="go">Book</button>
+</form>
+<script>
+const $=id=>document.getElementById(id);
+const M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+let y=2026,m=9;
+function draw(){$('title').textContent=M[m]+' '+y;const g=$('grid');g.innerHTML='';
+ const n=new Date(y,m+1,0).getDate();
+ for(let i=1;i<=n;i++){const b=document.createElement('button');b.type='button';b.textContent=i;b.setAttribute('role','gridcell');
+  b.setAttribute('aria-label',M[m]+' '+i+', '+y);
+  b.onclick=()=>{$('d').value=y+'-'+String(m+1).padStart(2,'0')+'-'+String(i).padStart(2,'0');$('cal').hidden=true};g.appendChild(b)}}
+$('d').addEventListener('click',()=>{$('cal').hidden=false;draw()});
+$('prev').onclick=()=>{m--;if(m<0){m=11;y--}draw()};
+$('next').onclick=()=>{m++;if(m>11){m=0;y++}draw()};
+$('go').addEventListener('click',async()=>{
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({checkin:$('d').value,guests:$('n').value})});
+ document.body.innerHTML='<h1>Booked</h1>'});
+</script>

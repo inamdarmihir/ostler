@@ -62,7 +62,7 @@ What can erode it: competitors adding memory (it is not hard in principle), and 
 
 | aspect | what we test | where | status |
 |---|---|---|---|
-| **Correctness** | 17 browser e2e tests assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/waymarker-browser/tests` | passing |
+| **Correctness** | 21 browser e2e tests assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/waymarker-browser/tests` | passing |
 | **Form logic** | key->field matching (ambiguity reported, never guessed), option/date/time normalisation, sensitive-field detection, fingerprints | `waymarker-forms` unit tests (14) | passing |
 | **Protocol** | real binary over MCP stdio: initialize, tools, memory learning loop, confirm gate, domain policy, profiles | `crates/waymarker-cli/tests` | passing |
 | **Memory** | store semantics on a real Qdrant: roundtrip, isolation, upsert, dimension mismatch, 20 concurrent tenants; Cloud Inference request shape via mock | `waymarker-memory` tests (11 + 3 real) | passing |

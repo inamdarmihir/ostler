@@ -31,6 +31,15 @@ pub const PAGES: &[(&str, &str)] = &[
     ("types", include_str!("../../../fixtures/types.html")),
     ("masked", include_str!("../../../fixtures/masked.html")),
     ("longform", include_str!("../../../fixtures/longform.html")),
+    ("aria", include_str!("../../../fixtures/aria.html")),
+    (
+        "conditional",
+        include_str!("../../../fixtures/conditional.html"),
+    ),
+    (
+        "datepicker",
+        include_str!("../../../fixtures/datepicker.html"),
+    ),
 ];
 
 pub struct FixtureServer {

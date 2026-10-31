@@ -55,7 +55,7 @@ footer{padding:40px 0 70px;color:var(--mut);font-size:14px;border-top:1px solid 
 <p class="lead">Waymarker is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It fills a whole form in one call, checks every value it wrote, and uses Qdrant to remember what worked, so the next visit is better than the first.</p>
 <pre><code>cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
 claude mcp add waymarker -- waymarker serve</code></pre>
-<div class="status"><b>v0.1, early.</b> Tested end to end against real Chrome and a real Qdrant server. Evaluated on local fixtures built to reproduce known form-filling failures, <b>not yet on the open web</b>. This page says what we measured, how, and what we do not know.</div>
+<div class="status"><b>v0.2, early.</b> Tested end to end against real Chrome and a real Qdrant server. Evaluated on local fixtures built to reproduce known form-filling failures, <b>not yet on the open web</b>. This page says what we measured, how, and what we do not know.</div>
 </div>
 
 <section id="why">
@@ -193,7 +193,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <div class="scroll"><table>
 <thead><tr><th></th><th>Language</th><th>Form handling</th><th>Memory</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td><b>Waymarker</b></td><td>Rust</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.1; fixtures only; Chrome only</td></tr>
+<tr><td><b>Waymarker</b></td><td>Rust</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.2; fixtures only; Chrome only</td></tr>
 <tr><td>agent-browser (Vercel)</td><td>Rust CLI</td><td><code>fill</code> / <code>select</code> / <code>check</code>, command batching</td><td>Cookie/storage state, auth vault</td><td>Larger and more mature. Closest competitor.</td></tr>
 <tr><td>Playwright MCP (Microsoft)</td><td>Node</td><td>Accessibility snapshots, batch <code>browser_fill_form</code></td><td>Browser profile</td><td>Mature and broad</td></tr>
 <tr><td>chrome-devtools-mcp (Google)</td><td>Node</td><td>Automation plus debugging and performance tooling</td><td>None</td><td>Built for debugging</td></tr>

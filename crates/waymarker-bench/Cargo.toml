@@ -25,8 +25,8 @@ serde_json = "1.0.154"
 tempfile = "3.27.0"
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "process", "sync"] }
 uuid = { version = "1.20.0", features = ["v4"] }
-waymarker-browser = { version = "0.1.0", path = "../waymarker-browser" }
-waymarker-cdp = { version = "0.1.0", path = "../waymarker-cdp" }
-waymarker-fixtures = { version = "0.1.0", path = "../waymarker-fixtures" }
-waymarker-mcp = { version = "0.1.0", path = "../waymarker-mcp" }
-waymarker-memory = { version = "0.1.0", path = "../waymarker-memory" }
+waymarker-browser = { version = "0.2.0", path = "../waymarker-browser" }
+waymarker-cdp = { version = "0.2.0", path = "../waymarker-cdp" }
+waymarker-fixtures = { version = "0.2.0", path = "../waymarker-fixtures" }
+waymarker-mcp = { version = "0.2.0", path = "../waymarker-mcp" }
+waymarker-memory = { version = "0.2.0", path = "../waymarker-memory" }
