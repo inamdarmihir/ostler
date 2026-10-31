@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/inamdarmihir/waymarker/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/inamdarmihir/waymarker/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Rust 1.80+" src="https://img.shields.io/badge/rust-1.80%2B-orange.svg">
+  <img alt="Rust 1.82+" src="https://img.shields.io/badge/rust-1.82%2B-orange.svg">
   <img alt="MCP" src="https://img.shields.io/badge/protocol-MCP-black.svg">
   <a href="https://inamdarmihir.github.io/waymarker/"><img alt="Site" src="https://img.shields.io/badge/site-github.io-informational.svg"></a>
 </p>
@@ -33,7 +33,7 @@ What worked is saved in Qdrant: which profile fact fills which field, per site a
 | Dependent dropdowns, wizards | handled inside `form_fill` / `form_submit` | agent has to notice and retry |
 | Submit result | `Submitted` / `Advanced` / `NOT SUBMITTED` + the page's messages | agent infers from a new snapshot |
 | Memory across sessions | **Qdrant**: facts, playbooks, episodes | none, or a browser profile |
-| Tool schema cost per turn | ~1.1k tokens (`--tools forms` is smaller) | varies |
+| Tool schema cost per turn | ~1.4k tokens (`--tools forms` is smaller) | varies |
 
 The "3 vs ~20" row is measured on our own fixtures with a scripted agent, and the comparison column is **our engine driven that way, not another product**. Tools that already offer a batched fill (Playwright MCP, chrome-devtools-mcp) are closer to Waymarker than this table suggests. See [Benchmarks](#benchmarks) and the [design review](docs/REVIEW-2026-10.md).
 
@@ -41,7 +41,7 @@ The "3 vs ~20" row is measured on our own fixtures with a scripted agent, and th
 
 ## Install
 
-You need **Chrome or Chromium** and **Rust 1.80+**. Prebuilt binaries are not published yet.
+You need **Chrome or Chromium** and **Rust 1.82+**. Prebuilt binaries are not published yet.
 
 ```sh
 cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
@@ -175,11 +175,14 @@ Extra serve flags go after `--`: `waymarker setup claude --apply -- --lean --too
 | group | tools |
 |---|---|
 | browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `screenshot` `back` |
+| tabs | `tabs` (list, new, switch, close; popups arrive as tabs) · `context` (notes shared by every tab) |
 | forms | `form_inspect` `form_fill` `form_submit` `fill_field` |
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
 | other | `stats` |
 
-`--tools core|forms|all` controls how many the agent sees. The full set costs ~1.1k tokens of context on every turn, and a test keeps it under 7 KB.
+`--tools core|forms|all` controls how many the agent sees. The full set (19 tools) is about 5.6 KB of schema, roughly 1.4k tokens on every turn; a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+
+**Tabs share one browser context**, so cookies and logins carry across them, and the `context` tool is a small key/value notepad every tab (and every later call) can read, for things like "applicant = Ada, order id = 4471". It survives a browser restart.
 
 ---
 
@@ -224,6 +227,7 @@ Reproduce: `cargo build --release -p waymarker-bench && ./target/release/waymark
 waymarker <COMMAND>
 
   serve      Run the MCP server on stdio (what the agent launches)
+  a2a        Serve Agent2Agent (A2A) over HTTP so other agents can delegate forms
   init       Save settings (Qdrant URL/key, tenant, defaults) and test them
   config     show | path | set <key> <value> | unset <key>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
@@ -246,6 +250,7 @@ waymarker <COMMAND>
 | `--allow-file` | off | permit `file://` URLs |
 | `--require-confirm-submit` | off | `form_submit` needs `confirm=true` |
 | `--learn` | off | save non-sensitive typed values after an accepted submit |
+| `--verbose` | off | timings, fingerprints and ids in tool output (costs context) |
 | `--memory` | `auto` | `auto`, `qdrant`, `ephemeral`, `off` |
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
 | `--embeddings`, `--embedding-model`, `--embedding-dim` | `cloud`, MiniLM, 384 | embedding source |
@@ -256,11 +261,23 @@ Set `WAYMARKER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root o
 
 ---
 
+## A2A: let other agents hand it forms
+
+```sh
+waymarker a2a --allow-domain example.com
+curl http://127.0.0.1:8765/.well-known/agent-card.json
+```
+
+Besides MCP, Waymarker speaks [Agent2Agent](https://a2a-protocol.org) v1.0. Another agent sends a task (`{"url": …, "values": {…}, "submit": true}`), Waymarker fills and verifies the form, and answers `input-required` when it needs something (a missing field, a rejected value, or your **confirm** before anything is submitted). Each conversation gets its own browser and tabs. It binds to loopback, requires a bearer token to listen anywhere else, and refuses requests from web pages. Checked against the official A2A Python SDK. Details, security notes and limits: [docs/A2A.md](docs/A2A.md).
+
 ## Safety
 
-Domain allowlist (`--allow-domain`), `--require-confirm-submit`, secrets refused by memory, page text marked untrusted, and sensitive values masked in fill reports.
+- `--allow-domain` is enforced **inside the browser** on navigations, form posts, `fetch`/XHR, beacons and event streams, so a request to another host never leaves. It does not cover images, scripts, stylesheets or WebSockets, and it ignores ports.
+- `--require-confirm-submit` blocks **every non-GET request** (click, Enter, page script) unless it happens inside a confirmed `form_submit`. A GET with side effects is not covered.
+- Page text is wrapped as untrusted (the wrapper cannot be closed from inside); secrets are refused by memory and masked in reports, snapshots and notes; memory never overwrites a fact you told it.
+- Popups open as tabs under the same policy. A crashed Chrome is restarted and the agent is told.
 
-**Known gaps found by our own review and not yet fixed:** the allowlist is checked after navigation rather than at the network layer, the submit confirmation only guards `form_submit`, file fields accept any local path, secrets can appear in error notes and snapshots, and the DevTools port is open to local users. For anything sensitive, use `--allow-domain` and a throwaway profile. Details: [SECURITY.md](SECURITY.md), [review](docs/REVIEW-2026-10.md).
+**Still open, from our own review:** file fields accept any local path, the DevTools port is a TCP port other local users can reach, an empty allowlist still permits localhost and private addresses (including cloud metadata), `confirm()` dialogs are auto-accepted, and Chrome can be orphaned if the server is killed. For anything sensitive use `--allow-domain` and a throwaway profile. Status of every finding: [review](docs/REVIEW-2026-10.md#status). Policy and threat model: [SECURITY.md](SECURITY.md).
 
 ## How it compares
 

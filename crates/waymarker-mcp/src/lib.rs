@@ -7,7 +7,7 @@ mod app;
 mod render;
 mod tools;
 
-pub use app::{App, AppConfig, Content, ToolOutput};
+pub use app::{App, AppConfig, Content, FormTask, FormTaskResult, TaskVerdict, ToolOutput};
 pub use tools::Profile;
 
 use serde_json::{json, Value};

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Fixes from the [design review](docs/REVIEW-2026-10.md) (status table there), plus three features.
+
+- **Tool output is terse by default.** Verified fields are named once instead of one line each, form names no longer include the form's whole text, and fingerprints, timings and repeated page titles are gone. About 30% less text on a four-call form flow (1.5 KB to 1.0 KB). `--verbose` (or `verbose = true` in the config) restores the detail.
+- **Tabs and shared context.** New `tabs` tool (list, new, switch, close). All tabs share one browser context, so cookies carry across; popups open as tabs under the same policy; new `context` tool is a notepad every tab and later call can read, kept across browser restarts.
+- **A2A.** `waymarker a2a` serves Agent2Agent v1.0 (JSON-RPC, SSE streaming): Agent Card, `SendMessage`, `SendStreamingMessage`, `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`. Tasks move to `input-required` for missing values, rejected input and submit confirmation. Per-conversation browsers; loopback by default; bearer token to listen elsewhere; `Origin`/`Host` checks. Verified with the official A2A Python SDK. See [docs/A2A.md](docs/A2A.md).
+- **Wrong-fill prevention:** keys resolve against every visible field once, so an ambiguous key cannot win by elimination; forms re-mounted by a framework are followed; keys can no longer be silently dropped, and `FillReport::ok()` counts unmatched keys.
+- **Memory:** learned values never overwrite facts you saved; playbooks persist only exact (playbook/autocomplete) matches; semantic matches need a margin over the runner-up and never apply to labels about other people; fixed the playbook key being cut at the first space.
+- **Safety:** the allowlist is enforced at the network layer; `--require-confirm-submit` blocks all non-GET requests outside a confirmed submit; the untrusted-content wrapper cannot be closed by page text; secrets are masked in snapshots and notes and scrubbed from stored episodes.
+- **Reliability:** a crashed Chrome is relaunched and the agent is told; closed connections fail immediately; larger WebSocket frames; `panic = "abort"` removed.
+- **MSRV** is now Rust 1.82.
+
 - **New:** `waymarker setup <claude|codex|cursor|vscode|json> [--apply] [-- serve flags]` prints client config with the binary's absolute path; `--apply` runs `claude mcp add`. `doctor` now points to it.
 - **New:** `waymarker init` (interactive or flag-driven; saves Qdrant URL/key, tenant, defaults to `~/.config/waymarker/config.toml` with `0600` permissions and tests the connection) and `waymarker config show|path|set|unset`. Precedence: flag, environment variable, config file, default. Qdrant Cloud URLs get `:6333` added. Key is masked in `config show`.
 - **Docs:** README rewritten (quickstart, real tool output, measured-vs-modelled labelling, known gaps), `docs/TROUBLESHOOTING.md`, and the [design review](docs/REVIEW-2026-10.md).

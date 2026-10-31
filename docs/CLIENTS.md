@@ -9,7 +9,7 @@ waymarker doctor
 ## Install
 
 ```sh
-# from source (needs Rust 1.80+ and Chrome/Chromium)
+# from source (needs Rust 1.82+ and Chrome/Chromium)
 cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
 ```
 

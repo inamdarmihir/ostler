@@ -29,6 +29,8 @@ enum Cmd {
     Serve(ServeArgs),
     /// Check that Chrome launches and (if configured) Qdrant is reachable.
     Doctor(MemoryArgs),
+    /// Serve the Agent2Agent (A2A) protocol so other agents can hand this one form tasks over HTTP.
+    A2a(A2aArgs),
     /// Save your settings (Qdrant URL and API key, tenant, defaults) to the config file and verify them.
     Init(InitArgs),
     /// Show or edit the config file.
@@ -67,6 +69,91 @@ enum Cmd {
         #[arg(long, default_value_t = 8787)]
         port: u16,
     },
+}
+
+#[derive(Args)]
+struct A2aArgs {
+    #[command(flatten)]
+    serve: ServeArgs,
+    /// Address to listen on. Anything other than loopback requires --a2a-token.
+    #[arg(long, env = "WAYMARKER_A2A_BIND", default_value = "127.0.0.1:8765")]
+    bind: std::net::SocketAddr,
+    /// Bearer token clients must send. Prefer the environment variable or `waymarker config set a2a_token`.
+    #[arg(long, env = "WAYMARKER_A2A_TOKEN", hide_env_values = true)]
+    a2a_token: Option<String>,
+    /// Externally visible base URL for the Agent Card (reverse proxy, container).
+    #[arg(long)]
+    public_url: Option<String>,
+    /// Additional accepted Host header values. Repeatable.
+    #[arg(long = "allowed-host")]
+    allowed_hosts: Vec<String>,
+    /// Concurrent remote conversations; each one is a Chrome process.
+    #[arg(long, default_value_t = 4)]
+    max_contexts: usize,
+    /// Close a conversation's browser after this many idle seconds.
+    #[arg(long, default_value_t = 300)]
+    idle_secs: u64,
+    #[arg(long, default_value_t = 120)]
+    task_timeout_secs: u64,
+    /// Treat `submit: true` as already confirmed (skips the input-required confirmation step).
+    #[arg(long)]
+    a2a_auto_submit: bool,
+}
+
+async fn run_a2a(a: A2aArgs) -> Result<()> {
+    let s = a.serve;
+    let memory = build_memory(&s.mem)?;
+    let profile: Profile = s.tools.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    if s.profile_dir.is_some() {
+        eprintln!("waymarker: --profile-dir is ignored in A2A mode (each conversation needs its own browser profile).");
+    }
+    if s.allow_domains.is_empty() {
+        eprintln!("waymarker: warning: no --allow-domain set, so remote agents can send this browser to any website. Restrict it.");
+    }
+    if let Some(m) = &memory {
+        if let Err(e) = m.init().await {
+            eprintln!(
+                "waymarker: memory unavailable ({e}); exiting rather than hiding the problem."
+            );
+            std::process::exit(2);
+        }
+    }
+    let (chrome_path, headless, lean) = (s.chrome_path.clone(), !s.headed, s.lean);
+    let (policy, learn, confirm, verbose) = (
+        Policy {
+            allowed_domains: s.allow_domains.clone(),
+            allow_file: s.allow_file,
+        },
+        s.learn,
+        s.require_confirm_submit,
+        s.verbose,
+    );
+    let factory: waymarker_a2a::AppFactory = Arc::new(move || {
+        App::new(AppConfig {
+            launch: LaunchOptions {
+                chrome_path: chrome_path.clone(),
+                headless,
+                lean,
+                ..Default::default()
+            },
+            policy: policy.clone(),
+            profile,
+            memory: memory.clone(),
+            learn,
+            require_confirm_submit: confirm,
+            verbose,
+        })
+    });
+    let mut cfg = waymarker_a2a::A2aConfig::new(a.bind);
+    cfg.token = a.a2a_token;
+    cfg.public_url = a.public_url;
+    cfg.allowed_hosts = a.allowed_hosts;
+    cfg.max_contexts = a.max_contexts.max(1);
+    cfg.idle = Duration::from_secs(a.idle_secs);
+    cfg.task_timeout = Duration::from_secs(a.task_timeout_secs);
+    cfg.auto_submit = a.a2a_auto_submit;
+    waymarker_a2a::serve(cfg, factory).await?;
+    Ok(())
 }
 
 #[derive(Args)]
@@ -536,6 +623,7 @@ async fn main() -> Result<()> {
             );
             waymarker_mcp::serve_stdio(app).await?;
         }
+        Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(m) => doctor(m).await?,
         Cmd::Init(a) => init(a).await?,
         Cmd::Config { cmd } => config_cmd(cmd)?,

@@ -19,10 +19,12 @@ pub const KEYS: &[(&str, &str)] = &[
     ("learn", "WAYMARKER_LEARN"),
     ("lean", "WAYMARKER_LEAN"),
     ("verbose", "WAYMARKER_VERBOSE"),
+    ("a2a_bind", "WAYMARKER_A2A_BIND"),
+    ("a2a_token", "WAYMARKER_A2A_TOKEN"),
     ("tools", "WAYMARKER_TOOLS"),
 ];
 
-const SECRET: &str = "qdrant_api_key";
+const SECRETS: &[&str] = &["qdrant_api_key", "a2a_token"];
 
 pub fn path() -> PathBuf {
     if let Ok(p) = std::env::var("WAYMARKER_CONFIG") {
@@ -122,7 +124,7 @@ pub fn env_for(key: &str) -> Option<&'static str> {
 }
 
 pub fn mask(key: &str, value: &str) -> String {
-    if key != SECRET {
+    if !SECRETS.contains(&key) {
         return value.to_string();
     }
     match value.len() {

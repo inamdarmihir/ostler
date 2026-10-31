@@ -23,7 +23,7 @@
 | `waymarker-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
 | `waymarker-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
 | `waymarker-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors) and `InMemoryStore`; `Memory` API for one tenant. |
-| `waymarker-mcp` | JSON-RPC loop, 17 tools in 3 profiles, lazy browser, per-tool metrics, background memory writes. |
+| `waymarker-mcp` | JSON-RPC loop, 19 tools in 3 profiles (including `tabs` and `context`), lazy browser, per-tool metrics, background memory writes. |
 | `waymarker-cli` | `serve`, `doctor`, `inspect`, `memory`, `fixtures`. |
 | `waymarker-fixtures` | The 11 test pages and a recording HTTP server. |
 | `waymarker-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |

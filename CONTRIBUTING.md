@@ -5,7 +5,7 @@ Thanks for looking. This project values **evidence over claims**: a change that 
 ## Setup
 
 ```sh
-rustup toolchain install stable        # Rust 1.80+
+rustup toolchain install stable        # Rust 1.82+
 # Chrome or Chromium must be installed (or set WAYMARKER_CHROME)
 cargo test --workspace                 # browser tests skip politely if Chrome is missing
 WAYMARKER_REQUIRE_CHROME=1 cargo test  # ...or fail instead (what CI does)

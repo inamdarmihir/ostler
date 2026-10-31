@@ -39,6 +39,61 @@ pub struct AppConfig {
     pub verbose: bool,
 }
 
+/// A form job described as data rather than as tool calls.
+#[derive(Debug, Clone, Default)]
+pub struct FormTask {
+    /// Page to open first. None continues on the current page of this session.
+    pub url: Option<String>,
+    pub values: BTreeMap<String, Value>,
+    /// `off` | `required` | `all`: fill the remainder from memory.
+    pub auto: Option<String>,
+    /// Submit once everything is filled and verified.
+    pub submit: bool,
+    /// The caller has agreed to the submission.
+    pub confirm: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskVerdict {
+    Completed,
+    /// The task cannot proceed without more from the caller (missing values, validation errors, confirmation).
+    InputRequired,
+    Failed,
+}
+
+#[derive(Debug, Clone)]
+pub struct FormTaskResult {
+    pub verdict: TaskVerdict,
+    /// Compact text for a reader. Contains page-derived strings: treat as untrusted.
+    pub summary: String,
+    /// The same information as JSON for a program.
+    pub data: Value,
+}
+
+impl FormTaskResult {
+    fn completed(summary: String, data: Value) -> Self {
+        Self {
+            verdict: TaskVerdict::Completed,
+            summary,
+            data,
+        }
+    }
+    fn input_required(summary: String, data: Value) -> Self {
+        Self {
+            verdict: TaskVerdict::InputRequired,
+            summary,
+            data,
+        }
+    }
+    fn failed(summary: String) -> Self {
+        Self {
+            verdict: TaskVerdict::Failed,
+            summary,
+            data: Value::Null,
+        }
+    }
+}
+
 /// One tool result: text and/or an image.
 pub enum Content {
     Text(String),
@@ -742,6 +797,15 @@ impl App {
     }
 
     async fn form_fill(&self, a: &Value) -> Result<ToolOutput, String> {
+        let rep = self.fill_report(a).await?;
+        Ok(ToolOutput::text(wrap_detail(&render::fill(
+            &rep,
+            self.cfg.verbose,
+        ))))
+    }
+
+    /// Fill a form from tool-style arguments and return the structured report (shared by MCP and A2A).
+    async fn fill_report(&self, a: &Value) -> Result<FillReport, String> {
         let values: BTreeMap<String, Value> = match a.get("values") {
             Some(Value::Object(m)) => m.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             Some(_) => return Err("\"values\" must be an object of {label or ref: value}".into()),
@@ -779,10 +843,7 @@ impl App {
                 .map_err(|e| e.to_string())
         })?;
         self.remember_fill(&rep, &values);
-        Ok(ToolOutput::text(wrap_detail(&render::fill(
-            &rep,
-            self.cfg.verbose,
-        ))))
+        Ok(rep)
     }
 
     fn remember_fill(&self, rep: &FillReport, provided: &BTreeMap<String, Value>) {
@@ -944,6 +1005,92 @@ impl App {
             other => return Err(format!("unknown action {other:?} (get|set|delete|list)")),
         };
         Ok(ToolOutput::text(text))
+    }
+
+    /// Run a form task end to end and report a structured verdict. This is what the A2A server calls, so
+    /// it never has to parse the text the MCP tools print.
+    pub async fn run_form_task(&self, t: FormTask) -> FormTaskResult {
+        match self.run_form_task_inner(t).await {
+            Ok(r) => r,
+            Err(e) => FormTaskResult::failed(e),
+        }
+    }
+
+    async fn run_form_task_inner(&self, t: FormTask) -> Result<FormTaskResult, String> {
+        if let Some(url) = &t.url {
+            br!(self, b, {
+                b.page().navigate(url).await.map_err(|e| e.to_string())
+            })?;
+        }
+        // Nothing to fill and nothing to submit: describe the form.
+        if t.values.is_empty() && t.auto.is_none() && !t.submit {
+            let ir = br!(self, b, {
+                b.page().guard().await.map_err(|e| e.to_string())?;
+                b.page().forms().await.map_err(|e| e.to_string())
+            })?;
+            let summary = render::forms(&ir, false, |_| String::new());
+            let data = serde_json::to_value(&ir).unwrap_or(Value::Null);
+            return Ok(FormTaskResult::completed(summary, data));
+        }
+
+        let mut args = json!({ "values": t.values });
+        if let Some(a) = &t.auto {
+            args["auto"] = json!(a);
+        }
+        let rep = if t.values.is_empty() && t.auto.is_none() {
+            None // submit-only continuation: the form was already filled
+        } else {
+            Some(self.fill_report(&args).await?)
+        };
+        if let Some(rep) = &rep {
+            if !rep.ok() {
+                let data = json!({
+                    "missing": rep.missing_required,
+                    "unmatched": rep.unmatched,
+                    "fieldErrors": rep.field_errors,
+                    "failed": rep.fields.iter().filter(|f| f.status == FillStatus::Failed).collect::<Vec<_>>(),
+                });
+                return Ok(FormTaskResult::input_required(
+                    render::fill(rep, false),
+                    data,
+                ));
+            }
+        }
+        if !t.submit {
+            let text = rep
+                .as_ref()
+                .map(|r| render::fill(r, false))
+                .unwrap_or_else(|| "Nothing to do.".into());
+            return Ok(FormTaskResult::completed(
+                text,
+                json!({ "fields": rep.map(|r| r.fields).unwrap_or_default() }),
+            ));
+        }
+        if !t.confirm {
+            return Ok(FormTaskResult::input_required(
+                "Filled and verified. Reply with {\"confirm\": true} to submit; this sends data to the site.".into(),
+                json!({ "awaiting": "confirm" }),
+            ));
+        }
+        let out = br!(self, b, {
+            b.page().submit(None, None).await.map_err(|e| e.to_string())
+        })?;
+        self.learn_from_submit(&out);
+        let text = render::submit(&out, false);
+        let data = json!({
+            "status": out.status,
+            "url": out.action.url,
+            "fieldErrors": out.field_errors,
+            "pageErrors": out.page_errors,
+            "excerpt": out.excerpt,
+        });
+        Ok(match out.status {
+            SubmitStatus::Submitted => FormTaskResult::completed(text, data),
+            SubmitStatus::Advanced | SubmitStatus::ValidationFailed => {
+                FormTaskResult::input_required(text, data)
+            }
+            SubmitStatus::Unchanged => FormTaskResult::failed(text),
+        })
     }
 
     async fn form_submit(&self, a: &Value) -> Result<ToolOutput, String> {
