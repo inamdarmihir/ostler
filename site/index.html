@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ostler: a headless browser for AI agents that remembers</title>
 <meta name="description" content="Rust headless browser for AI coding agents. MCP server, Qdrant-backed memory, and a form engine that fills a 20-field form in 3 tool calls instead of 22. Measured, with the caveats.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/">
+<meta name="theme-color" content="#14110f">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Ostler: a browser for AI agents that fills forms and remembers">
+<meta property="og:description" content="Fills a whole form in one call, reads every value back, shows the agent where to click, and remembers with Qdrant. MCP and A2A. Rust.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
 <style>
 :root{--bg:#fbfaf7;--fg:#1c1b19;--mut:#6b675f;--line:#e4e0d6;--card:#fff;--accent:#c2410c;--accent2:#0f766e;--bar-a:#c2410c;--bar-b:#9ca3af;--code:#f1eee6}
 @media (prefers-color-scheme:dark){:root{--bg:#141311;--fg:#ece9e2;--mut:#a09b90;--line:#2b2924;--card:#1c1a17;--accent:#fb923c;--accent2:#5eead4;--bar-a:#fb923c;--bar-b:#6b7280;--code:#22201c}}
@@ -14,7 +23,7 @@ a{color:var(--accent)}a:hover{text-decoration:none}
 .wrap{max-width:980px;margin:0 auto;padding:0 24px}
 header.top{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:5}
 header.top .wrap{display:flex;gap:20px;align-items:center;height:54px;font-size:15px}
-header.top b{font-size:17px;letter-spacing:-.01em;margin-right:auto}header.top a{color:var(--mut);text-decoration:none}header.top a:hover{color:var(--fg)}
+header.top b{display:flex;align-items:center;gap:9px;font-size:17px;letter-spacing:-.01em;margin-right:auto}header.top a{color:var(--mut);text-decoration:none}header.top a:hover{color:var(--fg)}
 @media(max-width:700px){header.top .hide{display:none}}
 .hero{padding:72px 0 40px}
 .hero h1{font-size:clamp(34px,6vw,56px);line-height:1.08;letter-spacing:-.03em;margin:0 0 18px;max-width:18ch}
@@ -45,7 +54,7 @@ footer{padding:40px 0 70px;color:var(--mut);font-size:14px;border-top:1px solid 
 </head>
 <body>
 <header class="top"><div class="wrap">
-<b>Ostler</b><a href="#how" class="hide">How it works</a><a href="#choices" class="hide">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare" class="hide">Compare</a><a href="https://github.com/inamdarmihir/ostler">GitHub</a>
+<b><img src="assets/logo.svg" alt="" width="26" height="26">Ostler</b><a href="#new" class="hide">New</a><a href="#how" class="hide">How it works</a><a href="#choices" class="hide">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare" class="hide">Compare</a><a href="https://github.com/inamdarmihir/ostler">GitHub</a>
 </div></header>
 
 <main class="wrap">
@@ -65,6 +74,16 @@ claude mcp add ostler -- ostler serve</code></pre>
 <div class="card"><h3>One call per field</h3><p>Typical tools make the model click, type, and re-read the page for each field. A 20-field form is 20+ turns, and every turn re-reads the whole conversation.</p></div>
 <div class="card"><h3>Forms are tricky</h3><p>Dependent dropdowns that load asynchronously, wizards, input masks, controlled components that ignore a plain <code>.value =</code>, custom comboboxes, shadow DOM, iframes, silent validation.</p></div>
 <div class="card"><h3>Amnesia</h3><p>Every session starts from zero: the same site quirks rediscovered, the same personal details asked for again, the same validation mistakes repeated.</p></div>
+</div>
+</section>
+
+<section id="new">
+<h2>Built for what agents get wrong</h2>
+<p class="sub">Three things that make a page easier for an agent to use correctly.</p>
+<div class="grid g3">
+<div class="card"><h3>Shows where to click</h3><p>The <code>look</code> tool returns a screenshot with every clickable element boxed and numbered from the DOM, plus a legend: <code>e6 button "Send" → submits the form</code>. Elements hidden under a cookie banner or modal are left out and counted, so the agent closes the overlay first.</p></div>
+<div class="card"><h3>Catches errors you can only see</h3><p>Red borders, red text under a field, and toast banners are reported as errors even when the page sets no <code>aria-invalid</code>. An error that was already on a field before the fill is flagged, so it is not mistaken for a new one.</p></div>
+<div class="card"><h3>Tabs, A2A, one notepad</h3><p>Popups arrive as tabs under the same policy. Other agents can hand over a form through A2A v1.0 and get <code>input-required</code> back when something is missing or needs your confirmation.</p></div>
 </div>
 </section>
 
@@ -204,8 +223,8 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <section id="limits">
 <h2>Limits and roadmap</h2>
 <div class="grid g2">
-<div class="card"><h3>Today it does not</h3><p>Handle tabs or popups, cross-origin iframes, closed shadow roots, CAPTCHAs, 2FA, or calendar-click date pickers. It runs Chrome only, over stdio only, and is tested on macOS locally and Linux in CI.</p></div>
-<div class="card"><h3>Next</h3><p>Real-site form evaluation with published failures · head-to-head benchmark · live Qdrant Cloud Inference validation · Qdrant sizing study · tabs and cross-origin frames · an optional Lightpanda backend if it earns its keep.</p></div>
+<div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, CAPTCHAs or 2FA. <code>look</code> covers only the visible viewport. It runs Chrome only, and is tested on macOS locally and Linux in CI.</p></div>
+<div class="card"><h3>Next</h3><p>Real-site form evaluation with published failures · head-to-head benchmark · live Qdrant Cloud Inference validation · Qdrant sizing study · per-site click paths remembered in Qdrant · cross-origin frames · an optional Lightpanda backend if it earns its keep.</p></div>
 </div>
 </section>
 

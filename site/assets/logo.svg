@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Ostler">
+  <rect width="128" height="128" rx="28" fill="#14110f"/>
+  <path d="M38 24A40 40 0 1 0 90 24" fill="none" stroke="#fb923c" stroke-width="13" stroke-linecap="round"/>
+  <g fill="#14110f">
+    <circle cx="25.4" cy="64.8" r="3.4"/><circle cx="35.7" cy="82.7" r="3.4"/><circle cx="53.6" cy="93" r="3.4"/>
+    <circle cx="102.6" cy="64.8" r="3.4"/><circle cx="92.3" cy="82.7" r="3.4"/><circle cx="74.4" cy="93" r="3.4"/>
+  </g>
+  <path d="M50 62l10 10 20-23" fill="none" stroke="#5eead4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

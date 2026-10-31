@@ -1,6 +1,6 @@
 name: Pages
 on:
-  push: { branches: [main], paths: ["site/**", ".github/workflows/pages.yml"] }
+  push: { branches: [main], paths: ["site/**", "assets/**", ".github/workflows/pages.yml"] }
   workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
@@ -15,3 +15,9 @@ jobs:
         with: { path: site }
       - id: d
         uses: actions/deploy-pages@v4
+      - name: Smoke test the live site
+        run: |
+          base="${{ steps.d.outputs.page_url }}"
+          for f in "" favicon.svg assets/og.png assets/icon-180.png; do
+            curl -fsS --retry 5 --retry-delay 3 -o /dev/null -w "%{http_code} $base$f\n" "$base$f"
+          done
