@@ -43,6 +43,11 @@ impl Browser {
         self.conn.call_count()
     }
 
+    /// False once the connection to Chrome has dropped; the owner should relaunch.
+    pub fn is_alive(&self) -> bool {
+        !self.conn.is_closed()
+    }
+
     pub fn pid(&self) -> Option<u32> {
         self.chrome.pid()
     }

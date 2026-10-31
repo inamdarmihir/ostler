@@ -227,6 +227,7 @@ impl Page {
         req: FillRequest,
         sug: Option<&dyn Suggester>,
     ) -> Result<FillReport> {
+        self.guard().await?;
         let t0 = Instant::now();
         let mut pending = req.values.clone();
         let mut attempted: HashSet<String> = HashSet::new();
@@ -684,6 +685,19 @@ impl Page {
 
     /// Click a submit/next control and classify what happened.
     pub async fn submit(&self, form: Option<&str>, control: Option<&str>) -> Result<SubmitOutcome> {
+        // The caller has already obtained confirmation (if required); only this window may send data.
+        self.arm_submit(true);
+        let out = self.submit_inner(form, control).await;
+        self.arm_submit(false);
+        out
+    }
+
+    async fn submit_inner(
+        &self,
+        form: Option<&str>,
+        control: Option<&str>,
+    ) -> Result<SubmitOutcome> {
+        self.guard().await?;
         let before = self.forms().await?;
         let target = pick_form(&before.forms, form, &BTreeMap::new()).cloned();
         let before_fp = target

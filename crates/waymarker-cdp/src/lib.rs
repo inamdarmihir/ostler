@@ -12,7 +12,7 @@ pub use launch::{
 };
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -59,11 +59,18 @@ pub struct Connection {
     next_id: AtomicU64,
     calls: AtomicU64,
     events: broadcast::Sender<Event>,
+    /// Set as soon as the socket is gone, so callers fail at once instead of waiting out the timeout.
+    closed: Arc<AtomicBool>,
 }
 
 impl Connection {
     pub async fn connect(ws_url: &str) -> Result<Arc<Self>> {
-        let (ws, _) = tokio_tungstenite::connect_async(ws_url)
+        // Chrome sends big messages (a full-page PNG is one base64 string); the default 16/64 MiB
+        // limits would kill the whole connection on a tall page.
+        let cfg = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+            .max_message_size(Some(512 << 20))
+            .max_frame_size(Some(512 << 20));
+        let (ws, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(cfg), false)
             .await
             .map_err(|e| CdpError::Ws(e.to_string()))?;
         let (mut sink, mut stream) = ws.split();
@@ -79,6 +86,8 @@ impl Connection {
             }
         });
 
+        let closed = Arc::new(AtomicBool::new(false));
+        let reader_closed = closed.clone();
         let reader_pending = pending.clone();
         let reader_events = events.clone();
         tokio::spawn(async move {
@@ -111,7 +120,8 @@ impl Connection {
                     });
                 }
             }
-            // Connection gone: fail every in-flight request.
+            // Connection gone: refuse new requests first, then fail every in-flight one.
+            reader_closed.store(true, Ordering::SeqCst);
             let drained: Vec<_> = reader_pending.lock().unwrap().drain().collect();
             for (_, tx) in drained {
                 let _ = tx.send(Err(CdpError::Closed));
@@ -124,7 +134,13 @@ impl Connection {
             next_id: AtomicU64::new(1),
             calls: AtomicU64::new(0),
             events,
+            closed,
         }))
+    }
+
+    /// True once the browser connection has dropped (Chrome crashed or was killed).
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
     }
 
     /// Total protocol round-trips issued on this connection (a latency/cost proxy).
@@ -144,10 +160,18 @@ impl Connection {
         session_id: Option<&str>,
         timeout: Duration,
     ) -> Result<Value> {
+        if self.is_closed() {
+            return Err(CdpError::Closed);
+        }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.calls.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().unwrap().insert(id, tx);
+        // The reader may have drained `pending` between the check above and the insert.
+        if self.is_closed() {
+            self.pending.lock().unwrap().remove(&id);
+            return Err(CdpError::Closed);
+        }
         let mut msg = json!({ "id": id, "method": method, "params": params });
         if let Some(s) = session_id {
             msg["sessionId"] = json!(s);

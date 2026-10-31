@@ -275,3 +275,55 @@ async fn core_profile_exposes_only_core_tools() {
         "{names:?}"
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn server_recovers_when_chrome_is_killed() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    let (err, _) = c
+        .tool(
+            "navigate",
+            json!({"url": srv.url("/basic.html"), "observe": "none"}),
+        )
+        .await;
+    assert!(!err);
+    // Kill Chrome (the server's only child) the way an OOM killer would.
+    let pid = c.child.id().expect("server pid").to_string();
+    let kids = std::process::Command::new("pgrep")
+        .args(["-P", &pid])
+        .output()
+        .unwrap();
+    let kids = String::from_utf8_lossy(&kids.stdout).to_string();
+    assert!(!kids.trim().is_empty(), "expected a Chrome child process");
+    for k in kids.split_whitespace() {
+        std::process::Command::new("kill")
+            .args(["-9", k])
+            .status()
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let t = Instant::now();
+    let (err, text) = c
+        .tool(
+            "navigate",
+            json!({"url": srv.url("/basic.html"), "observe": "none"}),
+        )
+        .await;
+    assert!(!err, "{text}");
+    assert!(
+        text.contains("restarted"),
+        "agent must be told state was lost: {text}"
+    );
+    assert!(
+        t.elapsed() < Duration::from_secs(20),
+        "recovery must not wait out a timeout"
+    );
+    let (_, insp) = c.tool("form_inspect", json!({})).await;
+    assert!(insp.contains("Full name"), "{insp}");
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}

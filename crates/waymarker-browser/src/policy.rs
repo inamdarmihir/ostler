@@ -10,6 +10,11 @@ pub struct Policy {
 }
 
 impl Policy {
+    /// True when an allowlist is in force (so network-level enforcement is worth its cost).
+    pub fn restricts(&self) -> bool {
+        !self.allowed_domains.is_empty()
+    }
+
     pub fn check(&self, raw: &str) -> Result<(), String> {
         if raw == "about:blank" {
             return Ok(());

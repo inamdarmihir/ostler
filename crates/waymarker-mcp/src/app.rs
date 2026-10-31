@@ -128,6 +128,8 @@ pub struct App {
     browser: Mutex<Option<Browser>>,
     metrics: StdMutex<Metrics>,
     last_fill: StdMutex<Option<LastFill>>,
+    /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
+    notice: StdMutex<Option<String>>,
     pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
     started: Instant,
 }
@@ -251,6 +253,7 @@ impl App {
             browser: Mutex::new(None),
             metrics: StdMutex::default(),
             last_fill: StdMutex::default(),
+            notice: StdMutex::default(),
             pending: StdMutex::default(),
             started: Instant::now(),
         }
@@ -318,10 +321,26 @@ impl App {
     /// The shared browser, launched on first use (so the server starts instantly and idles for free).
     async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, String> {
         let mut guard = self.browser.lock().await;
+        if guard.as_ref().is_some_and(|b| !b.is_alive()) {
+            // Chrome died (crash, OOM kill). Reap it and start fresh rather than failing every call forever.
+            if let Some(dead) = guard.take() {
+                dead.close().await;
+            }
+            *self.notice.lock().unwrap() = Some(
+                "Note: the browser had crashed and was restarted. The previous page and its state are gone; navigate again."
+                    .to_string(),
+            );
+        }
         if guard.is_none() {
             let b = Browser::launch(self.cfg.launch.clone(), self.cfg.policy.clone())
                 .await
                 .map_err(|e| e.to_string())?;
+            if self.cfg.require_confirm_submit {
+                b.page
+                    .set_submit_gate(true)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
             *guard = Some(b);
         }
         Ok(guard)
@@ -339,6 +358,13 @@ impl App {
                 Err(e) => ToolOutput::err(e),
             },
         };
+        let mut out = out;
+        if let Some(n) = self.notice.lock().unwrap().take() {
+            match out.content.first_mut() {
+                Some(Content::Text(t)) => *t = format!("{n}\n{t}"),
+                _ => out.content.insert(0, Content::Text(n)),
+            }
+        }
         let ms = t0.elapsed().as_millis();
         let mut m = self.metrics.lock().unwrap();
         let s = m.per_tool.entry(name.to_string()).or_default();
@@ -546,6 +572,7 @@ impl App {
             "form_inspect" => {
                 let want = arg_str(a, "form").map(String::from);
                 br!(self, b, {
+                    b.page.guard().await.map_err(|e| e.to_string())?;
                     let mut ir = b.page.forms().await.map_err(|e| e.to_string())?;
                     if let Some(w) = &want {
                         ir.forms.retain(|f| f.r#ref == w.trim_start_matches('@'));
