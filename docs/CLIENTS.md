@@ -35,11 +35,12 @@ It uses this binary's absolute path, so it works even when the client's `PATH` d
 ## Memory with Qdrant
 
 ```sh
-export QDRANT_URL="https://<your-cluster>.cloud.qdrant.io:6333"
-export QDRANT_API_KEY="…"
-waymarker doctor                        # creates collections, checks connectivity
-claude mcp add waymarker -- waymarker serve --learn
+waymarker init          # prompts for URL + API key, saves them privately, tests the connection
+waymarker doctor
+waymarker setup claude --apply -- --learn
 ```
+
+Or non-interactively: `export QDRANT_URL=… QDRANT_API_KEY=…` (these override the saved config). See the README's [Configure](../README.md#configure) section for every setting and where it comes from.
 
 - Embeddings default to **Qdrant Cloud Inference** (`sentence-transformers/all-minilm-l6-v2`, 384 dims). Enable Inference on the cluster in the Qdrant Cloud console. This path follows Qdrant's documentation and is covered by request-shape tests, but has not been exercised against a live cluster by the maintainers; please report problems.
 - Against open-source Qdrant (no inference): `--embeddings dev-hash` uses non-semantic client-side vectors. Exact lookups and `autocomplete` matching work; semantic matching is poor. For development only.

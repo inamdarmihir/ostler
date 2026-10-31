@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **New:** `waymarker setup <claude|codex|cursor|vscode|json> [--apply] [-- serve flags]` prints client config with the binary's absolute path; `--apply` runs `claude mcp add`. `doctor` now points to it.
+- **New:** `waymarker init` (interactive or flag-driven; saves Qdrant URL/key, tenant, defaults to `~/.config/waymarker/config.toml` with `0600` permissions and tests the connection) and `waymarker config show|path|set|unset`. Precedence: flag, environment variable, config file, default. Qdrant Cloud URLs get `:6333` added. Key is masked in `config show`.
 - **Docs:** README rewritten (quickstart, real tool output, measured-vs-modelled labelling, known gaps), `docs/TROUBLESHOOTING.md`, and the [design review](docs/REVIEW-2026-10.md).
 
 ## 0.2.0

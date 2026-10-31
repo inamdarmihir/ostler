@@ -1,3 +1,5 @@
+mod config;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,8 +27,15 @@ struct Cli {
 enum Cmd {
     /// Run the MCP server on stdio (what Claude Code, Codex, Cursor launch).
     Serve(ServeArgs),
-    /// Check Chrome, Qdrant and print ready-to-paste client configuration.
+    /// Check that Chrome launches and (if configured) Qdrant is reachable.
     Doctor(MemoryArgs),
+    /// Save your settings (Qdrant URL and API key, tenant, defaults) to the config file and verify them.
+    Init(InitArgs),
+    /// Show or edit the config file.
+    Config {
+        #[command(subcommand)]
+        cmd: ConfigCmd,
+    },
     /// Print (or with --apply, run) the exact setup for an MCP client, using this binary's absolute path.
     Setup {
         #[arg(value_enum)]
@@ -58,6 +67,231 @@ enum Cmd {
         #[arg(long, default_value_t = 8787)]
         port: u16,
     },
+}
+
+#[derive(Args)]
+struct InitArgs {
+    /// Qdrant URL, e.g. https://<cluster>.cloud.qdrant.io:6333 (the :6333 is added for Qdrant Cloud if missing).
+    #[arg(long)]
+    qdrant_url: Option<String>,
+    /// Qdrant API key. Prefer the interactive prompt or the QDRANT_API_KEY variable: flags show up in `ps`.
+    #[arg(long, env = "QDRANT_API_KEY", hide_env_values = true)]
+    qdrant_api_key: Option<String>,
+    #[arg(long)]
+    tenant: Option<String>,
+    /// Save `learn = true` (opt in to remembering values typed after accepted forms).
+    #[arg(long)]
+    learn: bool,
+    /// Save `lean = true` (less RAM; no images in screenshots).
+    #[arg(long)]
+    lean: bool,
+    /// Embeddings: `cloud` (Qdrant Cloud Inference) or `dev-hash` (non-semantic, for open-source Qdrant).
+    #[arg(long, value_enum)]
+    embeddings: Option<Embeddings>,
+    /// Never prompt; only use the flags given.
+    #[arg(long)]
+    yes: bool,
+    /// Save without testing the connection.
+    #[arg(long)]
+    no_check: bool,
+}
+
+#[derive(Subcommand)]
+enum ConfigCmd {
+    /// Print the effective file contents (API key masked).
+    Show,
+    /// Print the config file path.
+    Path,
+    /// Set one value, e.g. `waymarker config set tenant alice`.
+    Set { key: String, value: String },
+    /// Remove one value.
+    Unset { key: String },
+}
+
+fn prompt(question: &str, default: &str) -> Result<String> {
+    use std::io::{BufRead, Write};
+    if default.is_empty() {
+        eprint!("{question}: ");
+    } else {
+        eprint!("{question} [{default}]: ");
+    }
+    std::io::stderr().flush()?;
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    let line = line.trim();
+    Ok(if line.is_empty() {
+        default.to_string()
+    } else {
+        line.to_string()
+    })
+}
+
+fn yes_no(question: &str, default: bool) -> Result<bool> {
+    let a = prompt(
+        &format!("{question} (y/n)"),
+        if default { "y" } else { "n" },
+    )?;
+    Ok(matches!(a.to_lowercase().as_str(), "y" | "yes" | "true"))
+}
+
+async fn init(a: InitArgs) -> Result<()> {
+    use std::io::IsTerminal;
+    let mut cfg = config::read()?;
+    let any_flag =
+        a.qdrant_url.is_some() || a.tenant.is_some() || a.learn || a.lean || a.embeddings.is_some();
+    let interactive = !a.yes && !any_flag && std::io::stdin().is_terminal();
+
+    let mut url = a.qdrant_url.clone();
+    let mut key = a.qdrant_api_key.clone();
+    if interactive {
+        eprintln!("Waymarker setup. Press Enter to keep the value shown in [brackets].\n");
+        eprintln!("Memory is optional. Without a Qdrant URL everything except memory still works.");
+        let cur = cfg.get("qdrant_url").cloned().unwrap_or_default();
+        let u = prompt("Qdrant URL (blank = no memory)", &cur)?;
+        if !u.is_empty() {
+            url = Some(u);
+            eprintln!("API key: input is visible; leave blank for a local Qdrant without auth.");
+            let has = cfg.contains_key("qdrant_api_key");
+            let k = prompt(
+                if has {
+                    "Qdrant API key (blank = keep saved)"
+                } else {
+                    "Qdrant API key"
+                },
+                "",
+            )?;
+            if !k.is_empty() {
+                key = Some(k);
+            }
+            let t = prompt(
+                "Tenant (separates users on a shared cluster)",
+                cfg.get("tenant").map(String::as_str).unwrap_or("default"),
+            )?;
+            cfg.insert("tenant".into(), t);
+            let learn = yes_no(
+                "Remember non-sensitive values the agent types after a form is accepted (--learn)?",
+                cfg.get("learn").map(|v| v == "true").unwrap_or(false),
+            )?;
+            cfg.insert("learn".into(), learn.to_string());
+        }
+        let lean = yes_no(
+            "Lean mode (about 37% less RAM; screenshots omit images)?",
+            cfg.get("lean").map(|v| v == "true").unwrap_or(false),
+        )?;
+        cfg.insert("lean".into(), lean.to_string());
+    }
+
+    if let Some(u) = url {
+        let u = config::normalize_qdrant_url(&u);
+        cfg.insert("qdrant_url".into(), u);
+    }
+    if let Some(k) = key {
+        cfg.insert("qdrant_api_key".into(), k);
+    }
+    if let Some(t) = a.tenant {
+        cfg.insert("tenant".into(), t);
+    }
+    if a.learn {
+        cfg.insert("learn".into(), "true".into());
+    }
+    if a.lean {
+        cfg.insert("lean".into(), "true".into());
+    }
+    if let Some(e) = a.embeddings {
+        let v = match e {
+            Embeddings::Cloud => "cloud",
+            Embeddings::DevHash => "dev-hash",
+        };
+        cfg.insert("embeddings".into(), v.into());
+    }
+    if cfg.is_empty() {
+        eprintln!("Nothing to save. Run `waymarker init` in a terminal, or pass flags such as --qdrant-url.");
+        return Ok(());
+    }
+
+    let path = config::write(&cfg)?;
+    println!("Saved {} (owner-only permissions).", path.display());
+
+    if cfg.contains_key("qdrant_url") && !a.no_check {
+        // Re-read through the same path `serve` uses so the check tests exactly what will run.
+        for (k, env) in config::KEYS {
+            if let Some(v) = cfg.get(*k) {
+                std::env::set_var(env, v);
+            }
+        }
+        if let Cmd::Doctor(m) = Cli::parse_from(["waymarker", "doctor"]).cmd {
+            let mem = build_memory(&m)?;
+            match mem {
+                Some(mem) => match mem.init().await {
+                    Ok(()) => println!(
+                        "Qdrant: reachable, collections ready (tenant {:?}). OK",
+                        mem.tenant
+                    ),
+                    Err(e) => {
+                        println!("Qdrant: FAILED: {e}\nThe settings were saved anyway. Fix the URL/key with `waymarker config set`, then run `waymarker doctor`.");
+                        std::process::exit(1);
+                    }
+                },
+                None => println!("Memory is off."),
+            }
+        }
+    }
+    println!("\nNext: `waymarker setup claude --apply` (or codex / cursor / vscode).");
+    Ok(())
+}
+
+fn config_cmd(cmd: ConfigCmd) -> Result<()> {
+    match cmd {
+        ConfigCmd::Path => println!("{}", config::path().display()),
+        ConfigCmd::Show => {
+            let cfg = config::read()?;
+            println!("# {}", config::path().display());
+            if cfg.is_empty() {
+                println!("(empty; run `waymarker init`)");
+            }
+            for (k, v) in &cfg {
+                println!("{k} = {}", config::mask(k, v));
+            }
+            let from_env: Vec<_> = config::KEYS
+                .iter()
+                .filter(|(k, e)| std::env::var_os(e).is_some() && !cfg.contains_key(*k))
+                .map(|(_, e)| *e)
+                .collect();
+            if !from_env.is_empty() {
+                println!("# also set in your environment: {}", from_env.join(", "));
+            }
+        }
+        ConfigCmd::Set { key, value } => {
+            anyhow::ensure!(
+                config::env_for(&key).is_some(),
+                "unknown key {key:?}; valid keys: {}",
+                config::KEYS
+                    .iter()
+                    .map(|(k, _)| *k)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let mut cfg = config::read()?;
+            let value = if key == "qdrant_url" {
+                config::normalize_qdrant_url(&value)
+            } else {
+                value
+            };
+            cfg.insert(key.clone(), value.clone());
+            config::write(&cfg)?;
+            println!("{key} = {}", config::mask(&key, &value));
+        }
+        ConfigCmd::Unset { key } => {
+            let mut cfg = config::read()?;
+            anyhow::ensure!(
+                cfg.remove(&key).is_some(),
+                "{key:?} is not set in the config file"
+            );
+            config::write(&cfg)?;
+            println!("removed {key}");
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -156,21 +390,30 @@ enum Embeddings {
 
 #[derive(Args, Clone)]
 struct MemoryArgs {
-    #[arg(long, value_enum, default_value = "auto")]
+    #[arg(long, value_enum, default_value = "auto", env = "WAYMARKER_MEMORY")]
     memory: MemoryMode,
     #[arg(long, env = "QDRANT_URL")]
     qdrant_url: Option<String>,
     #[arg(long, env = "QDRANT_API_KEY", hide_env_values = true)]
     qdrant_api_key: Option<String>,
-    #[arg(long, value_enum, default_value = "cloud")]
+    #[arg(
+        long,
+        value_enum,
+        default_value = "cloud",
+        env = "WAYMARKER_EMBEDDINGS"
+    )]
     embeddings: Embeddings,
     /// Cloud Inference model (its dimension must match --embedding-dim).
-    #[arg(long, default_value = "sentence-transformers/all-minilm-l6-v2")]
+    #[arg(
+        long,
+        default_value = "sentence-transformers/all-minilm-l6-v2",
+        env = "WAYMARKER_EMBEDDING_MODEL"
+    )]
     embedding_model: String,
     #[arg(long, default_value_t = 384)]
     embedding_dim: usize,
     /// Keep Qdrant vectors on disk (memory-mapped): much less RAM per user, slightly slower search.
-    #[arg(long)]
+    #[arg(long, env = "WAYMARKER_QDRANT_ON_DISK")]
     qdrant_on_disk: bool,
     /// Isolates one user's memory from another's inside shared collections.
     #[arg(long, env = "WAYMARKER_TENANT", default_value = "default")]
@@ -182,14 +425,14 @@ struct ServeArgs {
     #[command(flatten)]
     mem: MemoryArgs,
     /// Tools to expose: core | forms | all.
-    #[arg(long, default_value = "all")]
+    #[arg(long, default_value = "all", env = "WAYMARKER_TOOLS")]
     tools: String,
     #[arg(long)]
     headed: bool,
     #[arg(long, env = "WAYMARKER_CHROME")]
     chrome_path: Option<PathBuf>,
     /// Smaller footprint: lean Chrome flags and no image/font/media downloads (screenshots will lack images).
-    #[arg(long)]
+    #[arg(long, env = "WAYMARKER_LEAN")]
     lean: bool,
     /// Persistent Chrome profile (keeps logins). Default is a throwaway profile.
     #[arg(long)]
@@ -203,7 +446,7 @@ struct ServeArgs {
     #[arg(long)]
     require_confirm_submit: bool,
     /// After an accepted submit, save the non-sensitive values the agent typed as profile facts.
-    #[arg(long)]
+    #[arg(long, env = "WAYMARKER_LEARN")]
     learn: bool,
 }
 
@@ -253,6 +496,7 @@ fn build_memory(a: &MemoryArgs) -> Result<Option<Memory>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    config::load_into_env();
     match Cli::parse().cmd {
         Cmd::Serve(a) => {
             let memory = build_memory(&a.mem)?;
@@ -289,6 +533,8 @@ async fn main() -> Result<()> {
             waymarker_mcp::serve_stdio(app).await?;
         }
         Cmd::Doctor(m) => doctor(m).await?,
+        Cmd::Init(a) => init(a).await?,
+        Cmd::Config { cmd } => config_cmd(cmd)?,
         Cmd::Setup {
             client,
             apply,

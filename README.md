@@ -1,49 +1,75 @@
-<h1 align="center">Waymarker</h1>
-
 <p align="center">
-  <b>A headless browser for AI coding agents.</b><br>
-  Fills complex forms in one call, verifies what it typed, and remembers what worked, using Qdrant.<br>
-  Written in Rust. Speaks <a href="https://modelcontextprotocol.io">MCP</a>, so it works with Claude Code, Codex, Cursor and anything else that does.
+  <img src="assets/logo.svg" alt="Waymarker" width="96" height="96">
 </p>
+
+<h1 align="center">Waymarker</h1>
 
 <p align="center">
   <a href="https://github.com/inamdarmihir/waymarker/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/inamdarmihir/waymarker/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Rust 1.80+" src="https://img.shields.io/badge/rust-1.80%2B-orange.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/protocol-MCP-black.svg">
   <a href="https://inamdarmihir.github.io/waymarker/"><img alt="Site" src="https://img.shields.io/badge/site-github.io-informational.svg"></a>
 </p>
 
-> **Status: v0.2, early.** Works end to end and is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](docs/REVIEW-2026-10.md) found real flaws (listed openly, with a fix order). Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it.
+**The headless browser for AI coding agents that fills complex forms and remembers how.**
 
-## Quickstart (2 minutes)
+Rust, MCP, Chrome, and [Qdrant](https://qdrant.tech) memory. Works with Claude Code, Codex, Cursor, VS Code and anything else that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
 
-You need **Chrome or Chromium** and **Rust 1.80+** (prebuilt binaries are not published yet).
+> **Status: v0.2, early.** Tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](docs/REVIEW-2026-10.md) found real flaws; they are listed openly with a fix order. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it.
+
+---
+
+Waymarker is a browser server your coding agent drives over MCP. Instead of clicking one field per tool call, the agent asks for the form's typed fields, sends `{label: value}` for the whole form, and gets back what was actually filled, verified by reading each value back. Dependent dropdowns, multi-step wizards, masks, comboboxes, shadow DOM and same-origin iframes are handled by the engine, and the page's own validation messages come back when a submit is rejected.
+
+What worked is saved in Qdrant: which profile fact fills which field, per site and per form, so the next visit starts informed.
+
+### Why Waymarker?
+
+| | Waymarker | typical snapshot-per-action MCP browser |
+|---|---|---|
+| Fill a 20-field form | **3 tool calls** (inspect, fill, submit) | ~1 per field plus a page snapshot each time |
+| Wrong or missing field | **reported** (`UNMATCHED`, `ambiguous`, read-back mismatch) | usually silent |
+| Dependent dropdowns, wizards | handled inside `form_fill` / `form_submit` | agent has to notice and retry |
+| Submit result | `Submitted` / `Advanced` / `NOT SUBMITTED` + the page's messages | agent infers from a new snapshot |
+| Memory across sessions | **Qdrant**: facts, playbooks, episodes | none, or a browser profile |
+| Tool schema cost per turn | ~1.1k tokens (`--tools forms` is smaller) | varies |
+
+The "3 vs ~20" row is measured on our own fixtures with a scripted agent, and the comparison column is **our engine driven that way, not another product**. Tools that already offer a batched fill (Playwright MCP, chrome-devtools-mcp) are closer to Waymarker than this table suggests. See [Benchmarks](#benchmarks) and the [design review](docs/REVIEW-2026-10.md).
+
+---
+
+## Install
+
+You need **Chrome or Chromium** and **Rust 1.80+**. Prebuilt binaries are not published yet.
 
 ```sh
 cargo install --git https://github.com/inamdarmihir/waymarker waymarker-cli
-waymarker doctor                 # checks Chrome (and Qdrant, if configured)
-waymarker setup claude --apply   # registers it with Claude Code
+
+# or from a checkout
+git clone https://github.com/inamdarmihir/waymarker && cd waymarker
+cargo build --release -p waymarker-cli      # binary: target/release/waymarker
 ```
 
-Then ask your agent, for example: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada in Germany, Bavaria."* (Run `waymarker fixtures` first to serve the demo pages.)
+Check it works:
 
-### Other clients
+```sh
+waymarker doctor
+```
 
-`waymarker setup <client>` prints the exact config, using this binary's **absolute path** (avoids the classic "command not found because the app has a different PATH").
+## Quick start
 
-| client | command | what it does |
-|---|---|---|
-| Claude Code | `waymarker setup claude --apply` | runs `claude mcp add` for you |
-| Codex | `waymarker setup codex` | prints the block for `~/.codex/config.toml` |
-| Cursor | `waymarker setup cursor` | prints JSON for `~/.cursor/mcp.json` |
-| VS Code | `waymarker setup vscode` | prints JSON for `.vscode/mcp.json` |
-| anything else | `waymarker setup json` | generic `mcpServers` JSON |
+```sh
+waymarker init                      # optional: save Qdrant URL + API key and other defaults (see Configure)
+waymarker setup claude --apply      # register with Claude Code
+waymarker fixtures                  # serve demo forms at http://127.0.0.1:8787
+```
 
-Add serve flags after `--`, for example `waymarker setup claude --apply -- --lean --tools forms`. Only Claude Code is applied automatically; other clients' files are never modified. Details: [docs/CLIENTS.md](docs/CLIENTS.md). Trouble? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Then ask your agent: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
 
-## What the agent sees
+### What the agent sees
 
-Real output from the bundled fixtures (`waymarker serve --tools forms`), lightly reformatted for width. The page is a shipping form where *State* is disabled until *Country* is chosen.
+Real output from the bundled fixtures (`waymarker serve --tools forms`), lightly reformatted. *State* is disabled until *Country* is chosen.
 
 ```text
 > form_inspect
@@ -67,55 +93,178 @@ NOT SUBMITTED: the page reported validation problems.
   e3 "Recipient": "Please fill in this field."
 ```
 
-Three things to notice: dependent dropdowns work in a single call; a key that matches nothing is **reported, not guessed**; and submission tells the agent exactly why it failed, in the page's own words.
+A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words.
 
-## Why it exists
+---
 
-Agents fail on forms (dependent dropdowns, wizards, masks, validation, shadow DOM) and burn tokens doing it one field per tool call. They also forget everything between sessions. Waymarker:
+## Configure
 
-1. **Fills a form per call.** `form_inspect` returns typed fields; `form_fill` takes `{label: value}`, resolves, normalises, fills in order, re-inspects after each field (so dependent dropdowns work) and **reads every value back**. `form_submit` reports *Submitted*, *Advanced* (next wizard step) or *failed validation*.
-2. **Remembers, using Qdrant.** Profile facts, form *playbooks* (structure that worked, never values) and *episodes* (what went wrong) live in Qdrant, tenant-scoped, so the next visit knows which fact fills which field.
-3. **Is honest about cost.** Numbers below come from a harness in this repo, and each says whether it was measured or modelled.
+Settings come from, in order: **command-line flag, then environment variable, then the config file, then the default.** One path per setting, so what `waymarker serve` does is what `waymarker doctor` tested.
 
-## Measured and modelled results
-
-Fixtures only, one Apple M2, localhost. [Full methodology and caveats](docs/BENCHMARKS.md).
-
-| | measured or modelled | result |
-|---|---|---|
-| browser time per form task | measured | 0.4-1.1 s |
-| 8 parallel sessions on 8 cores | measured | 354-393 tasks/min, p95 < 1 s, 100% success |
-| memory per session (physical footprint) | measured | 412 MiB `--lean` / 658 MiB default |
-| browser compute cost | modelled from measured CPU | ~$0.006 per 1,000 tasks |
-| Qdrant retrieval at 200k points / 10k tenants | measured (hash vectors, 20 points/tenant) | 0.4 ms p50 |
-| 20-field form: tool calls | measured (scripted agent) | 3 vs 22 for one-call-per-field |
-| 20-field form: LLM cost, end-to-end time | **modelled** (illustrative price, 3 s per turn, 1.5k-token base context) | $0.021 vs $0.105, 13 s vs 70 s |
-
-**Read these carefully.** There is no LLM in the benchmark loop: a script drives both columns, so it shows call counts and bytes, not whether a model succeeds. The "one call per field" column is Waymarker itself driven the way snapshot-per-action tools work, **not a measurement of another product**; tools with a batched fill (Playwright MCP, chrome-devtools-mcp) would sit much closer to Waymarker. With a realistic 20k-token agent context the 20-field cost ratio falls from ~5x to ~2.7x, and across all fixtures the aggregate is ~1.7x. The honest claim is "fewer turns per completed form", and the evaluation that proves or kills it (a real model against real tools on real sites) is the next milestone.
-
-## Tools
-
-`navigate` `snapshot` `click` `type` `press` `wait_for` `screenshot` `back` · `form_inspect` `form_fill` `form_submit` `fill_field` · `memory_remember` `memory_recall` `memory_list` `memory_forget` `stats`.
-
-`--tools core|forms|all` controls how many the agent sees; the full set costs ~1.1k tokens of context on every turn (enforced by a test).
-
-## Memory with Qdrant (optional)
+### Easy setup
 
 ```sh
-export QDRANT_URL=https://<cluster>.cloud.qdrant.io:6333 QDRANT_API_KEY=…
-waymarker doctor
-waymarker setup claude --apply -- --learn --lean
+waymarker init
 ```
 
-Embeddings use **Qdrant Cloud Inference**; that path follows Qdrant's docs and is pinned by tests but has **not** been run against a live cluster. `--learn` is opt-in: without it Waymarker records how forms were filled, never your data. Inspect or erase anytime: `waymarker memory list|remember|forget|wipe`. More in [docs/CLIENTS.md](docs/CLIENTS.md#memory-with-qdrant).
+Asks for a Qdrant URL and API key (skip both for no memory), a tenant name, and whether to enable `--learn` and `--lean`. It writes the config file with owner-only permissions and immediately tests the connection. Non-interactive:
+
+```sh
+waymarker init --qdrant-url https://<cluster>.cloud.qdrant.io --qdrant-api-key "$KEY" --tenant alice
+```
+
+The `:6333` port is added to Qdrant Cloud URLs for you. If the connection test fails the settings are still saved, so you can fix one value instead of retyping everything:
+
+```sh
+waymarker config show                          # key is masked
+waymarker config set qdrant_url http://localhost:6333
+waymarker config unset learn
+waymarker config path                          # ~/.config/waymarker/config.toml
+```
+
+### Which keys do I need?
+
+**Only Qdrant ones, and only for memory.** Everything else (browsing, form filling) needs no account and no key.
+
+| you want | you need |
+|---|---|
+| browsing and form filling only | nothing |
+| memory, trying it out | `--memory ephemeral` (in-process, lost on exit), no keys |
+| memory on **Qdrant Cloud** | cluster URL + API key, with **Inference enabled** on the cluster (embeddings run inside Qdrant; no separate embedding provider or key) |
+| memory on a self-hosted/open-source Qdrant | URL (+ key if you set one) and `--embeddings dev-hash`. Those vectors are not semantic: exact-key and `autocomplete` matches work, fuzzy meaning does not |
+
+Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-shape tests, but has **not** been run against a live Cloud cluster by the maintainers. The open-source path is tested against a real Qdrant server.
+
+### Config file reference
+
+`~/.config/waymarker/config.toml` (or `$XDG_CONFIG_HOME`, or the path in `WAYMARKER_CONFIG`):
+
+| key | environment variable | meaning |
+|---|---|---|
+| `qdrant_url` | `QDRANT_URL` | Qdrant REST endpoint |
+| `qdrant_api_key` | `QDRANT_API_KEY` | Qdrant API key (secret; file is `0600`) |
+| `tenant` | `WAYMARKER_TENANT` | isolates users sharing a cluster (default `default`) |
+| `memory` | `WAYMARKER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `ephemeral`, `off` |
+| `embeddings` | `WAYMARKER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference) or `dev-hash` |
+| `embedding_model` | `WAYMARKER_EMBEDDING_MODEL` | Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`, 384 dims) |
+| `qdrant_on_disk` | `WAYMARKER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
+| `learn` | `WAYMARKER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
+| `lean` | `WAYMARKER_LEAN` | lower memory use; no images in screenshots |
+| `tools` | `WAYMARKER_TOOLS` | `core`, `forms` or `all` |
+
+Anything stored: [what is and is not saved](SECURITY.md). Inspect or erase it any time: `waymarker memory list | remember | forget | wipe`.
+
+---
+
+## Use with your agent
+
+`waymarker setup <client>` prints the exact config, using this binary's **absolute path** (avoids "command not found" when the app's `PATH` differs from your shell's).
+
+| client | command | result |
+|---|---|---|
+| Claude Code | `waymarker setup claude --apply` | runs `claude mcp add` for you |
+| Codex | `waymarker setup codex` | prints the block for `~/.codex/config.toml` |
+| Cursor | `waymarker setup cursor` | prints JSON for `~/.cursor/mcp.json` |
+| VS Code | `waymarker setup vscode` | prints JSON for `.vscode/mcp.json` |
+| anything else | `waymarker setup json` | generic `mcpServers` JSON |
+
+Extra serve flags go after `--`: `waymarker setup claude --apply -- --lean --tools forms`. Only Claude Code is applied automatically; other clients' files are never modified. More in [docs/CLIENTS.md](docs/CLIENTS.md), problems in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+### Tools
+
+| group | tools |
+|---|---|
+| browse | `navigate` `snapshot` `click` `type` `press` `wait_for` `screenshot` `back` |
+| forms | `form_inspect` `form_fill` `form_submit` `fill_field` |
+| memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
+| other | `stats` |
+
+`--tools core|forms|all` controls how many the agent sees. The full set costs ~1.1k tokens of context on every turn, and a test keeps it under 7 KB.
+
+---
+
+## Memory
+
+Three Qdrant collections, multi-tenant through a `tenant` payload index:
+
+| collection | holds | never holds |
+|---|---|---|
+| `waymarker_profile` | facts you saved (`email`, `company`, …) | passwords, card numbers, anything `looks_sensitive` |
+| `waymarker_playbooks` | per site and form: which fact fills which field | the values themselves |
+| `waymarker_episodes` | what went wrong on a form, so it is not repeated | secrets |
+
+Retrieval order for a field: a saved playbook mapping, then an exact `autocomplete`-token match, then semantic search. `form_fill` with `auto: "required"` fills what memory can supply and reports the rest. Details: [ARCHITECTURE](docs/ARCHITECTURE.md), [ADRs](docs/adr/).
+
+---
+
+## Benchmarks
+
+Fixtures only, one Apple M2 (8 cores), Chrome 156, localhost. Full tables, methodology and caveats: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+| metric | kind | result |
+|---|---|---|
+| browser time per form task | measured | 0.4-1.1 s |
+| 8 parallel sessions, 8 cores | measured | 354-393 tasks/min, p95 < 1 s, 100% success |
+| memory per session (physical footprint) | measured | **412 MiB** `--lean` / 658 MiB default |
+| cold start | measured | ~0.6 s |
+| Qdrant retrieval, 200k points / 10k tenants | measured (hash vectors, 20 points per tenant) | 0.4 ms p50 |
+| 20-field form, tool calls | measured (scripted agent) | **3** vs 22 one-call-per-field |
+| 20-field form, LLM cost / end-to-end time | **modelled** (illustrative price, 3 s per turn, 1.5k base context) | $0.021 vs $0.105 / 13 s vs 70 s |
+| browser compute | modelled from measured CPU | ~$0.006 per 1,000 tasks |
+
+**Read these carefully.** No LLM is in the loop: a script drives both columns, so this shows call counts and bytes, not whether a model succeeds. The one-call-per-field column is Waymarker itself driven the way snapshot-per-action tools work. With a realistic 20k-token agent context the 20-field cost ratio falls from ~5x to ~2.7x, and across all fixtures the aggregate is ~1.7x. The next milestone is a real-model evaluation against real tools on real sites.
+
+Reproduce: `cargo build --release -p waymarker-bench && ./target/release/waymarker-bench forms --reps 3`.
+
+---
+
+## CLI reference
+
+```text
+waymarker <COMMAND>
+
+  serve      Run the MCP server on stdio (what the agent launches)
+  init       Save settings (Qdrant URL/key, tenant, defaults) and test them
+  config     show | path | set <key> <value> | unset <key>
+  setup      Print or apply the config for claude | codex | cursor | vscode | json
+  doctor     Check that Chrome launches and Qdrant is reachable
+  inspect    Open a URL and print the typed form model as JSON
+  memory     list | remember <key> <value> | forget <key> | wipe --yes
+  fixtures   Serve the demo form pages (default port 8787)
+```
+
+### `waymarker serve`
+
+| flag | default | description |
+|---|---|---|
+| `--tools` | `all` | `core`, `forms` or `all` |
+| `--lean` | off | lean Chrome flags; no image/font/media downloads |
+| `--headed` | off | show the browser window |
+| `--profile-dir DIR` | throwaway | persistent Chrome profile (keeps logins) |
+| `--chrome-path PATH` | auto | Chrome binary (`WAYMARKER_CHROME`) |
+| `--allow-domain D` | any | only this domain and subdomains; repeatable |
+| `--allow-file` | off | permit `file://` URLs |
+| `--require-confirm-submit` | off | `form_submit` needs `confirm=true` |
+| `--learn` | off | save non-sensitive typed values after an accepted submit |
+| `--memory` | `auto` | `auto`, `qdrant`, `ephemeral`, `off` |
+| `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
+| `--embeddings`, `--embedding-model`, `--embedding-dim` | `cloud`, MiniLM, 384 | embedding source |
+| `--qdrant-on-disk` | off | vectors on disk |
+| `--tenant` | `default` | memory namespace |
+
+Set `WAYMARKER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root or in some containers). See [Troubleshooting](docs/TROUBLESHOOTING.md).
+
+---
 
 ## Safety
 
-Domain allowlist (`--allow-domain`), `--require-confirm-submit`, secrets refused by memory, page text marked untrusted. **Known gaps, found by our own review and not yet fixed:** the allowlist is checked after navigation rather than at the network layer, the submit confirmation only guards `form_submit`, file fields accept any local path, and the DevTools port is open to local users. Use `--allow-domain` and a throwaway profile for anything sensitive. See [SECURITY.md](SECURITY.md) and the [review](docs/REVIEW-2026-10.md).
+Domain allowlist (`--allow-domain`), `--require-confirm-submit`, secrets refused by memory, page text marked untrusted, and sensitive values masked in fill reports.
+
+**Known gaps found by our own review and not yet fixed:** the allowlist is checked after navigation rather than at the network layer, the submit confirmation only guards `form_submit`, file fields accept any local path, secrets can appear in error notes and snapshots, and the DevTools port is open to local users. For anything sensitive, use `--allow-domain` and a throwaway profile. Details: [SECURITY.md](SECURITY.md), [review](docs/REVIEW-2026-10.md).
 
 ## How it compares
 
-From each project's README (see [research](docs/research/landscape.md); star counts move; we have **not** run a head-to-head):
+From each project's own README (see [research](docs/research/landscape.md); star counts move; we have **not** run a head-to-head):
 
 | | language | form handling | memory |
 |---|---|---|---|
@@ -123,22 +272,22 @@ From each project's README (see [research](docs/research/landscape.md); star cou
 | agent-browser (Vercel) | Rust CLI | `fill`/`select`/`check`, batching, `--delta` snapshots | cookie/storage state, auth vault |
 | Playwright MCP (Microsoft) | Node | accessibility snapshots, `browser_fill_form` batch fill | browser profile |
 | chrome-devtools-mcp (Google) | Node | `fill_form` batch fill plus debugging/perf tooling | none |
-| Lightpanda | Zig | n/a (engine, no rendering; AGPL) | n/a |
+| Lightpanda | Zig | n/a (engine without rendering; AGPL) | n/a |
 
-Stagehand and Browser Use cache or learn actions too; they are Python/TS frameworks rather than MCP tools for coding agents.
+Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript frameworks rather than MCP tools for coding agents.
 
 ## Roadmap
 
-- [x] CDP client, in-page runtime, form engine, Qdrant memory, MCP server, benchmark harness
+- [x] CDP client, in-page runtime, form engine, Qdrant memory, MCP server, benchmark harness, `init`/`config`/`setup`
 - [ ] **Fix the review findings**, starting with wrong-fill prevention and browser-level enforcement of the safety flags ([order](docs/REVIEW-2026-10.md#recommended-order-of-work))
-- [ ] **LLM-in-the-loop evaluation** against real tools on real sites, results published including failures
-- [ ] Prebuilt binaries and one-line install
+- [ ] **Real-model evaluation** against real tools on real sites, published including failures
+- [ ] Prebuilt binaries and a one-line installer
 - [ ] Live validation of Qdrant Cloud Inference; Linux benchmark numbers
 - [ ] Tabs/popups, cross-origin iframes, HTTP transport
 
-## Repository map
+## Repository
 
-`crates/` cdp · browser · forms · memory · mcp · cli · fixtures · bench. `fixtures/` test pages. `docs/` [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md). [CHANGELOG](CHANGELOG.md) · [CONTRIBUTING](CONTRIBUTING.md).
+`crates/` cdp · browser · forms · memory · mcp · cli · fixtures · bench. `fixtures/` test pages. Docs: [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md).
 
 ## License
 
