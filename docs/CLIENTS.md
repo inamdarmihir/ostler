@@ -64,7 +64,10 @@ ostler memory wipe --yes
 
 | flag | effect |
 |---|---|
-| `--allow-domain example.com` (repeatable) | only that domain and subdomains; checked after redirects and clicks |
+| `--allow-domain example.com` (repeatable) | only that domain and subdomains, every request and WebSockets included; `example.com:8443` pins a port |
+| `--upload-dir DIR` (repeatable) | file fields may be filled from this directory; without it uploads are refused |
+| `--block-private-networks` | with no allowlist, refuse loopback, private, metadata and internal hosts (on by default for `a2a`) |
+| `--accept-dialogs` | answer the page's `confirm()` and `prompt()` with OK; they are dismissed by default |
 | `--require-confirm-submit` | `form_submit` fails unless the agent passes `confirm=true`, so a human can approve |
 | `--tools core\|forms\|all` | which tools the agent sees |
 | `--lean` | lower memory; no images/fonts/media |

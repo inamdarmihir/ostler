@@ -127,6 +127,44 @@ fn internal_name(d: &str) -> bool {
         || d.ends_with(".home.arpa")
 }
 
+/// Where `path` would be if it existed: made absolute, `.` / `..` folded away, and the deepest ancestor that
+/// does exist resolved through symlinks (so `/var/...` and `/private/var/...` compare equal on macOS), with
+/// the missing remainder re-attached. Only used to pick a message for a path that does not exist, never to
+/// decide what is allowed.
+fn resolve_lenient(path: &str) -> PathBuf {
+    use std::path::Component;
+    let p = std::path::Path::new(path);
+    let abs = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(p)
+    };
+    let mut folded = PathBuf::new();
+    for c in abs.components() {
+        match c {
+            Component::ParentDir => {
+                folded.pop();
+            }
+            Component::CurDir => {}
+            other => folded.push(other),
+        }
+    }
+    let (mut cur, mut tail) = (folded.as_path(), Vec::new());
+    loop {
+        if let Ok(mut real) = std::fs::canonicalize(cur) {
+            real.extend(tail.iter().rev());
+            return real;
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name.to_owned());
+                cur = parent;
+            }
+            _ => return folded,
+        }
+    }
+}
+
 type DnsCache = Mutex<HashMap<String, (Instant, bool)>>;
 
 static DNS_CACHE: LazyLock<DnsCache> = LazyLock::new(Default::default);
@@ -232,21 +270,34 @@ impl Policy {
 
     /// Resolve `path` for upload: it must be an existing regular file inside one of `upload_dirs`
     /// (after resolving symlinks and `..`). Returns the canonical path to hand to the browser.
+    ///
+    /// A path outside the allowed directories gets the same answer whether or not it exists, so the
+    /// message cannot be used to probe which files are on the disk.
     pub fn check_upload(&self, path: &str) -> Result<String, String> {
         if self.upload_dirs.is_empty() {
             return Err("file uploads are disabled: start Ostler with --upload-dir <directory> to allow files from one".into());
         }
-        let real = std::fs::canonicalize(path).map_err(|_| format!("file not found: {path}"))?;
-        if !real.is_file() {
-            return Err(format!("not a regular file: {path}"));
-        }
-        let inside = self
+        let dirs: Vec<PathBuf> = self
             .upload_dirs
             .iter()
             .filter_map(|d| std::fs::canonicalize(d).ok())
-            .any(|d| real.starts_with(d));
-        if !inside {
-            return Err(format!("{path} is outside the allowed upload directories"));
+            .collect();
+        let outside = || format!("{path} is outside the allowed upload directories");
+        let Ok(real) = std::fs::canonicalize(path) else {
+            // Does not exist: say so only where the path would have been allowed.
+            return Err(
+                if dirs.iter().any(|d| resolve_lenient(path).starts_with(d)) {
+                    format!("file not found: {path}")
+                } else {
+                    outside()
+                },
+            );
+        };
+        if !dirs.iter().any(|d| real.starts_with(d)) {
+            return Err(outside());
+        }
+        if !real.is_file() {
+            return Err(format!("not a regular file: {path}"));
         }
         Ok(real.to_string_lossy().into_owned())
     }
@@ -440,10 +491,23 @@ mod tests {
             .check_upload(dir.path().to_str().unwrap())
             .unwrap_err()
             .contains("regular file"));
+        // Inside the directory a missing file is "not found"; outside it, a missing file and an existing
+        // one get the same answer, so the message is no oracle for what is on the disk.
+        let missing_inside = dir.path().join("nope.txt");
+        assert!(p
+            .check_upload(missing_inside.to_str().unwrap())
+            .unwrap_err()
+            .contains("not found"));
+        let missing_outside = secret_dir.path().join("nope");
+        let a = p
+            .check_upload(missing_outside.to_str().unwrap())
+            .unwrap_err();
+        let b = p.check_upload(secret.to_str().unwrap()).unwrap_err();
+        assert!(a.contains("outside") && b.contains("outside"), "{a} / {b}");
         assert!(p
             .check_upload("/definitely/not/here")
             .unwrap_err()
-            .contains("not found"));
+            .contains("outside"));
     }
 
     #[test]
