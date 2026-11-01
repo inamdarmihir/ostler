@@ -25,13 +25,16 @@ header.top{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,tran
 header.top .wrap{display:flex;gap:20px;align-items:center;height:54px;font-size:15px}
 header.top b{display:flex;align-items:center;gap:9px;font-size:17px;letter-spacing:-.01em;margin-right:auto}header.top a{color:var(--mut);text-decoration:none}header.top a:hover{color:var(--fg)}
 @media(max-width:700px){header.top .hide{display:none}}
+@media(max-width:860px){header.top .hide-sm{display:none}}
+@media(max-width:700px){header.top .wrap{flex-wrap:wrap;height:auto;padding:8px 16px;gap:8px 14px}}
 .hero{padding:72px 0 40px}
 .hero h1{font-size:clamp(34px,6vw,56px);line-height:1.08;letter-spacing:-.03em;margin:0 0 18px;max-width:18ch}
 .hero p.lead{font-size:20px;color:var(--mut);max-width:60ch;margin:0 0 26px}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:3px 12px;font-size:13px;color:var(--mut);margin:0 6px 8px 0;background:var(--card)}
 .status{border-left:3px solid var(--accent);background:var(--card);padding:12px 16px;margin:26px 0;border-radius:0 8px 8px 0;font-size:15px}
 pre,code{font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}code{background:var(--code);padding:1px 6px;border-radius:5px}
-pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow:auto;border:1px solid var(--line)}pre code{background:none;padding:0}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow:auto;border:1px solid var(--line);position:relative}pre code{background:none;padding:0}
+@media(max-width:480px){pre{white-space:pre-wrap;word-break:break-all;overflow-x:visible}}
 section{padding:46px 0;border-top:1px solid var(--line)}
 h2{font-size:30px;letter-spacing:-.02em;margin:0 0 6px}h2+p.sub{color:var(--mut);margin:0 0 26px;max-width:62ch}
 h3{font-size:18px;margin:0 0 6px}
@@ -71,8 +74,25 @@ header.top a.cta:hover{filter:brightness(1.08);color:#fff}
 @media (prefers-color-scheme:dark){.btn.primary{color:#14110f}}
 .install{position:relative}
 .install pre{margin:0;padding:14px 76px 14px 16px;white-space:pre-wrap;word-break:break-all}
-.copy{position:absolute;top:8px;right:8px;font:600 12px system-ui;border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:7px;padding:4px 10px;cursor:pointer}
+.copy{position:absolute;top:8px;right:8px;font:600 12px system-ui;border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:7px;padding:4px 10px;cursor:pointer;z-index:2}
 .copy:hover{color:var(--fg);border-color:var(--accent)}
+/* Always visible on touch; hover-only hidden on pointer: fine devices get it persistent too */
+.pre-copy{position:absolute;top:8px;right:8px;font:600 12px system-ui;border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:7px;padding:4px 10px;cursor:pointer;z-index:2;opacity:1}
+.pre-copy:hover{color:var(--fg);border-color:var(--accent)}
+/* tabs */
+.tabs{display:flex;gap:0;margin-bottom:-1px;flex-wrap:wrap}
+.tabs button{font:600 13px system-ui;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 14px;background:var(--code);color:var(--mut);cursor:pointer;margin-right:4px}
+.tabs button.active{background:var(--card);color:var(--fg);border-color:var(--line)}
+.tabpanel{display:none}.tabpanel.active{display:block}
+.tabwrap{border:1px solid var(--line);border-radius:0 10px 10px 10px;background:var(--card);overflow:hidden}
+.tabwrap pre{margin:0;border:0;border-radius:0}
+/* setup prompt button */
+.prompt-btn{display:inline-flex;align-items:center;gap:7px;font:600 13px system-ui;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 14px;cursor:pointer;margin:10px 0 0}
+.prompt-btn:hover{border-color:var(--accent);color:var(--accent)}
+.prompt-btn svg{flex-shrink:0}
+/* section anchor links */
+.anchor{color:var(--mut);text-decoration:none;opacity:0;margin-left:8px;font-weight:400;font-size:18px}
+section>h2:hover .anchor,.anchor:focus{opacity:1}
 .term{background:var(--term);color:var(--term-fg);border-radius:14px;border:1px solid #2b2924;box-shadow:0 24px 60px -24px rgba(0,0,0,.45);overflow:hidden;min-width:0}
 .term .bar{display:flex;gap:7px;align-items:center;padding:11px 14px;border-bottom:1px solid #2b2924;font:12px ui-monospace,Menlo,monospace;color:#8a857a}
 .term .bar i{width:10px;height:10px;border-radius:50%;background:#3a372f;display:inline-block}
@@ -93,7 +113,7 @@ footer nav a{margin-right:16px}
 </head>
 <body>
 <header class="top"><div class="wrap">
-<b><img src="assets/logo.svg" alt="" width="26" height="26">Ostler</b><a href="#new" class="hide">New</a><a href="#how" class="hide">How it works</a><a href="#choices" class="hide">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare" class="hide">Compare</a><a href="https://github.com/inamdarmihir/ostler" class="cta">GitHub</a>
+<b><img src="assets/logo.svg" alt="" width="26" height="26">Ostler</b><a href="#new">New</a><a href="#how">How it works</a><a href="#choices" class="hide-sm">Engineering choices</a><a href="#speed">Speed</a><a href="#numbers">Numbers</a><a href="#compare">Compare</a><a href="https://github.com/inamdarmihir/ostler" class="cta">GitHub</a>
 </div></header>
 
 <main class="wrap">
@@ -103,8 +123,58 @@ footer nav a{margin-right:16px}
 <h1>A browser for AI agents that <em>fills forms</em> and remembers.</h1>
 <p class="lead">Ostler is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It fills a whole form in one call, reads every value back to check it, and uses Qdrant to remember what worked.</p>
 <div class="btns"><a class="btn primary" href="#start">Get started</a><a class="btn" href="https://github.com/inamdarmihir/ostler">View on GitHub</a><a class="btn" href="#numbers">See the numbers</a></div>
-<div class="install"><pre><code id="inst">cargo install --git https://github.com/inamdarmihir/ostler ostler
-claude mcp add ostler -- ostler serve</code></pre><button class="copy" type="button" data-target="inst" aria-label="Copy install commands">Copy</button></div>
+<div class="tabs" role="tablist" aria-label="Agent picker">
+<button role="tab" aria-selected="true" aria-controls="hero-claude" id="htab-claude" class="active" type="button">Claude Code</button>
+<button role="tab" aria-selected="false" aria-controls="hero-codex" id="htab-codex" type="button">Codex</button>
+<button role="tab" aria-selected="false" aria-controls="hero-cursor" id="htab-cursor" type="button">Cursor</button>
+<button role="tab" aria-selected="false" aria-controls="hero-vscode" id="htab-vscode" type="button">VS Code</button>
+</div>
+<div class="tabwrap">
+<div id="hero-claude" class="tabpanel active" role="tabpanel" aria-labelledby="htab-claude">
+<div style="position:relative"><pre><code id="hero-inst-claude"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. connect Claude Code (writes config automatically)
+ostler setup claude --apply</code></pre><button class="pre-copy" type="button" data-copy="hero-inst-claude" aria-label="Copy Claude Code install commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:8px 16px 10px;margin:0">Using Codex, Cursor or VS Code? Pick your agent above — or <button class="prompt-btn" type="button" id="hero-copy-prompt-claude" style="display:inline-flex;vertical-align:middle"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1" y="4" width="10" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 3V2.5A1.5 1.5 0 0 1 6.5 1h7A1.5 1.5 0 0 1 15 2.5v8A1.5 1.5 0 0 1 13.5 12H13" stroke="currentColor" stroke-width="1.5"/></svg>&nbsp;Copy setup prompt</button> to paste into your agent.</p>
+</div>
+<div id="hero-codex" class="tabpanel" role="tabpanel" aria-labelledby="htab-codex">
+<div style="position:relative"><pre><code id="hero-inst-codex"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for ~/.codex/config.toml (paste or merge)
+ostler setup codex</code></pre><button class="pre-copy" type="button" data-copy="hero-inst-codex" aria-label="Copy Codex install commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:8px 16px 10px;margin:0">Prints the <code>[mcp_servers.ostler]</code> block using the binary's absolute path. Or <button class="prompt-btn" type="button" id="hero-copy-prompt-codex" style="display:inline-flex;vertical-align:middle"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1" y="4" width="10" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 3V2.5A1.5 1.5 0 0 1 6.5 1h7A1.5 1.5 0 0 1 15 2.5v8A1.5 1.5 0 0 1 13.5 12H13" stroke="currentColor" stroke-width="1.5"/></svg>&nbsp;Copy setup prompt</button> to paste into Codex directly.</p>
+</div>
+<div id="hero-cursor" class="tabpanel" role="tabpanel" aria-labelledby="htab-cursor">
+<div style="position:relative"><pre><code id="hero-inst-cursor"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for ~/.cursor/mcp.json (paste or merge)
+ostler setup cursor</code></pre><button class="pre-copy" type="button" data-copy="hero-inst-cursor" aria-label="Copy Cursor install commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:8px 16px 10px;margin:0">Prints JSON using the binary's absolute path. Full options: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md#cursor">CLIENTS.md → Cursor</a>.</p>
+</div>
+<div id="hero-vscode" class="tabpanel" role="tabpanel" aria-labelledby="htab-vscode">
+<div style="position:relative"><pre><code id="hero-inst-vscode"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for .vscode/mcp.json (paste or merge)
+ostler setup vscode</code></pre><button class="pre-copy" type="button" data-copy="hero-inst-vscode" aria-label="Copy VS Code install commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:8px 16px 10px;margin:0">Prints JSON using the binary's absolute path. Full options: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md#vs-code">CLIENTS.md → VS Code</a>.</p>
+</div>
+</div>
 <ul class="trust" style="margin-top:14px"><li>Every fill verified by read-back</li><li>Wrong keys reported, never guessed</li><li>Domain allowlist enforced in the browser</li></ul>
 </div>
 <div class="term" role="img" aria-label="Example form_fill output: two fields verified, one unmatched key reported, submit blocked with the page's own message">
@@ -127,7 +197,7 @@ Still empty and required:
 <div class="status"><b>v0.2, early.</b> Tested end to end against real Chrome and a real Qdrant server. Evaluated on local fixtures built to reproduce known form-filling failures, <b>not yet on the open web</b>. This page says what we measured, how, and what we do not know.</div>
 
 <section id="why">
-<h2>The problem</h2>
+<h2>The problem<a href="#why" class="anchor" aria-label="Link to The problem">#</a></h2>
 <p class="sub">Agents are slow and expensive on forms for two reasons, and neither is "the browser is slow".</p>
 <div class="grid g3">
 <div class="card"><h3>One call per field</h3><p>Typical tools make the model click, type, and re-read the page for each field. A 20-field form is 20+ turns, and every turn re-reads the whole conversation.</p></div>
@@ -137,7 +207,7 @@ Still empty and required:
 </section>
 
 <section id="new">
-<h2>Built for what agents get wrong</h2>
+<h2>Built for what agents get wrong<a href="#new" class="anchor" aria-label="Link to Built for what agents get wrong">#</a></h2>
 <p class="sub">Five things that make a page easier for an agent to use correctly.</p>
 <div class="grid g3">
 <div class="card"><h3><span class="ic">&#9678;</span>Shows where to click</h3><p>The <code>look</code> tool returns a screenshot with every clickable element boxed and numbered from the DOM, plus a legend: <code>e6 button "Send" → submits the form</code>. Elements hidden under a cookie banner or modal are left out and counted, so the agent closes the overlay first.</p></div>
@@ -149,16 +219,16 @@ Still empty and required:
 </section>
 
 <section id="how">
-<h2>How it works</h2>
+<h2>How it works<a href="#how" class="anchor" aria-label="Link to How it works">#</a></h2>
 <p class="sub">Four calls cover most forms. The model states intent; the engine does the mechanics, reports what actually happened, and learns from it.</p>
-<pre><code>navigate  →  page state with interactive elements (no separate snapshot call)
+<div style="position:relative"><pre><code id="how-transcript">navigate  →  page state with interactive elements (no separate snapshot call)
 form_inspect  →  typed fields: kind, label, required, options, current value, errors
                  + "this form was filled successfully 3x before; known issue: ZIP must be 5 digits"
 form_fill {"Country":"Germany","State":"Bavaria","Date of birth":"March 5, 2001"}
   OK  e4 "Country" = "de"
   OK  e5 "State / region" = "by"          ← appeared after Country was set
   OK  e7 "Date of birth" = "2001-03-05"
-form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's messages</code></pre>
+form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's messages</code></pre><button class="pre-copy" type="button" data-copy="how-transcript" aria-label="Copy How it works example">Copy</button></div>
 <div class="grid g3">
 <div class="card"><h3>Resolve</h3><p>Keys match a field by ref, name, label or fuzzy label. If two fields match equally well, it asks instead of guessing.</p></div>
 <div class="card"><h3>Fill and verify</h3><p>Fields are filled in document order, re-inspected after each (so dependent controls appear), then read back from the page.</p></div>
@@ -167,7 +237,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="choices">
-<h2>Engineering choices, and why</h2>
+<h2>Engineering choices, and why<a href="#choices" class="anchor" aria-label="Link to Engineering choices">#</a></h2>
 <p class="sub">Each choice has a written decision record in the repo with the alternatives we rejected.</p>
 <div class="grid g2">
 <div class="card"><h3>An injected runtime, not the accessibility tree</h3><p>One script runs inside every page. It walks shadow DOM and same-origin iframes, assigns stable refs, and answers in one round-trip what would take dozens of protocol calls.</p><p class="why"><b>Why:</b> fewer round-trips and one code path for shadow DOM. <b>Cost:</b> it shares a JS world with the page; closed shadow roots and cross-origin frames are invisible.</p></div>
@@ -180,7 +250,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="speed">
-<h2>Where the time actually goes</h2>
+<h2>Where the time actually goes<a href="#speed" class="anchor" aria-label="Link to Where the time actually goes">#</a></h2>
 <p class="sub">We set out to make a fast browser. Measuring told us the browser is not where the time is.</p>
 <figure>
 <svg viewBox="0 0 900 150" width="100%" role="img" aria-label="A 12.5 second task: 0.5 seconds browser work, 12 seconds model turns">
@@ -205,7 +275,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="numbers">
-<h2>Measured results</h2>
+<h2>Measured results<a href="#numbers" class="anchor" aria-label="Link to Measured results">#</a></h2>
 <p class="sub">One machine (Apple M2, 8 cores, Chrome 156), local fixtures, localhost Qdrant. Every assumption is a flag on the harness; raw data is in <code>bench-results/</code>.</p>
 
 <figure>
@@ -256,7 +326,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="economics">
-<h2>Economics, honestly</h2>
+<h2>Economics, honestly<a href="#economics" class="anchor" aria-label="Link to Economics, honestly">#</a></h2>
 <p class="sub">What an investor or senior engineer should ask first.</p>
 <div class="grid g2">
 <div class="card"><h3>Compute is not the cost</h3><p>~$0.006 per 1,000 tasks of browser compute versus ~$17–24 per 1,000 in LLM tokens. The product's value is fewer turns and fewer tokens, not a cheaper browser.</p></div>
@@ -268,7 +338,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="compare">
-<h2>How it compares</h2>
+<h2>How it compares<a href="#compare" class="anchor" aria-label="Link to How it compares">#</a></h2>
 <p class="sub">From each project's README (snapshot 2026-10-30; star counts move). We have not run a head-to-head on identical real-site tasks yet.</p>
 <div class="scroll"><table>
 <thead><tr><th></th><th>Language</th><th>Form handling</th><th>Memory</th><th>Notes</th></tr></thead>
@@ -282,7 +352,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="limits">
-<h2>Limits and roadmap</h2>
+<h2>Limits and roadmap<a href="#limits" class="anchor" aria-label="Link to Limits and roadmap">#</a></h2>
 <div class="grid g2">
 <div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. It runs Chrome only, and is tested on macOS locally and Linux in CI.</p></div>
 <div class="card"><h3>Next</h3><p>Real-site form evaluation with published failures · head-to-head benchmark · live Qdrant Cloud Inference validation · Qdrant sizing study · per-site click paths remembered in Qdrant · cross-origin frames · an optional Lightpanda backend if it earns its keep.</p></div>
@@ -290,30 +360,200 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 </section>
 
 <section id="start">
-<h2>Try it</h2>
-<pre><code># today: from source (Rust 1.89+)
-cargo install --git https://github.com/inamdarmihir/ostler ostler
-ostler doctor                      # checks Chrome, prints the fix when something is missing
-ostler setup claude --apply        # or: codex, cursor, vscode, json
+<h2>Try it<a href="#start" class="anchor" aria-label="Link to Try it">#</a></h2>
+<p class="sub">Three steps: install, verify, connect. Pick your agent.</p>
 
-# from the first release: no Rust needed
-curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh
-claude mcp add ostler -- npx -y ostler serve
+<div class="tabs" role="tablist" aria-label="Agent setup picker">
+<button role="tab" aria-selected="true" aria-controls="start-claude" id="stab-claude" class="active" type="button">Claude Code</button>
+<button role="tab" aria-selected="false" aria-controls="start-codex" id="stab-codex" type="button">Codex</button>
+<button role="tab" aria-selected="false" aria-controls="start-cursor" id="stab-cursor" type="button">Cursor</button>
+<button role="tab" aria-selected="false" aria-controls="start-vscode" id="stab-vscode" type="button">VS Code</button>
+</div>
+<div class="tabwrap">
+<div id="start-claude" class="tabpanel active" role="tabpanel" aria-labelledby="stab-claude">
+<div style="position:relative"><pre><code id="start-inst-claude"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
 
-# with Qdrant memory
-export QDRANT_URL=https://&lt;cluster&gt;.cloud.qdrant.io:6333 QDRANT_API_KEY=…
-claude mcp add ostler -- ostler serve --learn --lean</code></pre>
-<p>Setup for Codex, Cursor and others: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md">docs/CLIENTS.md</a>.</p>
+# 2. check it works
+ostler doctor
+
+# 3. connect Claude Code (writes config automatically)
+ostler setup claude --apply</code></pre><button class="pre-copy" type="button" data-copy="start-inst-claude" aria-label="Copy Claude Code setup commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:6px 16px 10px;margin:0">Writes <code>claude mcp add</code> with the binary's absolute path. <button class="prompt-btn" type="button" id="start-copy-prompt-claude"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1" y="4" width="10" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 3V2.5A1.5 1.5 0 0 1 6.5 1h7A1.5 1.5 0 0 1 15 2.5v8A1.5 1.5 0 0 1 13.5 12H13" stroke="currentColor" stroke-width="1.5"/></svg>&nbsp;Copy setup prompt</button> — paste this into Claude Code to let it do all of the above.</p>
+</div>
+<div id="start-codex" class="tabpanel" role="tabpanel" aria-labelledby="stab-codex">
+<div style="position:relative"><pre><code id="start-inst-codex"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for ~/.codex/config.toml (paste or merge it)
+ostler setup codex</code></pre><button class="pre-copy" type="button" data-copy="start-inst-codex" aria-label="Copy Codex setup commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:6px 16px 10px;margin:0">Prints the <code>[mcp_servers.ostler]</code> block using the binary's absolute path — paste or merge it into <code>~/.codex/config.toml</code>. <button class="prompt-btn" type="button" id="start-copy-prompt-codex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1" y="4" width="10" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 3V2.5A1.5 1.5 0 0 1 6.5 1h7A1.5 1.5 0 0 1 15 2.5v8A1.5 1.5 0 0 1 13.5 12H13" stroke="currentColor" stroke-width="1.5"/></svg>&nbsp;Copy setup prompt</button> — paste into Codex to let it do the above. Full options: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md#codex">CLIENTS.md → Codex</a>.</p>
+</div>
+<div id="start-cursor" class="tabpanel" role="tabpanel" aria-labelledby="stab-cursor">
+<div style="position:relative"><pre><code id="start-inst-cursor"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for ~/.cursor/mcp.json (paste or merge it)
+ostler setup cursor</code></pre><button class="pre-copy" type="button" data-copy="start-inst-cursor" aria-label="Copy Cursor setup commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:6px 16px 10px;margin:0">Prints JSON using the binary's absolute path. Full options: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md#cursor">CLIENTS.md → Cursor</a>.</p>
+</div>
+<div id="start-vscode" class="tabpanel" role="tabpanel" aria-labelledby="stab-vscode">
+<div style="position:relative"><pre><code id="start-inst-vscode"># 1. install (Rust 1.82+ and Chrome required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. print config for .vscode/mcp.json (paste or merge it)
+ostler setup vscode</code></pre><button class="pre-copy" type="button" data-copy="start-inst-vscode" aria-label="Copy VS Code setup commands">Copy</button></div>
+<p style="font-size:13px;color:var(--mut);padding:6px 16px 10px;margin:0">Prints JSON using the binary's absolute path. Full options: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/CLIENTS.md#vs-code">CLIENTS.md → VS Code</a>.</p>
+</div>
+</div>
+
+<h3 style="margin-top:28px">See it work</h3>
+<p>Run <code>ostler fixtures</code>, then tell your agent:</p>
+<blockquote style="border-left:3px solid var(--accent2);margin:10px 0 0 0;padding:10px 16px;background:var(--card);border-radius:0 8px 8px 0;font-style:italic">
+"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."
+<button class="pre-copy" type="button" data-text="Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria." style="position:static;margin-left:12px;display:inline-block;vertical-align:middle" aria-label="Copy fixture prompt">Copy prompt</button>
+</blockquote>
+<p style="font-size:14px;color:var(--mut);margin-top:8px">Ostler fills Country, watches State load, reads every value back, and reports what the page said. These are demo pages on your own machine — nothing real is submitted. When you point Ostler at real sites, read the <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md#safety">Safety flags section</a> first.</p>
+
+<h3 style="margin-top:28px">Optional: Qdrant memory</h3>
+<div style="position:relative"><pre><code id="qdrant-setup"># saves your cluster URL and key, tests the connection
+ostler init
+
+# then re-register with memory flags (Claude Code shown)
+ostler setup claude --apply -- --learn --lean</code></pre><button class="pre-copy" type="button" data-copy="qdrant-setup" aria-label="Copy Qdrant memory setup">Copy</button></div>
+<p style="font-size:14px;color:var(--mut);margin-top:6px">Everything above works without Qdrant. Memory is separate and optional. Details in <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md#memory">README → Memory</a>.</p>
 </section>
 </main>
 
 <footer><div class="wrap"><div>Ostler is Apache-2.0 open source. Benchmarks measured 2026-10-30 on an Apple M2.</div>
 <nav><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/ARCHITECTURE.md">Architecture</a><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr">Decision records</a><a href="https://github.com/inamdarmihir/ostler/blob/main/SECURITY.md">Security</a><a href="https://github.com/inamdarmihir/ostler/blob/main/CHANGELOG.md">Changelog</a></nav></div></footer>
+
+<!-- hidden strings for copy-setup-prompt buttons -->
+<textarea id="prompt-claude" style="position:absolute;left:-9999px" aria-hidden="true">Set up Ostler (headless-browser MCP server for form filling) on this machine. Work step by step and stop at any failure.
+
+1. Inspect first, change nothing yet:
+   - OS and package manager available
+   - whether Rust/cargo is installed and its version (need 1.82+)
+   - whether Chrome or Chromium is installed
+   - whether `ostler` is already on PATH (`command -v ostler`)
+   - whether an `ostler` MCP server is already registered (`claude mcp list`)
+   Report what you found before doing anything else.
+2. Ask me before any system change (installing Rust, Chrome, or the ostler binary). Install only what is missing:
+   cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+3. Run `ostler doctor` and show me the output. Stop if it fails.
+4. If step 1 found an existing `ostler` entry in claude mcp list, stop and ask me before replacing it - show only a redacted summary (server name and launch command), never the full config, since stored entries can contain environment variables with secrets.
+   Otherwise register the server: ostler setup claude --apply
+   (this runs claude mcp add with the binary's absolute path)
+5. Verify the registration with `claude mcp list` - it should show ostler connected. If you are running inside an older session that does not see the new server yet, tell me to start a new session or run /mcp to check.
+6. Demo, localhost fixtures only: run `ostler fixtures` in the background, then use the ostler tools to open http://127.0.0.1:8787/dependent.html and fill the shipping form for Ada Lovelace in Germany, Bavaria. These are synthetic demo pages on localhost; do not browse real websites, do not fill or submit any real form, and do not use any real personal data. Submit only this fixture form. Show me the read-back verification and the submit result.</textarea>
+
+<textarea id="prompt-codex" style="position:absolute;left:-9999px" aria-hidden="true">Set up Ostler (headless-browser MCP server for form filling) on this machine. Work step by step and stop at any failure.
+
+1. Inspect first, change nothing yet:
+   - OS and package manager available
+   - whether Rust/cargo is installed and its version (need 1.82+)
+   - whether Chrome or Chromium is installed
+   - whether `ostler` is already on PATH (`command -v ostler`)
+   - whether an `ostler` MCP server already exists (`codex mcp list`, and check for an [mcp_servers.ostler] table in ~/.codex/config.toml)
+   Report what you found before doing anything else.
+2. Ask me before any system change (installing Rust, Chrome, or the ostler binary). Install only what is missing:
+   cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+3. Run `ostler doctor` and show me the output. Stop if it fails.
+4. If step 1 found an existing [mcp_servers.ostler] entry, stop and ask me before replacing it - show only a redacted summary (server name and launch command), never the full config file or other servers' entries, since env values can contain secrets.
+   Otherwise register the server with the installed binary's absolute path so it works whatever PATH Codex sees. Resolve the path with the shell that is actually in use:
+   - POSIX shells (bash/zsh on macOS/Linux): codex mcp add ostler -- "$(command -v ostler)" serve
+   - Windows PowerShell: codex mcp add ostler -- (Get-Command ostler).Source serve
+   Do not run POSIX expansion in PowerShell. `codex mcp add` edits ~/.codex/config.toml itself rather than hand-appending TOML.
+5. Verify with `codex mcp list` (or `codex mcp get ostler`). If this running session does not pick up the new tools, tell me to start a new Codex session or restart the IDE extension before continuing.
+6. Demo, localhost fixtures only: run `ostler fixtures` in the background, then use the ostler tools to open http://127.0.0.1:8787/dependent.html and fill the shipping form for Ada Lovelace in Germany, Bavaria. These are synthetic demo pages on localhost; do not browse real websites, do not fill or submit any real form, and do not use any real personal data. Submit only this fixture form. Show me the read-back verification and the submit result.</textarea>
+
 <script>
-document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){
-  var t=document.getElementById(b.dataset.target).innerText;
-  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)},function(){b.textContent='Press Ctrl+C'});
-});});
+// Accessible copy for .pre-copy buttons (reads data-copy id OR data-text literal)
+var liveRegion = document.createElement('div');
+liveRegion.setAttribute('aria-live','polite');
+liveRegion.setAttribute('aria-atomic','true');
+liveRegion.style.cssText='position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
+document.body.appendChild(liveRegion);
+
+function copyText(text, btn, label) {
+  var orig = btn.textContent;
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(function() {
+      btn.textContent = 'Copied!';
+      liveRegion.textContent = label + ' copied';
+      setTimeout(function() { btn.textContent = orig; liveRegion.textContent = ''; }, 2000);
+    }, function() {
+      // fallback: select the source element if possible, else change label
+      btn.textContent = 'Select and copy';
+      liveRegion.textContent = 'Copy failed — select and copy manually';
+      setTimeout(function() { btn.textContent = orig; liveRegion.textContent = ''; }, 3000);
+    });
+}
+
+document.querySelectorAll('.pre-copy').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var text;
+    if (btn.dataset.text) {
+      text = btn.dataset.text;
+    } else {
+      var el = document.getElementById(btn.dataset.copy);
+      text = el ? el.textContent : '';
+    }
+    copyText(text, btn, btn.getAttribute('aria-label') || 'Text');
+  });
+});
+
+// Legacy .copy buttons (hero old-style, kept for safety)
+document.querySelectorAll('.copy').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var el = document.getElementById(btn.dataset.target);
+    var text = el ? el.textContent : '';
+    copyText(text, btn, btn.getAttribute('aria-label') || 'Text');
+  });
+});
+
+// Tab switching (works for both hero and start tabgroups)
+document.querySelectorAll('[role="tablist"]').forEach(function(tl) {
+  tl.querySelectorAll('[role="tab"]').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      tl.querySelectorAll('[role="tab"]').forEach(function(t) {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected','false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected','true');
+      var panelId = tab.getAttribute('aria-controls');
+      var parent = tl.parentElement;
+      parent.querySelectorAll('[role="tabpanel"]').forEach(function(p) {
+        p.classList.remove('active');
+      });
+      var panel = document.getElementById(panelId);
+      if (panel) panel.classList.add('active');
+    });
+  });
+});
+
+// Copy-setup-prompt buttons
+['hero','start'].forEach(function(prefix) {
+  ['claude','codex'].forEach(function(client) {
+    var btn = document.getElementById(prefix+'-copy-prompt-'+client);
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      var src = document.getElementById('prompt-'+client);
+      if (!src) return;
+      copyText(src.value, btn, 'Setup prompt for '+client);
+    });
+  });
+});
 </script>
 </body>
 </html>

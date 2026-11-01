@@ -93,19 +93,32 @@ ostler doctor        # Chrome launches? Qdrant reachable (if you set one)? print
 
 ## Quick start
 
-Three steps, under a minute:
+Three steps: install, verify, connect.
 
 ```sh
-ostler doctor                    # 1. check Chrome
-ostler setup claude --apply      # 2. connect your agent (also: codex, cursor, vscode, json)
-ostler fixtures                  # 3. serve demo forms at http://127.0.0.1:8787 to try it on
+# 1. install (Rust 1.82+ and Chrome/Chromium required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+
+# 2. check it works
+ostler doctor
+
+# 3. connect your agent (Claude Code shown; others below)
+ostler setup claude --apply
 ```
 
-Using `npx` instead of an installed binary: `claude mcp add ostler -- npx -y ostler serve`.
+Using Codex, Cursor or VS Code instead? Replace step 3 with the matching line from
+[Use with your agent](#use-with-your-agent): `ostler setup codex`, `ostler setup cursor`
+or `ostler setup vscode` — each prints the config for you to place.
 
-Then ask your agent: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
+Then try the demo: run `ostler fixtures` (serves synthetic test forms at http://127.0.0.1:8787), then ask your agent:
 
-Memory is optional. Everything above works without it. To turn it on (so Ostler learns each form you fill): [Configure](#configure), or just `ostler init`.
+> *Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria.*
+
+Ostler fills Country, watches State load, reads every value back, and reports what the page said. Nothing real is submitted.
+
+Memory (Qdrant) is optional and separate: `ostler init` saves your cluster URL and key,
+then re-register with `--learn` when you connect. Details in [Configure](#configure).
+
 
 ### Things to ask your agent
 
