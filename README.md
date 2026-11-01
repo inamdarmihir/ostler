@@ -96,8 +96,8 @@ ostler doctor        # Chrome launches? Qdrant reachable (if you set one)? print
 Three steps: install, verify, connect.
 
 ```sh
-# 1. install (Rust 1.82+ and Chrome/Chromium required)
-cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+# 1. install (Rust 1.89+ and Chrome/Chromium required)
+cargo install --git https://github.com/inamdarmihir/ostler ostler
 
 # 2. check it works
 ostler doctor
