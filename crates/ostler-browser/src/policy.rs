@@ -46,6 +46,26 @@ impl Policy {
             ))
         }
     }
+
+    /// Value for Chrome's `--host-resolver-rules`: every host except the allowed ones (and their
+    /// subdomains) becomes unresolvable. Unlike per-tab request interception this binds the whole
+    /// browser process, so WebSockets, images, stylesheets and the first request of a popup (which is
+    /// attached only after it has started) cannot reach a forbidden host either.
+    pub fn host_resolver_rules(&self) -> Option<String> {
+        if !self.restricts() {
+            return None;
+        }
+        let mut rules = vec!["MAP * ~NOTFOUND".to_string()];
+        for d in &self.allowed_domains {
+            let d = d.trim().trim_start_matches("*.").to_lowercase();
+            if d.is_empty() {
+                continue;
+            }
+            rules.push(format!("EXCLUDE {d}"));
+            rules.push(format!("EXCLUDE *.{d}"));
+        }
+        Some(rules.join(", "))
+    }
 }
 
 #[cfg(test)]
@@ -81,5 +101,18 @@ mod tests {
             allow_file: true,
         };
         assert!(p.check("file:///tmp/a.html").is_ok());
+    }
+
+    #[test]
+    fn resolver_rules_block_everything_but_the_allowlist() {
+        assert_eq!(Policy::default().host_resolver_rules(), None);
+        let p = Policy {
+            allowed_domains: vec!["example.com".into(), " *.Docs.Rs ".into(), "".into()],
+            allow_file: false,
+        };
+        assert_eq!(
+            p.host_resolver_rules().unwrap(),
+            "MAP * ~NOTFOUND, EXCLUDE example.com, EXCLUDE *.example.com, EXCLUDE docs.rs, EXCLUDE *.docs.rs"
+        );
     }
 }

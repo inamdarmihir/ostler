@@ -105,6 +105,67 @@
     } catch { /* fall through */ }
     return !hiddenSelf(el);
   }
+
+  // ---- concealed text -------------------------------------------------------------------------------
+  // Text a person cannot see but a model would read: the usual hiding place for an instruction aimed at an
+  // agent. Only *text* is judged. Controls are never dropped (a native checkbox at opacity 0 under a custom
+  // one is normal), and screen-reader-only text (clip / 1px boxes) is kept: it is meant to be read.
+  let memo = null; // per-snapshot cache; null outside a snapshot
+  const newCache = () => ({ c: new WeakMap(), bg: new WeakMap() });
+  // Solid colour painted behind `el`, or null when it cannot be told (gradient, image, translucent layer).
+  function solidBackground(el, cache) {
+    if (cache && cache.bg.has(el)) return cache.bg.get(el);
+    const cs = styleOf(el);
+    const c = parseRgb(cs.backgroundColor);
+    let res;
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') res = null;
+    else if (c && c.a >= 0.99) res = c;
+    else if (c && c.a > 0) res = null;
+    else if (el.parentElement) res = solidBackground(el.parentElement, cache);
+    else {
+      // Nothing painted: the canvas. Assume white unless the page opts into a dark scheme.
+      const dark = /dark/.test(cs.colorScheme || '') || (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      res = dark ? null : { r: 255, g: 255, b: 255, a: 1 };
+    }
+    if (cache) cache.bg.set(el, res);
+    return res;
+  }
+  function concealed(el, cache = memo) {
+    if (cache && cache.c.has(el)) return cache.c.get(el);
+    let v = false;
+    const cs = styleOf(el);
+    if (parseFloat(cs.opacity) === 0 || parseFloat(cs.fontSize) < 2) v = true;
+    if (!v) {
+      const fg = parseRgb(cs.color);
+      if (fg && fg.a === 0) v = true;
+      else if (fg) {
+        const bg = solidBackground(el, cache);
+        if (bg && Math.abs(fg.r - bg.r) < 8 && Math.abs(fg.g - bg.g) < 8 && Math.abs(fg.b - bg.b) < 8) v = true;
+      }
+    }
+    if (!v) {
+      // The old "left:-9999px" hiding idiom. Far off the page only, so a carousel one slide away stays readable.
+      const r = el.getBoundingClientRect();
+      if (r.width + r.height > 0 && (r.right + window.scrollX < -2000 || r.bottom + window.scrollY < -2000)) v = true;
+    }
+    if (!v && el.parentElement) v = concealed(el.parentElement, cache);
+    if (cache) cache.c.set(el, v);
+    return v;
+  }
+  // Text under `el` that a person can see, plus how many text runs were left out as concealed.
+  function readableText(el) {
+    const parts = [];
+    let omitted = 0;
+    const tw = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const p = n.parentElement;
+      const t = clean(n.nodeValue);
+      if (!p || !t || SKIP.has(p.tagName) || !rendered(p)) continue;
+      if (concealed(p)) { omitted++; continue; }
+      parts.push(t);
+    }
+    return { text: parts.join(' '), omitted };
+  }
   function rootOf(el) { return el.getRootNode(); }
   function byId(el, id) {
     const r = rootOf(el);
@@ -116,7 +177,14 @@
   // Text of an element without the text of embedded form controls.
   function ownText(el) {
     const c = el.cloneNode(true);
-    if (c.querySelectorAll) c.querySelectorAll('select,textarea,input,button,option,script,style').forEach((n) => n.remove());
+    if (el.querySelectorAll && c.querySelectorAll) {
+      // The clone has no styles: judge the live nodes, drop their twins. Controls go anyway, so skip them.
+      const cache = newCache();
+      const live = el.querySelectorAll('*');
+      const twins = c.querySelectorAll('*');
+      live.forEach((n, i) => { if (twins[i] && !n.matches('select,textarea,input,button,option,script,style') && concealed(n, cache)) twins[i].remove(); });
+      c.querySelectorAll('select,textarea,input,button,option,script,style').forEach((n) => n.remove());
+    }
     return clean(c.textContent);
   }
   function stripLabel(raw) {
@@ -230,7 +298,8 @@
     const lines = [];
     const budget = opts.maxChars || 20000;
     const interactiveOnly = !!opts.interactiveOnly;
-    let used = 0, truncated = false;
+    let used = 0, truncated = false, omittedText = 0;
+    memo = newCache();
     const emit = (depth, text) => {
       if (truncated) return;
       const line = '  '.repeat(depth) + text;
@@ -276,7 +345,10 @@
     function walk(node, depth, noText) {
       if (truncated) return;
       if (node.nodeType === 3) {
-        if (!interactiveOnly && !noText) { const t = clean(node.nodeValue); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+        if (!interactiveOnly && !noText) {
+          const t = clean(node.nodeValue);
+          if (t) { if (node.parentElement && concealed(node.parentElement)) omittedText++; else emit(depth, `text ${q(t.slice(0, 300))}`); }
+        }
         return;
       }
       if (node.nodeType !== 1) return;
@@ -317,7 +389,12 @@
       else if (!role && !el.shadowRoot && el.tagName !== 'SLOT' && el.tagName !== 'LEGEND') {
         // Plain container with nothing interesting inside: collapse to one text line.
         if (!el.querySelector('a[href],button,input,select,textarea,[role],[contenteditable],[tabindex],[onclick],summary,h1,h2,h3,h4,h5,h6,img,form,iframe,table,dialog,fieldset')) {
-          if (!interactiveOnly && !noText) { const t = clean(el.innerText || el.textContent); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+          if (!interactiveOnly && !noText) {
+            const r = readableText(el);
+            omittedText += r.omitted;
+            const t = r.omitted ? r.text : clean(el.innerText || el.textContent);
+            if (t) emit(depth, `text ${q(t.slice(0, 300))}`);
+          }
           return;
         }
       }
@@ -326,7 +403,9 @@
     }
     const root = opts.ref ? elOf(opts.ref) : document.documentElement;
     walk(root, 0, false);
-    return { url: location.href, title: document.title, lines, truncated, refs: counter };
+    memo = null;
+    if (omittedText) emit(0, `note: ${omittedText} invisible text run(s) omitted (opacity 0, zero font size, far off-screen or same colour as the background)`);
+    return { url: location.href, title: document.title, lines, truncated, refs: counter, omittedText };
   }
 
   // ---------------------------------------------------------------- forms
@@ -389,10 +468,11 @@
     const own = new Set([el, ...(el.labels || [])]);
     const scope = el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement : el.parentElement;
     if (!scope) return null;
-    const nodes = [...scope.querySelectorAll('*')];
-    const idx = nodes.indexOf(el);
-    for (let i = idx + 1; i < nodes.length; i++) {
-      const cand = nodes[i];
+    // Walk forward from the control a bounded number of elements: its message sits right after it. Scanning
+    // the whole grandparent per field made large flat forms quadratic.
+    const tw = el.ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+    tw.currentNode = el;
+    for (let steps = 0, cand = tw.nextNode(); cand && steps < 60; cand = tw.nextNode(), steps++) {
       if (cand.matches('input,select,textarea,button') || cand.querySelector('input,select,textarea,button')) {
         if (cand.contains(el)) continue;
         break;

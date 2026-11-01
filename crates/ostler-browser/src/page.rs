@@ -525,7 +525,17 @@ impl Page {
 
     /// Network interception is on whenever there is something to enforce: an allowlist or the submit gate.
     async fn sync_fetch(&self) -> Result<()> {
-        if self.policy.restricts() || self.shared.gate.load(Ordering::SeqCst) {
+        if self.policy.restricts() {
+            // An allowlist must see every request, whatever its type: an <img src>, a stylesheet or a font
+            // carries data out exactly as well as fetch() does.
+            self.session
+                .call(
+                    "Fetch.enable",
+                    json!({ "patterns": [{ "urlPattern": "*", "requestStage": "Request" }] }),
+                )
+                .await?;
+        } else if self.shared.gate.load(Ordering::SeqCst) {
+            // The submit gate only cares about requests that can have a body.
             let patterns: Vec<Value> = ["Document", "XHR", "Fetch", "Ping", "EventSource", "Other"]
                 .iter()
                 .map(|t| json!({ "urlPattern": "*", "resourceType": t, "requestStage": "Request" }))
@@ -865,6 +875,10 @@ impl Page {
         jpeg: bool,
     ) -> Result<Vec<u8>> {
         self.guard().await?;
+        // A capture needs a rendered frame, and Chrome does not produce one for a tab that is not in front
+        // (a popup opened by the page, or another tab the agent switched from, takes the front). Without
+        // this a full-page capture of a tall page waits out the 30 s timeout.
+        let _ = self.session.call("Page.bringToFront", json!({})).await;
         let mut params = json!({ "format": if jpeg { "jpeg" } else { "png" } });
         if jpeg {
             params["quality"] = json!(70);

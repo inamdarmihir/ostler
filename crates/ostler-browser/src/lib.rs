@@ -83,8 +83,12 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub async fn launch(opts: LaunchOptions, policy: Policy) -> page::Result<Self> {
+    pub async fn launch(mut opts: LaunchOptions, policy: Policy) -> page::Result<Self> {
         let lean = opts.lean;
+        if let Some(rules) = policy.host_resolver_rules() {
+            opts.extra_args
+                .push(format!("--host-resolver-rules={rules}"));
+        }
         let chrome = Chrome::launch(opts).await?;
         let conn = chrome.connect().await?;
         let setup = TabSetup {

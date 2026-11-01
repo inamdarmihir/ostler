@@ -1106,3 +1106,84 @@ async fn look_skips_elements_hidden_under_an_overlay() {
     assert_eq!(list["covered"], 2, "{list}");
     b.close().await;
 }
+
+#[tokio::test]
+async fn text_a_person_cannot_see_is_not_shown_to_the_agent() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/concealed.html"))
+        .await
+        .unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    for hidden in [
+        "OPACITY_INJECTION",
+        "FONT_INJECTION",
+        "OFFSCREEN_INJECTION",
+        "WHITE_INJECTION",
+        "NESTED_INJECTION",
+        "MIXED_INJECTION",
+        "LABEL_INJECTION",
+    ] {
+        assert!(
+            !snap.text.contains(hidden),
+            "{hidden} reached the agent:\n{}",
+            snap.text
+        );
+    }
+    // What a person sees, and what is meant for assistive tech, stays.
+    for shown in [
+        "VISIBLE_PARAGRAPH",
+        "tail text stays",
+        "SCREENREADER_ONLY",
+        "Accept terms",
+    ] {
+        assert!(
+            snap.text.contains(shown),
+            "{shown} was dropped:\n{}",
+            snap.text
+        );
+    }
+    // The agent is told something was left out instead of silently losing it.
+    assert!(
+        snap.text.contains("invisible text run(s) omitted"),
+        "{}",
+        snap.text
+    );
+    // A control that is itself invisible (native checkbox under a custom one) must remain usable.
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Accept terms": true, "Name": "Ada"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn full_page_screenshot_does_not_stall_when_a_popup_took_the_front() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page()
+        .eval("document.body.style.minHeight = '150000px'; window.open('about:blank'); 0")
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert!(
+        b.tabs().await.len() >= 2,
+        "the popup should have become a tab"
+    );
+    let started = std::time::Instant::now();
+    let png = b.page().screenshot(None, true, false).await.unwrap();
+    assert!(png.len() > 1000, "empty capture");
+    // Before the fix Chrome produced no frame for the hidden tab and this waited out the 30 s timeout.
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "took {:?}",
+        started.elapsed()
+    );
+    b.close().await;
+}
