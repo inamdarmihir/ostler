@@ -461,6 +461,7 @@ async fn a_url_outside_the_allowlist_fails_the_task_not_the_server() {
             policy: Policy {
                 allowed_domains: vec!["example.org".into()],
                 allow_file: false,
+                ..Default::default()
             },
             profile: Profile::All,
             memory: None,

@@ -98,6 +98,10 @@ struct A2aArgs {
     /// Treat `submit: true` as already confirmed (skips the input-required confirmation step).
     #[arg(long)]
     a2a_auto_submit: bool,
+    /// Remote agents may reach loopback, private and cloud-metadata addresses when no --allow-domain is set.
+    /// Off by default in A2A mode: a remote agent should not be able to probe the machine's own network.
+    #[arg(long)]
+    allow_private_networks: bool,
 }
 
 async fn run_a2a(a: A2aArgs) -> Result<()> {
@@ -107,8 +111,13 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
     if s.profile_dir.is_some() {
         eprintln!("ostler: --profile-dir is ignored in A2A mode (each conversation needs its own browser profile).");
     }
+    let block_private = !a.allow_private_networks;
     if s.allow_domains.is_empty() {
-        eprintln!("ostler: warning: no --allow-domain set, so remote agents can send this browser to any website. Restrict it.");
+        if block_private {
+            eprintln!("ostler: warning: no --allow-domain set, so remote agents can send this browser to any public website (private and internal addresses are blocked). Restrict it.");
+        } else {
+            eprintln!("ostler: warning: no --allow-domain set and --allow-private-networks given, so remote agents can reach any website and this machine's own network. Restrict it.");
+        }
     }
     if let Some(m) = &memory {
         if let Err(e) = m.init().await {
@@ -121,6 +130,9 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
         Policy {
             allowed_domains: s.allow_domains.clone(),
             allow_file: s.allow_file,
+            upload_dirs: s.upload_dirs.clone(),
+            block_private_networks: block_private,
+            accept_dialogs: s.accept_dialogs,
         },
         s.learn,
         s.require_confirm_submit,
@@ -529,11 +541,20 @@ struct ServeArgs {
     /// Persistent Chrome profile (keeps logins). Default is a throwaway profile.
     #[arg(long)]
     profile_dir: Option<PathBuf>,
-    /// Only allow these domains (and subdomains). Repeatable.
+    /// Only allow these domains (and subdomains), optionally pinned to a port (example.com:8443). Repeatable.
     #[arg(long = "allow-domain")]
     allow_domains: Vec<String>,
     #[arg(long)]
     allow_file: bool,
+    /// Directory file fields may be filled from. Repeatable. Without one, uploads are refused.
+    #[arg(long = "upload-dir")]
+    upload_dirs: Vec<PathBuf>,
+    /// With no --allow-domain, refuse loopback, private, link-local (cloud metadata) and internal hosts.
+    #[arg(long)]
+    block_private_networks: bool,
+    /// Answer the page's confirm() and prompt() dialogs with OK. By default they are dismissed.
+    #[arg(long)]
+    accept_dialogs: bool,
     /// Require confirm=true on form_submit so a human can approve irreversible actions.
     #[arg(long)]
     require_confirm_submit: bool,
@@ -607,6 +628,9 @@ async fn main() -> Result<()> {
                 policy: Policy {
                     allowed_domains: a.allow_domains,
                     allow_file: a.allow_file,
+                    upload_dirs: a.upload_dirs,
+                    block_private_networks: a.block_private_networks,
+                    accept_dialogs: a.accept_dialogs,
                 },
                 profile,
                 memory,

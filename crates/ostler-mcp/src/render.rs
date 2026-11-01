@@ -162,18 +162,19 @@ pub fn fill(r: &FillReport, verbose: bool) -> String {
         )
     } else {
         // Verified fields are named once here instead of getting a line each; only exceptions get detail.
+        // The names are the page's own words, so they go on a line of their own below the verdict, where the
+        // caller quarantines them, and are quoted so a label with a newline cannot start a line of its own.
         let good: Vec<String> = r
             .fields
             .iter()
             .filter(|f| f.status == FillStatus::Verified && f.source == "provided")
-            .map(|f| f.label.clone())
+            .map(|f| q(&f.label))
             .collect();
-        let tail = if good.is_empty() {
-            String::new()
-        } else {
-            format!(" verified: {}", good.join(", "))
-        };
-        format!("Filled {}/{}.{}\n", ok, r.fields.len(), tail)
+        let mut head = format!("Filled {}/{}.\n", ok, r.fields.len());
+        if !good.is_empty() {
+            head.push_str(&format!("verified: {}\n", good.join(", ")));
+        }
+        head
     };
     for f in &r.fields {
         if !verbose
@@ -309,7 +310,7 @@ pub fn submit(o: &SubmitOutcome, verbose: bool) -> String {
         let _ = writeln!(out, "Warning: {w}");
     }
     for d in &o.action.dialogs {
-        let _ = writeln!(out, "Dialog (auto-accepted): {d}");
+        let _ = writeln!(out, "Dialog: {d}");
     }
     if let (SubmitStatus::Advanced, Some(f)) = (o.status, &o.next_form) {
         let _ = writeln!(out, "Next: form_inspect (form {f}).");

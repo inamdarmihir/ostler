@@ -12,6 +12,10 @@ use ostler_fixtures::FixtureServer;
 use serde_json::{json, Value};
 
 async fn setup() -> Option<(FixtureServer, Browser)> {
+    setup_with(Policy::default()).await
+}
+
+async fn setup_with(policy: Policy) -> Option<(FixtureServer, Browser)> {
     if ostler_cdp::find_chrome(None).is_err() {
         assert!(
             std::env::var("OSTLER_REQUIRE_CHROME").is_err(),
@@ -21,7 +25,7 @@ async fn setup() -> Option<(FixtureServer, Browser)> {
         return None;
     }
     let server = FixtureServer::start();
-    let browser = Browser::launch(LaunchOptions::default(), Policy::default())
+    let browser = Browser::launch(LaunchOptions::default(), policy)
         .await
         .expect("launch");
     Some((server, browser))
@@ -441,19 +445,25 @@ async fn same_origin_iframe_form() {
 
 #[tokio::test]
 async fn rich_input_types() {
-    let Some((srv, b)) = setup().await else {
+    let dir = tempfile::tempdir().unwrap();
+    let cv_path = dir.path().join("cv.txt");
+    std::fs::write(&cv_path, "cv").unwrap();
+    let Some((srv, b)) = setup_with(Policy {
+        upload_dirs: vec![dir.path().to_path_buf()],
+        ..Default::default()
+    })
+    .await
+    else {
         return;
     };
     b.page().navigate(&srv.url("/types.html")).await.unwrap();
-    let cv = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(cv.path(), "cv").unwrap();
     let rep = b
         .page()
         .fill_form(
             req(json!({
                 "Date of birth": "March 5, 2001", "Preferred time": "3:30 PM", "Guests": 4, "Satisfaction": 7,
                 "Plan": "Pro", "Interests": ["AI", "Data"], "Dietary needs": ["Vegan"],
-                "CV": cv.path().to_str().unwrap(), "Notes": "Window seat please", "terms": "yes"
+                "CV": cv_path.to_str().unwrap(), "Notes": "Window seat please", "terms": "yes"
             })),
             None,
         )
@@ -476,7 +486,7 @@ async fn rich_input_types() {
     assert!(got["cv"]
         .as_str()
         .unwrap()
-        .ends_with(cv.path().file_name().unwrap().to_str().unwrap()));
+        .ends_with(cv_path.file_name().unwrap().to_str().unwrap()));
     b.close().await;
 }
 
@@ -577,6 +587,7 @@ async fn policy_blocks_disallowed_domains() {
     let policy = Policy {
         allowed_domains: vec!["example.org".into()],
         allow_file: false,
+        ..Default::default()
     };
     let b = Browser::launch(LaunchOptions::default(), policy)
         .await
@@ -976,6 +987,7 @@ async fn allowlist_blocks_requests_to_other_hosts_at_the_network() {
     let restricted = leak_attempt(Policy {
         allowed_domains: vec!["127.0.0.1".into()],
         allow_file: false,
+        ..Default::default()
     })
     .await;
     assert!(!restricted, "request to a forbidden host got through");

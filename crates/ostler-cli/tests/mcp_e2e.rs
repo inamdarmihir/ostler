@@ -534,3 +534,76 @@ async fn tabs_share_cookies_and_context_and_popups_become_tabs() {
     drop(c.stdin);
     let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
 }
+
+/// Text that is not inside an untrusted wrapper.
+fn outside_wrappers(text: &str) -> String {
+    let (open, close) = ("<page_content untrusted=\"true\">", "</page_content>");
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find(open) {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + open.len()..];
+        match after.find(close) {
+            Some(j) => rest = &after[j + close.len()..],
+            None => return out, // unterminated: everything after is inside
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+#[tokio::test]
+async fn page_text_never_reaches_a_trusted_line() {
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    let srv = FixtureServer::start();
+    // The page puts attacker text in its title, body, a label, an alert(), a validation message and a
+    // hidden element. Whatever tool the agent calls, that text may only appear inside the wrapper, and
+    // the wrapper may not be closed early from inside.
+    let mut outputs = vec![
+        c.tool("navigate", json!({"url": srv.url("/injection.html")}))
+            .await
+            .1,
+        c.tool("snapshot", json!({})).await.1,
+        c.tool("form_inspect", json!({})).await.1,
+        c.tool("look", json!({})).await.1,
+        c.tool("tabs", json!({"action": "list"})).await.1,
+        c.tool("form_fill", json!({"values": {"Name": "x"}}))
+            .await
+            .1,
+    ];
+    outputs.push(c.tool("form_submit", json!({})).await.1);
+    outputs.push(c.tool("click", json!({"ref": "e1"})).await.1);
+
+    let all = outputs.join("\n----\n");
+    for (i, text) in outputs.iter().enumerate() {
+        let opens = text.matches("<page_content").count();
+        let closes = text.matches("</page_content").count();
+        assert_eq!(
+            opens, closes,
+            "output {i} has unbalanced wrapper tags:\n{text}"
+        );
+        let outside = outside_wrappers(text);
+        assert!(
+            !outside.contains("ATTACK_") && !outside.contains("SYSTEM:"),
+            "output {i} has page text on a trusted line:\n{text}"
+        );
+    }
+    // Sanity: the attacker text did reach the agent, just quarantined (so the test is not vacuous)...
+    assert!(
+        all.contains("ATTACK_BODY") && all.contains("ATTACK_LABEL"),
+        "{all}"
+    );
+    assert!(
+        all.contains("ATTACK_TITLE") && all.contains("ATTACK_ALERT"),
+        "{all}"
+    );
+    // ...and the invisible text never did.
+    assert!(
+        !all.contains("ATTACK_HIDDEN"),
+        "hidden text reached the agent:\n{all}"
+    );
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}

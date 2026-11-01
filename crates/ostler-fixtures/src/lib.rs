@@ -50,6 +50,7 @@ pub const PAGES: &[(&str, &str)] = &[
     ("cookie", include_str!("../fixtures/cookie.html")),
     ("visual", include_str!("../fixtures/visual.html")),
     ("concealed", include_str!("../fixtures/concealed.html")),
+    ("injection", include_str!("../fixtures/injection.html")),
     ("overlay", include_str!("../fixtures/overlay.html")),
     ("aria", include_str!("../fixtures/aria.html")),
     ("conditional", include_str!("../fixtures/conditional.html")),

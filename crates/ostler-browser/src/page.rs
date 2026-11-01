@@ -183,22 +183,23 @@ impl Page {
                             .unwrap_or("GET")
                             .to_uppercase();
                         let is_doc = ev.params["resourceType"].as_str() == Some("Document");
-                        let mut verdict = fetch_policy.check(&url);
-                        if verdict.is_ok()
-                            && shared.gate.load(Ordering::SeqCst)
-                            && !shared.armed.load(Ordering::SeqCst)
-                            && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
-                        {
-                            shared
-                                .blocked
-                                .lock()
-                                .unwrap()
-                                .push(format!("{method} {url}"));
-                            verdict = Err("blocked by --require-confirm-submit".into());
-                        }
-                        let sess = sess.clone();
-                        // Separate task: never let a slow reply stall the event loop.
+                        let (policy, shared, sess) =
+                            (fetch_policy.clone(), shared.clone(), sess.clone());
+                        // Separate task: never let a slow reply (or a DNS lookup) stall the event loop.
                         tokio::spawn(async move {
+                            let mut verdict = policy.check_resolved(&url).await;
+                            if verdict.is_ok()
+                                && shared.gate.load(Ordering::SeqCst)
+                                && !shared.armed.load(Ordering::SeqCst)
+                                && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
+                            {
+                                shared
+                                    .blocked
+                                    .lock()
+                                    .unwrap()
+                                    .push(format!("{method} {url}"));
+                                verdict = Err("blocked by --require-confirm-submit".into());
+                            }
                             let _ = match (verdict, is_doc) {
                                 (Ok(()), _) => {
                                     sess.call("Fetch.continueRequest", json!({ "requestId": id }))
@@ -234,16 +235,20 @@ impl Page {
                     "Page.javascriptDialogOpening" => {
                         let kind = ev.params["type"].as_str().unwrap_or("dialog");
                         let msg = ev.params["message"].as_str().unwrap_or("");
-                        shared
-                            .dialogs
-                            .lock()
-                            .unwrap()
-                            .push(format!("{kind}: {msg}"));
+                        // alert and beforeunload ask for nothing. confirm and prompt ask for a decision the
+                        // page is about to act on ("Delete everything?"), so a browser nobody is watching
+                        // says no unless it was told otherwise.
+                        let accept =
+                            matches!(kind, "alert" | "beforeunload") || fetch_policy.accept_dialogs;
+                        shared.dialogs.lock().unwrap().push(format!(
+                            "{} {kind}: {msg}",
+                            if accept { "accepted" } else { "dismissed" }
+                        ));
                         let default = ev.params["defaultPrompt"].as_str().unwrap_or("");
                         let _ = sess
                             .call(
                                 "Page.handleJavaScriptDialog",
-                                json!({ "accept": true, "promptText": default }),
+                                json!({ "accept": accept, "promptText": default }),
                             )
                             .await;
                     }
@@ -398,7 +403,10 @@ impl Page {
     // ------------------------------------------------------------------ navigation
 
     pub async fn navigate(&self, url: &str) -> Result<ActionOutcome> {
-        self.policy.check(url).map_err(BrowserError::Policy)?;
+        self.policy
+            .check_resolved(url)
+            .await
+            .map_err(BrowserError::Policy)?;
         let loaded_before = self.shared.loaded.load(Ordering::SeqCst);
         let res = self
             .session
@@ -485,7 +493,7 @@ impl Page {
             url: String::new(),
             title: String::new(),
         });
-        if let Err(msg) = self.policy.check(&info.url) {
+        if let Err(msg) = self.policy.check_resolved(&info.url).await {
             // A redirect or link led somewhere forbidden: leave immediately.
             let _ = self
                 .session
@@ -503,7 +511,7 @@ impl Page {
         }
         let dialogs = self.take_dialogs();
         if !dialogs.is_empty() {
-            warnings.push("JavaScript dialogs were auto-accepted".into());
+            warnings.push("JavaScript dialogs appeared (confirm and prompt are dismissed unless --accept-dialogs)".into());
         }
         Ok(ActionOutcome {
             navigated,
@@ -561,7 +569,7 @@ impl Page {
     /// somewhere forbidden between tool calls).
     pub async fn guard(&self) -> Result<()> {
         let info = self.info().await?;
-        if let Err(msg) = self.policy.check(&info.url) {
+        if let Err(msg) = self.policy.check_resolved(&info.url).await {
             let _ = self
                 .session
                 .call("Page.navigate", json!({ "url": "about:blank" }))
@@ -789,10 +797,11 @@ impl Page {
     }
 
     pub async fn upload(&self, r: &str, paths: &[String]) -> Result<()> {
+        // Only files inside a configured --upload-dir, and the browser gets the resolved path, so a symlink
+        // swapped in afterwards cannot redirect it.
+        let mut real = Vec::with_capacity(paths.len());
         for p in paths {
-            if !std::path::Path::new(p).is_file() {
-                return Err(BrowserError::Other(format!("file not found: {p}")));
-            }
+            real.push(self.policy.check_upload(p).map_err(BrowserError::Policy)?);
         }
         let obj = self
             .session
@@ -807,7 +816,7 @@ impl Page {
         self.session
             .call(
                 "DOM.setFileInputFiles",
-                json!({ "files": paths, "objectId": object_id }),
+                json!({ "files": real, "objectId": object_id }),
             )
             .await?;
         Ok(())

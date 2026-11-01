@@ -302,20 +302,29 @@ fn quarantine(s: &str) -> String {
 }
 
 /// Keep our own verdict line ("Submitted…", "Filled 2/3 fields…") trusted and wrap only the
-/// page-derived detail beneath it (labels, option text, validation messages).
+/// page-derived detail beneath it (labels, option text, validation messages). Our own hints at the very
+/// end ("Ready: form_submit.") stay outside the wrapper so the agent still treats them as guidance; page
+/// text cannot forge one because every page string is quoted onto a single line before it gets here.
 fn wrap_detail(s: &str) -> String {
-    match s.split_once('\n') {
-        // Nothing but our own hints below the verdict: no page text, so nothing to quarantine.
-        Some((_, rest))
-            if rest.lines().all(|l| {
-                l.trim().is_empty() || l.starts_with("Ready:") || l.starts_with("Step ")
-            }) =>
-        {
-            s.trim_end().to_string()
-        }
-        Some((head, rest)) if !rest.trim().is_empty() => format!("{head}\n{}", wrap(rest)),
-        _ => s.to_string(),
+    let is_hint =
+        |l: &str| l.trim().is_empty() || l.starts_with("Ready:") || l.starts_with("Step ");
+    let Some((head, rest)) = s.split_once('\n') else {
+        return s.to_string();
+    };
+    let lines: Vec<&str> = rest.lines().collect();
+    let hints = lines.iter().rev().take_while(|l| is_hint(l)).count();
+    let (page, tail) = lines.split_at(lines.len() - hints);
+    // Nothing but our own hints below the verdict: no page text, so nothing to quarantine.
+    if page.is_empty() {
+        return s.trim_end().to_string();
     }
+    let mut out = format!("{head}\n{}", wrap(&page.join("\n")));
+    let tail = tail.join("\n");
+    if !tail.trim().is_empty() {
+        out.push('\n');
+        out.push_str(tail.trim_end());
+    }
+    out
 }
 
 fn wrap(s: &str) -> String {
@@ -557,7 +566,7 @@ impl App {
             s.push_str(&format!("Warning: {}\n", quarantine(w)));
         }
         for d in &o.dialogs {
-            s.push_str(&format!("Dialog (auto-accepted): {}\n", quarantine(d)));
+            s.push_str(&format!("Dialog: {}\n", quarantine(d)));
         }
         s
     }
