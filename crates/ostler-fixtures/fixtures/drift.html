@@ -1,0 +1,12 @@
+<!doctype html><meta charset=utf-8><title>Drift</title>
+<h1>Pick a day</h1>
+<form id="f" action="/submit" method="post">
+  <label for="day">Day</label>
+  <input id="day" name="day" type="text">
+  <button type="submit">Send</button>
+</form>
+<script>
+// A widget that discards what it was given a moment later (a date picker that closes and resets).
+const d=document.getElementById('day');
+d.addEventListener('change',()=>setTimeout(()=>{d.value=''},1500));
+</script>

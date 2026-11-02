@@ -28,7 +28,7 @@ Rule for everything below: say only what the benchmarks and tests show. The head
 
 The mark is a horseshoe (an ostler tends horses) with a verified check inside. Orange `#fb923c`, teal `#5eead4`, ink `#14110f`.
 
-Still to make by hand: GitHub **social preview** (Settings → General → Social preview: upload `site/assets/og.png`; there is no API for it), and a 20-second screen recording of `look` on `fixtures/overlay.html` followed by a one-call fill.
+Still to make by hand: GitHub **social preview** (Settings → General → Social preview: upload `site/assets/og.png`; there is no API for it), and a 20-second screen recording of `look` on `crates/ostler-fixtures/fixtures/overlay.html` followed by a one-call fill.
 
 ## Channels, in order
 

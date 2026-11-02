@@ -1,6 +1,7 @@
 //! Minimal async Chrome DevTools Protocol client.
 //!
-//! One WebSocket connection to the browser, many flattened target sessions.
+//! One connection to the browser (a private pipe by default, a WebSocket as fallback),
+//! many flattened target sessions.
 //! Requests are matched to responses by id; events are fanned out on a
 //! broadcast channel so any number of waiters can observe them.
 
@@ -23,8 +24,14 @@ use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CdpError {
-    #[error("could not find a Chrome/Chromium binary (set OSTLER_CHROME or pass --chrome-path)")]
+    #[error(
+        "could not find Chrome or Chromium. Install one \
+         (macOS: `brew install --cask google-chrome`; Debian/Ubuntu: `sudo apt install chromium`; \
+         Windows: https://www.google.com/chrome) or point Ostler at it with OSTLER_CHROME=/path/to/chrome"
+    )]
     ChromeNotFound,
+    #[error("the Chrome path {0:?} (from --chrome-path or OSTLER_CHROME) does not exist; fix it or unset it to auto-detect")]
+    ChromePathMissing(String),
     #[error("failed to launch browser: {0}")]
     Launch(String),
     #[error("websocket error: {0}")]
@@ -51,17 +58,75 @@ pub struct Event {
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value>>>>>;
 
+/// Messages larger than this are not kept as spare buffer capacity between pipe reads.
+#[cfg(unix)]
+const PIPE_BUF_KEEP: usize = 16 << 20;
+
 pub struct Connection {
-    out: mpsc::UnboundedSender<Message>,
+    /// Serialized CDP messages to send; a transport task frames and writes them.
+    out: mpsc::UnboundedSender<String>,
     pending: Pending,
     next_id: AtomicU64,
     calls: AtomicU64,
     events: broadcast::Sender<Event>,
-    /// Set as soon as the socket is gone, so callers fail at once instead of waiting out the timeout.
+    /// Set as soon as the transport is gone, so callers fail at once instead of waiting out the timeout.
     closed: Arc<AtomicBool>,
 }
 
+/// Route one decoded message from the browser to its waiting request or to event subscribers.
+fn dispatch(v: Value, pending: &Pending, events: &broadcast::Sender<Event>) {
+    if let Some(id) = v.get("id").and_then(Value::as_u64) {
+        let tx = pending.lock().unwrap().remove(&id);
+        if let Some(tx) = tx {
+            let res = match v.get("error") {
+                Some(e) => Err(CdpError::Protocol {
+                    code: e.get("code").and_then(Value::as_i64).unwrap_or(-1),
+                    message: e
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown")
+                        .to_string(),
+                }),
+                None => Ok(v.get("result").cloned().unwrap_or(Value::Null)),
+            };
+            let _ = tx.send(res);
+        }
+    } else if let Some(method) = v.get("method").and_then(Value::as_str) {
+        let _ = events.send(Event {
+            method: method.to_string(),
+            params: v.get("params").cloned().unwrap_or(Value::Null),
+            session_id: v.get("sessionId").and_then(Value::as_str).map(String::from),
+        });
+    }
+}
+
+/// Transport gone: refuse new requests first, then fail every in-flight one.
+fn fail_all(closed: &AtomicBool, pending: &Pending) {
+    closed.store(true, Ordering::SeqCst);
+    let drained: Vec<_> = pending.lock().unwrap().drain().collect();
+    for (_, tx) in drained {
+        let _ = tx.send(Err(CdpError::Closed));
+    }
+}
+
 impl Connection {
+    fn assemble(
+        out: mpsc::UnboundedSender<String>,
+        pending: Pending,
+        events: broadcast::Sender<Event>,
+        closed: Arc<AtomicBool>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            out,
+            pending,
+            next_id: AtomicU64::new(1),
+            calls: AtomicU64::new(0),
+            events,
+            closed,
+        })
+    }
+
+    /// Connect over a WebSocket (`--remote-debugging-port`). Fallback transport; the default is a pipe.
     pub async fn connect(ws_url: &str) -> Result<Arc<Self>> {
         // Chrome sends big messages (a full-page PNG is one base64 string); the default 16/64 MiB
         // limits would kill the whole connection on a tall page.
@@ -72,13 +137,13 @@ impl Connection {
             .await
             .map_err(|e| CdpError::Ws(e.to_string()))?;
         let (mut sink, mut stream) = ws.split();
-        let (out, mut out_rx) = mpsc::unbounded_channel::<Message>();
+        let (out, mut out_rx) = mpsc::unbounded_channel::<String>();
         let pending: Pending = Arc::default();
         let (events, _) = broadcast::channel(1024);
 
         tokio::spawn(async move {
             while let Some(msg) = out_rx.recv().await {
-                if sink.send(msg).await.is_err() {
+                if sink.send(Message::Text(msg.into())).await.is_err() {
                     break;
                 }
             }
@@ -94,46 +159,69 @@ impl Connection {
                 let Ok(v) = serde_json::from_str::<Value>(&text) else {
                     continue;
                 };
-                if let Some(id) = v.get("id").and_then(Value::as_u64) {
-                    let tx = reader_pending.lock().unwrap().remove(&id);
-                    if let Some(tx) = tx {
-                        let res = match v.get("error") {
-                            Some(e) => Err(CdpError::Protocol {
-                                code: e.get("code").and_then(Value::as_i64).unwrap_or(-1),
-                                message: e
-                                    .get("message")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("unknown")
-                                    .to_string(),
-                            }),
-                            None => Ok(v.get("result").cloned().unwrap_or(Value::Null)),
-                        };
-                        let _ = tx.send(res);
-                    }
-                } else if let Some(method) = v.get("method").and_then(Value::as_str) {
-                    let _ = reader_events.send(Event {
-                        method: method.to_string(),
-                        params: v.get("params").cloned().unwrap_or(Value::Null),
-                        session_id: v.get("sessionId").and_then(Value::as_str).map(String::from),
-                    });
-                }
+                dispatch(v, &reader_pending, &reader_events);
             }
-            // Connection gone: refuse new requests first, then fail every in-flight one.
-            reader_closed.store(true, Ordering::SeqCst);
-            let drained: Vec<_> = reader_pending.lock().unwrap().drain().collect();
-            for (_, tx) in drained {
-                let _ = tx.send(Err(CdpError::Closed));
+            fail_all(&reader_closed, &reader_pending);
+        });
+
+        Ok(Self::assemble(out, pending, events, closed))
+    }
+
+    /// Speak CDP over Chrome's `--remote-debugging-pipe`: Chrome reads commands from `writer`'s
+    /// peer and writes responses and events to `reader`'s peer. Every message is UTF-8 JSON
+    /// terminated by a single NUL byte.
+    #[cfg(unix)]
+    pub(crate) fn from_pipe(
+        reader: tokio::net::unix::pipe::Receiver,
+        mut writer: tokio::net::unix::pipe::Sender,
+    ) -> Arc<Self> {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+        let (out, mut out_rx) = mpsc::unbounded_channel::<String>();
+        let pending: Pending = Arc::default();
+        let (events, _) = broadcast::channel(1024);
+
+        // Ends when the connection is dropped or Chrome stops reading. Dropping `writer` closes
+        // Chrome's stdin-equivalent, which makes Chrome shut itself down.
+        tokio::spawn(async move {
+            while let Some(msg) = out_rx.recv().await {
+                let mut frame = msg.into_bytes();
+                frame.push(0);
+                if writer.write_all(&frame).await.is_err() {
+                    break;
+                }
             }
         });
 
-        Ok(Arc::new(Self {
-            out,
-            pending,
-            next_id: AtomicU64::new(1),
-            calls: AtomicU64::new(0),
-            events,
-            closed,
-        }))
+        let closed = Arc::new(AtomicBool::new(false));
+        let reader_closed = closed.clone();
+        let reader_pending = pending.clone();
+        let reader_events = events.clone();
+        tokio::spawn(async move {
+            // A full-page PNG is one multi-MB frame, so the buffer grows to fit the frame.
+            let mut reader = BufReader::new(reader);
+            let mut buf = Vec::new();
+            loop {
+                buf.clear();
+                match reader.read_until(0, &mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
+                // EOF mid-frame (no trailing NUL) means Chrome died while writing: drop the fragment.
+                if buf.pop() != Some(0) {
+                    break;
+                }
+                if let Ok(v) = serde_json::from_slice::<Value>(&buf) {
+                    dispatch(v, &reader_pending, &reader_events);
+                }
+                if buf.capacity() > PIPE_BUF_KEEP {
+                    buf = Vec::new();
+                }
+            }
+            fail_all(&reader_closed, &reader_pending);
+        });
+
+        Self::assemble(out, pending, events, closed)
     }
 
     /// True once the browser connection has dropped (Chrome crashed or was killed).
@@ -175,7 +263,7 @@ impl Connection {
             msg["sessionId"] = json!(s);
         }
         self.out
-            .send(Message::Text(msg.to_string().into()))
+            .send(msg.to_string())
             .map_err(|_| CdpError::Closed)?;
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(res)) => res,

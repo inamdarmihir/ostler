@@ -57,13 +57,18 @@ pub fn find_chrome(explicit: Option<&Path>) -> Result<PathBuf> {
         return if p.exists() {
             Ok(p.to_path_buf())
         } else {
-            Err(CdpError::ChromeNotFound)
+            Err(CdpError::ChromePathMissing(p.display().to_string()))
         };
     }
+    // An explicit setting that is wrong is an error, not a cue to quietly use some other browser.
     if let Ok(p) = std::env::var("OSTLER_CHROME") {
-        let p = PathBuf::from(p);
-        if p.exists() {
-            return Ok(p);
+        if !p.trim().is_empty() {
+            let p = PathBuf::from(p);
+            return if p.exists() {
+                Ok(p)
+            } else {
+                Err(CdpError::ChromePathMissing(p.display().to_string()))
+            };
         }
     }
     let fixed = [
@@ -96,15 +101,47 @@ pub fn find_chrome(explicit: Option<&Path>) -> Result<PathBuf> {
     Err(CdpError::ChromeNotFound)
 }
 
+/// How Ostler talks to Chrome. Pipe is the default: it needs no network listener, so no other
+/// local user can reach the browser. WebSocket (`OSTLER_CDP_TRANSPORT=ws`) opens an
+/// unauthenticated localhost debugging port and exists only as a debugging fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Transport {
+    #[cfg(unix)]
+    Pipe,
+    Ws,
+}
+
+impl Transport {
+    fn from_env() -> Result<Self> {
+        match std::env::var("OSTLER_CDP_TRANSPORT").as_deref() {
+            Err(_) | Ok("") | Ok("pipe") => {
+                #[cfg(unix)]
+                return Ok(Self::Pipe);
+                #[cfg(not(unix))]
+                return Ok(Self::Ws);
+            }
+            Ok("ws") => Ok(Self::Ws),
+            Ok(other) => Err(CdpError::Launch(format!(
+                "unknown OSTLER_CDP_TRANSPORT {other:?}; use \"pipe\" (default) or \"ws\""
+            ))),
+        }
+    }
+}
+
 /// A running browser process. Killed on drop.
 pub struct Chrome {
     child: Child,
-    pub ws_url: String,
+    /// DevTools WebSocket URL; `None` on the default pipe transport (there is no port).
+    pub ws_url: Option<String>,
+    /// Pipe transport: the connection, opened at launch because the pipe ends can be used once.
+    #[cfg(unix)]
+    pipe: Option<std::sync::Arc<Connection>>,
     _profile: Option<tempfile::TempDir>,
 }
 
 impl Chrome {
     pub async fn launch(opts: LaunchOptions) -> Result<Self> {
+        let transport = Transport::from_env()?;
         let exe = find_chrome(opts.chrome_path.as_deref())?;
         let (profile_dir, temp) = match &opts.user_data_dir {
             Some(p) => (p.clone(), None),
@@ -113,9 +150,21 @@ impl Chrome {
                 (t.path().to_path_buf(), Some(t))
             }
         };
+        // Chrome allows one process per profile; a second launch on a shared --profile-dir exits at once.
+        let profile_hint = match &opts.user_data_dir {
+            Some(p) => format!(
+                " (is another Ostler or Chrome already using profile {}? one browser per profile; use a separate --profile-dir per server, or omit it)",
+                p.display()
+            ),
+            None => String::new(),
+        };
         let mut cmd = Command::new(exe);
-        cmd.arg("--remote-debugging-port=0")
-            .arg(format!("--user-data-dir={}", profile_dir.display()))
+        match transport {
+            #[cfg(unix)]
+            Transport::Pipe => cmd.arg("--remote-debugging-pipe"),
+            Transport::Ws => cmd.arg("--remote-debugging-port=0"),
+        };
+        cmd.arg(format!("--user-data-dir={}", profile_dir.display()))
             .arg(format!(
                 "--window-size={},{}",
                 opts.window_size.0, opts.window_size.1
@@ -149,12 +198,84 @@ impl Chrome {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
-        let mut child = cmd.spawn().map_err(|e| CdpError::Launch(e.to_string()))?;
+        // Parent ends of the pipe pair; the child ends are moved into `cmd` as fds 3 and 4.
+        #[cfg(unix)]
+        let mut pipe_ends = None;
+        #[cfg(unix)]
+        if transport == Transport::Pipe {
+            use command_fds::{CommandFdExt, FdMapping};
+            let io = |e: std::io::Error| CdpError::Launch(format!("pipe setup failed: {e}"));
+            // Chrome reads commands on fd 3 and writes responses and events on fd 4.
+            let (cmd_rx, cmd_tx) = std::io::pipe().map_err(io)?;
+            let (resp_rx, resp_tx) = std::io::pipe().map_err(io)?;
+            cmd.fd_mappings(vec![
+                FdMapping {
+                    parent_fd: cmd_rx.into(),
+                    child_fd: 3,
+                },
+                FdMapping {
+                    parent_fd: resp_tx.into(),
+                    child_fd: 4,
+                },
+            ])
+            .map_err(|e| CdpError::Launch(e.to_string()))?;
+            // `from_file` makes only our ends non-blocking; Chrome's ends stay blocking.
+            let tx = tokio::net::unix::pipe::Sender::from_file(std::fs::File::from(
+                std::os::fd::OwnedFd::from(cmd_tx),
+            ))
+            .map_err(io)?;
+            let rx = tokio::net::unix::pipe::Receiver::from_file(std::fs::File::from(
+                std::os::fd::OwnedFd::from(resp_rx),
+            ))
+            .map_err(io)?;
+            pipe_ends = Some((rx, tx));
+        }
+
+        let spawned = cmd.spawn();
+        // Release the parent's copies of Chrome's pipe ends so EOF reaches us when Chrome exits.
+        drop(cmd);
+        let mut child = spawned.map_err(|e| CdpError::Launch(e.to_string()))?;
         let stderr = child
             .stderr
             .take()
             .ok_or_else(|| CdpError::Launch("no stderr".into()))?;
         let mut lines = BufReader::new(stderr).lines();
+
+        #[cfg(unix)]
+        if let Some((rx, tx)) = pipe_ends {
+            // Keep draining stderr so the pipe never fills and blocks the browser.
+            tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
+            let conn = Connection::from_pipe(rx, tx);
+            // The pipe has no "listening" banner, so prove Chrome is serving before returning.
+            match conn
+                .call(
+                    "Browser.getVersion",
+                    serde_json::json!({}),
+                    None,
+                    Duration::from_secs(20),
+                )
+                .await
+            {
+                Ok(_) => {}
+                Err(CdpError::Closed) => {
+                    return Err(CdpError::Launch(format!(
+                        "browser exited before DevTools was ready{profile_hint}"
+                    )))
+                }
+                Err(CdpError::Timeout(..)) => {
+                    return Err(CdpError::Launch(
+                        "timed out waiting for DevTools endpoint".into(),
+                    ))
+                }
+                Err(e) => return Err(CdpError::Launch(e.to_string())),
+            }
+            return Ok(Self {
+                child,
+                ws_url: None,
+                pipe: Some(conn),
+                _profile: temp,
+            });
+        }
 
         let find = async {
             while let Ok(Some(line)) = lines.next_line().await {
@@ -167,9 +288,9 @@ impl Chrome {
         let ws_url = match tokio::time::timeout(Duration::from_secs(20), find).await {
             Ok(Some(url)) => url,
             Ok(None) => {
-                return Err(CdpError::Launch(
-                    "browser exited before DevTools was ready".into(),
-                ))
+                return Err(CdpError::Launch(format!(
+                    "browser exited before DevTools was ready{profile_hint}"
+                )))
             }
             Err(_) => {
                 return Err(CdpError::Launch(
@@ -182,13 +303,23 @@ impl Chrome {
 
         Ok(Self {
             child,
-            ws_url,
+            ws_url: Some(ws_url),
+            #[cfg(unix)]
+            pipe: None,
             _profile: temp,
         })
     }
 
+    /// The connection to this browser (pipe by default, WebSocket with `OSTLER_CDP_TRANSPORT=ws`).
     pub async fn connect(&self) -> Result<std::sync::Arc<Connection>> {
-        Connection::connect(&self.ws_url).await
+        #[cfg(unix)]
+        if let Some(conn) = &self.pipe {
+            return Ok(conn.clone());
+        }
+        match &self.ws_url {
+            Some(url) => Connection::connect(url).await,
+            None => Err(CdpError::Launch("no DevTools transport".into())),
+        }
     }
 
     pub fn pid(&self) -> Option<u32> {

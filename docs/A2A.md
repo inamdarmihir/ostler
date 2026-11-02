@@ -61,7 +61,7 @@ An A2A endpoint lets a network client steer a browser that can log in to things.
 - Binds **127.0.0.1**. Binding anything else **requires `--a2a-token`** (or `OSTLER_A2A_TOKEN`); the server refuses to start otherwise.
 - With a token, the RPC endpoint needs `Authorization: Bearer …` (compared in constant time). The Agent Card stays public, as the protocol expects, and advertises the scheme but never the token.
 - Requests carrying an `Origin` header (a web page in a browser) are refused, and the `Host` header must be a loopback name or one you list with `--allowed-host`/`--public-url`. This blocks drive-by and DNS-rebinding attacks from a page open on the same machine.
-- **Always set `--allow-domain`.** Without it, any remote agent can send this browser to any website. The server warns at startup. The allowlist is enforced inside the browser for every conversation.
+- **Always set `--allow-domain`.** Without it, any remote agent can send this browser to any public website. The allowlist is enforced inside the browser for every conversation (every request type, WebSockets included). Without an allowlist the server blocks loopback, private and cloud-metadata addresses so a remote agent cannot probe this machine's network (`--allow-private-networks` turns that off); the server warns at startup. Uploads are refused unless you pass `--upload-dir`.
 - TLS is not terminated here. Put it behind a reverse proxy for anything beyond localhost, and set `--public-url`.
 - All conversations share one Qdrant `tenant`. If different callers must not see each other's saved profile, run one server per tenant.
 

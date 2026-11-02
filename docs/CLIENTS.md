@@ -8,10 +8,15 @@ ostler doctor
 
 ## Install
 
+You need Chrome or Chromium, plus one of:
+
 ```sh
-# from source (needs Rust 1.82+ and Chrome/Chromium)
-cargo install --git https://github.com/inamdarmihir/ostler ostler-cli
+cargo install --git https://github.com/inamdarmihir/ostler ostler   # from source (Rust 1.89+); works today
+curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh     # prebuilt binary, from the first release
+claude mcp add ostler -- npx -y ostler serve                         # no install step: npx downloads it on first run (first release)
 ```
+
+See the [README](../README.md#install) for the status of each and [RELEASING](RELEASING.md) for how they get published.
 
 ## Easiest: `ostler setup`
 
@@ -29,6 +34,8 @@ It uses this binary's absolute path, so it works even when the client's `PATH` d
 - Claude Code: `claude mcp add ostler -- ostler serve`
 - Codex: `[mcp_servers.ostler]` with `command = "ostler"`, `args = ["serve"]`
 - Cursor / others: `{ "mcpServers": { "ostler": { "command": "ostler", "args": ["serve"] } } }`
+
+After installing or rebuilding `ostler`, reconnect the MCP client (Claude Code: `/mcp`; others: restart it) so it starts the new binary.
 
 > Client config formats change between releases. If one of these does not load, check that client's current MCP documentation; the server itself only needs `ostler serve` on stdio.
 
@@ -59,7 +66,10 @@ ostler memory wipe --yes
 
 | flag | effect |
 |---|---|
-| `--allow-domain example.com` (repeatable) | only that domain and subdomains; checked after redirects and clicks |
+| `--allow-domain example.com` (repeatable) | only that domain and subdomains, every request and WebSockets included; `example.com:8443` pins a port |
+| `--upload-dir DIR` (repeatable) | file fields may be filled from this directory; without it uploads are refused |
+| `--block-private-networks` | with no allowlist, refuse loopback, private, metadata and internal hosts (on by default for `a2a`) |
+| `--accept-dialogs` | answer the page's `confirm()` and `prompt()` with OK; they are dismissed by default |
 | `--require-confirm-submit` | `form_submit` fails unless the agent passes `confirm=true`, so a human can approve |
 | `--tools core\|forms\|all` | which tools the agent sees |
 | `--lean` | lower memory; no images/fonts/media |

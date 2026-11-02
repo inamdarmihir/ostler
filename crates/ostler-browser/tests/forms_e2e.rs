@@ -12,6 +12,10 @@ use ostler_fixtures::FixtureServer;
 use serde_json::{json, Value};
 
 async fn setup() -> Option<(FixtureServer, Browser)> {
+    setup_with(Policy::default()).await
+}
+
+async fn setup_with(policy: Policy) -> Option<(FixtureServer, Browser)> {
     if ostler_cdp::find_chrome(None).is_err() {
         assert!(
             std::env::var("OSTLER_REQUIRE_CHROME").is_err(),
@@ -21,7 +25,7 @@ async fn setup() -> Option<(FixtureServer, Browser)> {
         return None;
     }
     let server = FixtureServer::start();
-    let browser = Browser::launch(LaunchOptions::default(), Policy::default())
+    let browser = Browser::launch(LaunchOptions::default(), policy)
         .await
         .expect("launch");
     Some((server, browser))
@@ -242,6 +246,171 @@ async fn custom_combobox_picks_the_option() {
 }
 
 #[tokio::test]
+async fn datetime_local_is_verified_not_assumed() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/datetime.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Start": "2001-03-05 3:30 PM"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    // The page rewrites this one after we write it: that must be a failure, not "verified".
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Clamped slot": "2001-03-05T15:30"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn combobox_that_diverges_from_the_request_fails() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/combobox_diverge.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Country": "United States"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    // Unrelated exact options still verify.
+    b.page()
+        .navigate(&srv.url("/combobox_diverge.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Country": "Uruguay"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn an_action_that_navigates_is_not_replayed_on_the_next_page() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/replay_a.html")).await.unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let r = snap
+        .text
+        .lines()
+        .find(|l| l.contains("button \"Go\""))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .unwrap_or_else(|| panic!("Go button in snapshot: {}", snap.text))
+        .to_string();
+    // The button is under an overlay, so this takes the script-click path. The click posts once and
+    // navigates; the page that replaces it has a button with the same look and must not be clicked.
+    b.page()
+        .click(&r)
+        .await
+        .expect("click that navigates succeeds");
+    srv.wait_for(1, Duration::from_secs(3));
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let hits: Vec<_> = srv.submissions().iter().map(|s| s["hit"].clone()).collect();
+    assert_eq!(
+        hits,
+        vec![json!("A")],
+        "replayed on the next page: {hits:?}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn eval_that_loses_its_page_is_replayed_but_eval_once_is_not() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // Posts a hit, schedules a navigation, then keeps awaiting: the page is replaced mid-evaluation.
+    let js = "(async()=>{fetch('/submit',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({hit:'js'})});setTimeout(()=>{location.href='/replay_b.html'},20);await new Promise(r=>setTimeout(r,3000));return 1})()";
+    b.page().navigate(&srv.url("/replay_a.html")).await.unwrap();
+    let _ = b.page().eval_once(js).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        srv.submissions().len(),
+        1,
+        "eval_once must run the script at most once"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn verification_walls_are_detected_but_not_over_reported() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // An embedded widget blocks the form.
+    b.page()
+        .navigate(&srv.url("/captcha_widget.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("widget detected");
+    assert_eq!((c.vendor.as_str(), c.interstitial), ("reCAPTCHA", false));
+    // The person solves it; the wall is gone.
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let solve = snap
+        .text
+        .lines()
+        .find(|l| l.contains("Simulate the person"))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|l| l.split(']').next())
+        .unwrap_or_else(|| panic!("solve button: {}", snap.text))
+        .to_string();
+    b.page().click(&solve).await.unwrap();
+    assert!(b.page().challenge().await.unwrap().is_none());
+
+    // A page that replaces the site with a check.
+    b.page()
+        .navigate(&srv.url("/captcha_interstitial.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("interstitial detected");
+    assert!(c.interstitial, "{c:?}");
+
+    // A search engine's bot wall is a form with only a submit button; it is still a wall.
+    b.page()
+        .navigate(&srv.url("/captcha_search_wall.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("search wall detected");
+    assert_eq!((c.vendor.as_str(), c.interstitial), ("DuckDuckGo", true));
+
+    // Not walls: an invisible-v3 badge, a plain form, a long page that merely mentions verification.
+    for page in ["/captcha_badge_only.html", "/basic.html", "/longform.html"] {
+        b.page().navigate(&srv.url(page)).await.unwrap();
+        assert_eq!(b.page().challenge().await.unwrap(), None, "{page}");
+    }
+    b.close().await;
+}
+
+#[tokio::test]
 async fn shadow_dom_form() {
     let Some((srv, b)) = setup().await else {
         return;
@@ -289,19 +458,25 @@ async fn same_origin_iframe_form() {
 
 #[tokio::test]
 async fn rich_input_types() {
-    let Some((srv, b)) = setup().await else {
+    let dir = tempfile::tempdir().unwrap();
+    let cv_path = dir.path().join("cv.txt");
+    std::fs::write(&cv_path, "cv").unwrap();
+    let Some((srv, b)) = setup_with(Policy {
+        upload_dirs: vec![dir.path().to_path_buf()],
+        ..Default::default()
+    })
+    .await
+    else {
         return;
     };
     b.page().navigate(&srv.url("/types.html")).await.unwrap();
-    let cv = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(cv.path(), "cv").unwrap();
     let rep = b
         .page()
         .fill_form(
             req(json!({
                 "Date of birth": "March 5, 2001", "Preferred time": "3:30 PM", "Guests": 4, "Satisfaction": 7,
                 "Plan": "Pro", "Interests": ["AI", "Data"], "Dietary needs": ["Vegan"],
-                "CV": cv.path().to_str().unwrap(), "Notes": "Window seat please", "terms": "yes"
+                "CV": cv_path.to_str().unwrap(), "Notes": "Window seat please", "terms": "yes"
             })),
             None,
         )
@@ -324,7 +499,7 @@ async fn rich_input_types() {
     assert!(got["cv"]
         .as_str()
         .unwrap()
-        .ends_with(cv.path().file_name().unwrap().to_str().unwrap()));
+        .ends_with(cv_path.file_name().unwrap().to_str().unwrap()));
     b.close().await;
 }
 
@@ -425,6 +600,7 @@ async fn policy_blocks_disallowed_domains() {
     let policy = Policy {
         allowed_domains: vec!["example.org".into()],
         allow_file: false,
+        ..Default::default()
     };
     let b = Browser::launch(LaunchOptions::default(), policy)
         .await
@@ -824,6 +1000,7 @@ async fn allowlist_blocks_requests_to_other_hosts_at_the_network() {
     let restricted = leak_attempt(Policy {
         allowed_domains: vec!["127.0.0.1".into()],
         allow_file: false,
+        ..Default::default()
     })
     .await;
     assert!(!restricted, "request to a forbidden host got through");
@@ -952,5 +1129,339 @@ async fn look_skips_elements_hidden_under_an_overlay() {
     // Only the dialog's button is reachable; the form behind it is reported as covered.
     assert_eq!(names, vec!["Accept all"], "{list}");
     assert_eq!(list["covered"], 2, "{list}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn text_a_person_cannot_see_is_not_shown_to_the_agent() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/concealed.html"))
+        .await
+        .unwrap();
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    for hidden in [
+        "OPACITY_INJECTION",
+        "FONT_INJECTION",
+        "OFFSCREEN_INJECTION",
+        "WHITE_INJECTION",
+        "NESTED_INJECTION",
+        "MIXED_INJECTION",
+        "LABEL_INJECTION",
+    ] {
+        assert!(
+            !snap.text.contains(hidden),
+            "{hidden} reached the agent:\n{}",
+            snap.text
+        );
+    }
+    // What a person sees, and what is meant for assistive tech, stays.
+    for shown in [
+        "VISIBLE_PARAGRAPH",
+        "tail text stays",
+        "SCREENREADER_ONLY",
+        "Accept terms",
+    ] {
+        assert!(
+            snap.text.contains(shown),
+            "{shown} was dropped:\n{}",
+            snap.text
+        );
+    }
+    // The agent is told something was left out instead of silently losing it.
+    assert!(
+        snap.text.contains("invisible text run(s) omitted"),
+        "{}",
+        snap.text
+    );
+    // A control that is itself invisible (native checkbox under a custom one) must remain usable.
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Accept terms": true, "Name": "Ada"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn long_text_is_split_and_cuts_are_marked() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/article.html")).await.unwrap();
+    let s = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(s.text.contains("FINALWORD."), "{}", s.text);
+    assert!(s.text.lines().all(|l| l.len() < 700), "{}", s.text);
+    assert!(s.text.contains("more chars cut]"), "{}", s.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn footer_collapses_and_expands_by_ref() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(full.text.contains("Link 30"), "{}", full.text);
+    let i = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(i.text.contains("30 links omitted; snapshot ref=e"), "{}", i.text);
+    assert!(!i.text.contains("Link 30"), "{}", i.text);
+    let r = i
+        .text
+        .split("snapshot ref=")
+        .nth(1)
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap()
+        .to_string();
+    let open = b
+        .page()
+        .snapshot(SnapshotOpts {
+            scope: Some(r),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(open.text.contains("Link 30"), "{}", open.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn full_page_screenshot_does_not_stall_when_a_popup_took_the_front() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page()
+        .eval("document.body.style.minHeight = '150000px'; window.open('about:blank'); 0")
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert!(
+        b.tabs().await.len() >= 2,
+        "the popup should have become a tab"
+    );
+    let started = std::time::Instant::now();
+    let png = b.page().screenshot(None, true, false).await.unwrap();
+    assert!(png.len() > 1000, "empty capture");
+    // Before the fix Chrome produced no frame for the hidden tab and this waited out the 30 s timeout.
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "took {:?}",
+        started.elapsed()
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn refs_survive_truncation_and_unknown_ref_is_actionable() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    let s = b
+        .page()
+        .snapshot(SnapshotOpts {
+            max_chars: Some(150),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(s.truncated);
+    // Past the cut, but numbered in document order (main: heading, Home link = e1; footer links follow).
+    b.page().click("e20").await.unwrap();
+    let err = b.page().click("e9999").await.unwrap_err().to_string();
+    assert!(err.contains("page changed") && err.contains("snapshot"), "{err}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn delta_after_navigating_to_similar_page_is_small() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/results.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    b.page().click("e42").await.unwrap_or_else(|e| panic!("{e}\n{}", full.text));
+    let d = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Delta,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(d.text.contains("Result 41"), "{}", d.text);
+    assert!(d.text.len() * 3 < full.text.len(), "{}", d.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn wrapper_with_click_handler_does_not_swallow_the_page() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/spa.html")).await.unwrap();
+    let i = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(i.text.contains("Best commute pick"), "{}", i.text);
+    assert!(i.text.contains("Compare"), "{}", i.text);
+    // A one-link card footer is not boilerplate: no "0/1 links omitted" noise.
+    assert!(!i.text.contains("footer ["), "{}", i.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn delta_right_after_navigate_is_small() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/results.html")).await.unwrap();
+    // The navigate view is interactive; the next delta must still have a baseline.
+    b.page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let d = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Delta,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(d.text.contains("no changes"), "{}", d.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn back_with_no_history_says_so() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    // The tab started on about:blank, which is not a page to return to.
+    let o = b.page().back().await.unwrap();
+    assert!(!o.changed, "{o:#?}");
+    assert!(o.notes.iter().any(|n| n.contains("no earlier page")), "{o:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn hash_and_query_changes_keep_the_delta_baseline() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    let url = srv.url("/results.html");
+    b.page().navigate(&url).await.unwrap();
+    b.page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(b.page().baseline_matches(&format!("{url}#top")));
+    assert!(b.page().baseline_matches(&format!("{url}?first=11")));
+    assert!(!b.page().baseline_matches(&srv.url("/basic.html")));
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_value_the_page_clears_after_filling_is_reported_at_submit() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/drift.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Day": "2026-12-25"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    tokio::time::sleep(std::time::Duration::from_millis(2200)).await;
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.drift.len(), 1, "{out:#?}");
+    assert_eq!(out.drift[0].was, "2026-12-25");
+    assert_eq!(out.drift[0].now, "");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_widget_that_learns_values_from_keyup_keeps_what_was_filled() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/picker.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Day": "12/25/2026"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    // Pressing anywhere else makes the widget rewrite the box from what it learned.
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let other = snap
+        .text
+        .lines()
+        .find(|l| l.contains("\"Other\""))
+        .and_then(|l| l.split("[").nth(1))
+        .and_then(|l| l.split("]").next())
+        .unwrap()
+        .to_string();
+    b.page().click(&other).await.unwrap();
+    let day = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(day.text.contains("12/25/2026"), "{}", day.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_heading_ref_reads_its_section_only() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/sections.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let r = full
+        .text
+        .lines()
+        .find(|l| l.contains("\"Technology\""))
+        .and_then(|l| l.split("[").nth(1))
+        .and_then(|l| l.split("]").next())
+        .unwrap_or_else(|| panic!("no ref on heading: {}", full.text))
+        .to_string();
+    let s = b
+        .page()
+        .snapshot(SnapshotOpts {
+            scope: Some(r),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(s.text.contains("Feedforward microphones"), "{}", s.text);
+    assert!(s.text.contains("Detailed feedforward text"), "{}", s.text);
+    assert!(!s.text.contains("History text"), "{}", s.text);
+    assert!(!s.text.contains("Intro text"), "{}", s.text);
     b.close().await;
 }

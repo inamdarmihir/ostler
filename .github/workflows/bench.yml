@@ -19,7 +19,7 @@ jobs:
           tar xzf q.tgz
           echo "OSTLER_QDRANT_BIN=$RUNNER_TEMP/qdrant/qdrant" >> "$GITHUB_ENV"
           echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
-      - run: cargo build --release -p ostler-bench -p ostler-cli
+      - run: cargo build --release -p ostler-bench -p ostler
       - run: |
           mkdir -p out
           ./target/release/ostler-bench --json out/forms.json forms --reps 3

@@ -1,0 +1,17 @@
+<!doctype html><meta charset=utf-8><title>Datetime</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Book a slot</h1>
+<form id="f">
+  <label for="start">Start</label>
+  <input id="start" name="start" type="datetime-local">
+  <label for="clamped">Clamped slot</label>
+  <input id="clamped" name="clamped" type="datetime-local">
+  <button type="submit">Book</button>
+</form>
+<script>
+// A badly behaved widget: whatever is entered, the page rewrites it.
+const c=document.getElementById('clamped');
+c.addEventListener('change',()=>{c.value='2025-01-01T00:00'});
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ await fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({start:document.getElementById('start').value,clamped:c.value})});
+ document.body.innerHTML='<h1>Booked</h1>'});
+</script>

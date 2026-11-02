@@ -11,45 +11,66 @@ use serde_json::{json, Value};
 use tiny_http::{Header, Method, Response, Server};
 
 pub const PAGES: &[(&str, &str)] = &[
-    ("basic", include_str!("../../../fixtures/basic.html")),
+    ("basic", include_str!("../fixtures/basic.html")),
+    ("validation", include_str!("../fixtures/validation.html")),
+    ("dependent", include_str!("../fixtures/dependent.html")),
+    ("wizard", include_str!("../fixtures/wizard.html")),
+    ("controlled", include_str!("../fixtures/controlled.html")),
+    ("combobox", include_str!("../fixtures/combobox.html")),
     (
-        "validation",
-        include_str!("../../../fixtures/validation.html"),
+        "combobox_diverge",
+        include_str!("../fixtures/combobox_diverge.html"),
+    ),
+    ("datetime", include_str!("../fixtures/datetime.html")),
+    ("replay_a", include_str!("../fixtures/replay_a.html")),
+    ("replay_b", include_str!("../fixtures/replay_b.html")),
+    ("redesign_v1", include_str!("../fixtures/redesign_v1.html")),
+    ("redesign_v2", include_str!("../fixtures/redesign_v2.html")),
+    (
+        "captcha_widget",
+        include_str!("../fixtures/captcha_widget.html"),
     ),
     (
-        "dependent",
-        include_str!("../../../fixtures/dependent.html"),
+        "captcha_interstitial",
+        include_str!("../fixtures/captcha_interstitial.html"),
     ),
-    ("wizard", include_str!("../../../fixtures/wizard.html")),
+    ("article", include_str!("../fixtures/article.html")),
     (
-        "controlled",
-        include_str!("../../../fixtures/controlled.html"),
+        "bigfooter",
+        include_str!("../fixtures/bigfooter.html"),
     ),
-    ("combobox", include_str!("../../../fixtures/combobox.html")),
-    ("shadow", include_str!("../../../fixtures/shadow.html")),
-    ("iframe", include_str!("../../../fixtures/iframe.html")),
-    ("types", include_str!("../../../fixtures/types.html")),
-    ("masked", include_str!("../../../fixtures/masked.html")),
-    ("longform", include_str!("../../../fixtures/longform.html")),
+    ("results", include_str!("../fixtures/results.html")),
     (
-        "ambiguous",
-        include_str!("../../../fixtures/ambiguous.html"),
+        "captcha_search_wall",
+        include_str!("../fixtures/captcha_search_wall.html"),
     ),
-    ("remount", include_str!("../../../fixtures/remount.html")),
-    ("payment", include_str!("../../../fixtures/payment.html")),
-    ("popup", include_str!("../../../fixtures/popup.html")),
-    ("cookie", include_str!("../../../fixtures/cookie.html")),
-    ("visual", include_str!("../../../fixtures/visual.html")),
-    ("overlay", include_str!("../../../fixtures/overlay.html")),
-    ("aria", include_str!("../../../fixtures/aria.html")),
+    ("noop", include_str!("../fixtures/noop.html")),
+    ("spa", include_str!("../fixtures/spa.html")),
+    ("drift", include_str!("../fixtures/drift.html")),
+    ("sections", include_str!("../fixtures/sections.html")),
+    ("picker", include_str!("../fixtures/picker.html")),
+    ("login", include_str!("../fixtures/login.html")),
     (
-        "conditional",
-        include_str!("../../../fixtures/conditional.html"),
+        "captcha_badge_only",
+        include_str!("../fixtures/captcha_badge_only.html"),
     ),
-    (
-        "datepicker",
-        include_str!("../../../fixtures/datepicker.html"),
-    ),
+    ("shadow", include_str!("../fixtures/shadow.html")),
+    ("iframe", include_str!("../fixtures/iframe.html")),
+    ("types", include_str!("../fixtures/types.html")),
+    ("masked", include_str!("../fixtures/masked.html")),
+    ("longform", include_str!("../fixtures/longform.html")),
+    ("ambiguous", include_str!("../fixtures/ambiguous.html")),
+    ("remount", include_str!("../fixtures/remount.html")),
+    ("payment", include_str!("../fixtures/payment.html")),
+    ("popup", include_str!("../fixtures/popup.html")),
+    ("cookie", include_str!("../fixtures/cookie.html")),
+    ("visual", include_str!("../fixtures/visual.html")),
+    ("concealed", include_str!("../fixtures/concealed.html")),
+    ("injection", include_str!("../fixtures/injection.html")),
+    ("overlay", include_str!("../fixtures/overlay.html")),
+    ("aria", include_str!("../fixtures/aria.html")),
+    ("conditional", include_str!("../fixtures/conditional.html")),
+    ("datepicker", include_str!("../fixtures/datepicker.html")),
 ];
 
 pub struct FixtureServer {
@@ -135,6 +156,37 @@ impl FixtureServer {
                                 let page = "<!doctype html><title>Thanks</title><h1>Thank you</h1><p>Your message was received.</p>";
                                 let _ = req.respond(Response::from_string(page).with_header(html));
                             }
+                        }
+                        // A normal-looking page served with a 404 status (GitHub style).
+                        (Method::Get, "/missing") => {
+                            let body = include_str!("../fixtures/notfound.html");
+                            let _ = req.respond(
+                                Response::from_string(body)
+                                    .with_status_code(404)
+                                    .with_header(html),
+                            );
+                        }
+                        // An empty 403: Chrome reports ERR_HTTP_RESPONSE_CODE_FAILURE.
+                        (Method::Get, "/forbidden") => {
+                            let _ = req.respond(Response::from_string("").with_status_code(403));
+                        }
+                        (Method::Get, "/doc.pdf") => {
+                            let pdf =
+                                Header::from_bytes("Content-Type", "application/pdf").unwrap();
+                            let _ = req.respond(
+                                Response::from_data(
+                                    b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n".to_vec(),
+                                )
+                                .with_header(pdf),
+                            );
+                        }
+                        (Method::Get, "/members") => {
+                            let loc = Header::from_bytes("Location", "/login.html").unwrap();
+                            let _ = req.respond(
+                                Response::from_string("")
+                                    .with_status_code(302)
+                                    .with_header(loc),
+                            );
                         }
                         (Method::Get, "/") => {
                             let list: String = PAGES

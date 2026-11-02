@@ -1,13 +1,22 @@
 [package]
-name = "ostler-cli"
+name = "ostler"
 description = "Headless browser for AI coding agents: MCP server with Qdrant-backed memory and reliable form filling"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "../../README.md"
 rust-version.workspace = true
 keywords = ["mcp", "browser", "qdrant", "ai-agents", "automation"]
 categories = ["command-line-utilities", "web-programming"]
+
+# `cargo binstall ostler` downloads the prebuilt binary from the GitHub release instead of compiling.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/ostler-v{ version }-{ target }.tar.gz"
+bin-dir = "ostler-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
 
 [[bin]]
 name = "ostler"

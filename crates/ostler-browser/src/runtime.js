@@ -59,7 +59,7 @@
   }
   function elOf(ref) {
     const el = refs.get(String(ref).replace(/^@/, ''));
-    if (!el) throw new Error(`unknown ref ${ref}; take a fresh snapshot`);
+    if (!el) throw new Error(`unknown ref ${ref}: the page changed or the last snapshot was truncated before it; call snapshot again (refs stay stable on the same page)`);
     if (!el.isConnected) throw new Error(`ref ${ref} is stale (element left the page); take a fresh snapshot`);
     return el;
   }
@@ -105,6 +105,67 @@
     } catch { /* fall through */ }
     return !hiddenSelf(el);
   }
+
+  // ---- concealed text -------------------------------------------------------------------------------
+  // Text a person cannot see but a model would read: the usual hiding place for an instruction aimed at an
+  // agent. Only *text* is judged. Controls are never dropped (a native checkbox at opacity 0 under a custom
+  // one is normal), and screen-reader-only text (clip / 1px boxes) is kept: it is meant to be read.
+  let memo = null; // per-snapshot cache; null outside a snapshot
+  const newCache = () => ({ c: new WeakMap(), bg: new WeakMap() });
+  // Solid colour painted behind `el`, or null when it cannot be told (gradient, image, translucent layer).
+  function solidBackground(el, cache) {
+    if (cache && cache.bg.has(el)) return cache.bg.get(el);
+    const cs = styleOf(el);
+    const c = parseRgb(cs.backgroundColor);
+    let res;
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') res = null;
+    else if (c && c.a >= 0.99) res = c;
+    else if (c && c.a > 0) res = null;
+    else if (el.parentElement) res = solidBackground(el.parentElement, cache);
+    else {
+      // Nothing painted: the canvas. Assume white unless the page opts into a dark scheme.
+      const dark = /dark/.test(cs.colorScheme || '') || (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      res = dark ? null : { r: 255, g: 255, b: 255, a: 1 };
+    }
+    if (cache) cache.bg.set(el, res);
+    return res;
+  }
+  function concealed(el, cache = memo) {
+    if (cache && cache.c.has(el)) return cache.c.get(el);
+    let v = false;
+    const cs = styleOf(el);
+    if (parseFloat(cs.opacity) === 0 || parseFloat(cs.fontSize) < 2) v = true;
+    if (!v) {
+      const fg = parseRgb(cs.color);
+      if (fg && fg.a === 0) v = true;
+      else if (fg) {
+        const bg = solidBackground(el, cache);
+        if (bg && Math.abs(fg.r - bg.r) < 8 && Math.abs(fg.g - bg.g) < 8 && Math.abs(fg.b - bg.b) < 8) v = true;
+      }
+    }
+    if (!v) {
+      // The old "left:-9999px" hiding idiom. Far off the page only, so a carousel one slide away stays readable.
+      const r = el.getBoundingClientRect();
+      if (r.width + r.height > 0 && (r.right + window.scrollX < -2000 || r.bottom + window.scrollY < -2000)) v = true;
+    }
+    if (!v && el.parentElement) v = concealed(el.parentElement, cache);
+    if (cache) cache.c.set(el, v);
+    return v;
+  }
+  // Text under `el` that a person can see, plus how many text runs were left out as concealed.
+  function readableText(el) {
+    const parts = [];
+    let omitted = 0;
+    const tw = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const p = n.parentElement;
+      const t = clean(n.nodeValue);
+      if (!p || !t || SKIP.has(p.tagName) || !rendered(p)) continue;
+      if (concealed(p)) { omitted++; continue; }
+      parts.push(t);
+    }
+    return { text: parts.join(' '), omitted };
+  }
   function rootOf(el) { return el.getRootNode(); }
   function byId(el, id) {
     const r = rootOf(el);
@@ -116,7 +177,14 @@
   // Text of an element without the text of embedded form controls.
   function ownText(el) {
     const c = el.cloneNode(true);
-    if (c.querySelectorAll) c.querySelectorAll('select,textarea,input,button,option,script,style').forEach((n) => n.remove());
+    if (el.querySelectorAll && c.querySelectorAll) {
+      // The clone has no styles: judge the live nodes, drop their twins. Controls go anyway, so skip them.
+      const cache = newCache();
+      const live = el.querySelectorAll('*');
+      const twins = c.querySelectorAll('*');
+      live.forEach((n, i) => { if (twins[i] && !n.matches('select,textarea,input,button,option,script,style') && concealed(n, cache)) twins[i].remove(); });
+      c.querySelectorAll('select,textarea,input,button,option,script,style').forEach((n) => n.remove());
+    }
     return clean(c.textContent);
   }
   function stripLabel(raw) {
@@ -225,12 +293,44 @@
     return (t || clean(el.title)).slice(0, 100);
   }
 
+  // Search engines wrap result links in tracking redirects (Bing /ck/a?u=a1<base64>, Google /url?q=,
+  // DuckDuckGo /l/?uddg=, Yahoo /RU=<url>/RK). Show the real destination so the agent can judge and
+  // quote it; clicking still goes through the element itself.
+  function displayHref(el) {
+    const raw = el.getAttribute('href') || '';
+    if (!raw || raw.startsWith('#') || raw.startsWith('javascript:')) return raw;
+    try {
+      const u = new URL(raw, location.href);
+      const p = u.searchParams;
+      let dest = null;
+      if (/(^|\.)bing\.com$/.test(u.hostname) && u.pathname === '/ck/a') {
+        const v = p.get('u') || '';
+        if (v.startsWith('a1')) {
+          const b = v.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+          dest = decodeURIComponent(escape(atob(b + '='.repeat((4 - (b.length % 4)) % 4))));
+        }
+      } else if (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname === '/url') {
+        dest = p.get('q') || p.get('url');
+      } else if (/(^|\.)duckduckgo\.com$/.test(u.hostname) && u.pathname.startsWith('/l/')) {
+        dest = p.get('uddg');
+      } else if (/(^|\.)search\.yahoo\.com$/.test(u.hostname)) {
+        const m = u.pathname.match(/\/RU=([^/]+)\/R[KV]=/);
+        if (m) dest = decodeURIComponent(m[1]);
+      }
+      if (dest && /^https?:\/\//i.test(dest)) return dest;
+      // Absolute form for same-origin relative links keeps the host visible only when it differs.
+      return raw.startsWith('http') ? raw : (u.origin === location.origin ? raw : u.href);
+    } catch { return raw; }
+  }
+
   // ---------------------------------------------------------------- snapshot
   function snapshot(opts = {}) {
     const lines = [];
     const budget = opts.maxChars || 20000;
     const interactiveOnly = !!opts.interactiveOnly;
-    let used = 0, truncated = false;
+    const root = opts.ref ? elOf(opts.ref) : document.documentElement;
+    let used = 0, truncated = false, omittedText = 0;
+    memo = newCache();
     const emit = (depth, text) => {
       if (truncated) return;
       const line = '  '.repeat(depth) + text;
@@ -239,11 +339,33 @@
       lines.push(line);
     };
     const q = (s) => JSON.stringify(s);
+    // Long text becomes several lines at word boundaries; anything cut gets an explicit marker.
+    const CHUNK = 500, TEXT_CAP = 3000;
+    function emitText(depth, t) {
+      let rest = t.length > TEXT_CAP ? t.slice(0, TEXT_CAP) : t;
+      const cut = t.length - rest.length;
+      while (rest.length > CHUNK) {
+        let i = rest.lastIndexOf(' ', CHUNK);
+        if (i < CHUNK / 2) i = CHUNK;
+        emit(depth, `text ${q(rest.slice(0, i).trim())}`);
+        rest = rest.slice(i).trim();
+      }
+      if (rest) emit(depth, `text ${q(rest)}`);
+      if (cut > 0) emit(depth, `text "… [${cut} more chars cut]"`);
+    }
+    const seenEmptyHref = new Set();
     function ctl(el, role, depth) {
       const r = refOf(el);
+      if (truncated) return; // keep numbering stable: refs are still assigned past the cut
       const name = nameOf(el);
+      // Image-only duplicates of a link already listed (product cards repeat the same href) add noise.
+      if (role === 'link' && !name) {
+        const h = el.getAttribute('href') || '';
+        if (!h || seenEmptyHref.has(h)) return;
+        seenEmptyHref.add(h);
+      }
       let s = `${role}${name ? ' ' + q(name) : ''} [${r}]`;
-      if (role === 'heading') s = `heading ${q(name)}`;
+      if (role === 'heading') s = `heading ${q(name)} [${r}]`;
       const attrs = [];
       if (el.disabled || el.getAttribute('aria-disabled') === 'true') attrs.push('disabled');
       if (el.required || el.getAttribute('aria-required') === 'true') attrs.push('required');
@@ -266,7 +388,7 @@
           if (ty && !['text', 'textarea'].includes(ty)) attrs.push(`type=${ty}`);
         }
       } else if (role === 'link') {
-        const href = el.getAttribute('href') || '';
+        const href = displayHref(el);
         if (href) attrs.push(`href=${q(href.length > 100 ? href.slice(0, 100) + '…' : href)}`);
       } else if (role === 'heading') {
         attrs.push(`level=${el.tagName[1] || el.getAttribute('aria-level') || '?'}`);
@@ -274,9 +396,11 @@
       emit(depth, s + (attrs.length ? ' ' + attrs.join(' ') : ''));
     }
     function walk(node, depth, noText) {
-      if (truncated) return;
       if (node.nodeType === 3) {
-        if (!interactiveOnly && !noText) { const t = clean(node.nodeValue); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+        if (!interactiveOnly && !noText && !truncated) {
+          const t = clean(node.nodeValue);
+          if (t) { if (node.parentElement && concealed(node.parentElement)) omittedText++; else emitText(depth, t); }
+        }
         return;
       }
       if (node.nodeType !== 1) return;
@@ -284,7 +408,10 @@
       if (SKIP.has(el.tagName) || hiddenSelf(el)) return;
       // A label that owns a control: keep the control (it may be wrapped), drop the duplicate text.
       if (el.tagName === 'LABEL' && el.control) noText = true;
-      const role = roleOf(el);
+      let role = roleOf(el);
+      // A page-level element with a click handler (common in single-page apps) would swallow everything
+      // inside it as one control. When it contains real controls, treat it as a container instead.
+      if (role === 'clickable' && el.querySelector('a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],h1,h2,h3')) role = null;
       const isFrame = el.tagName === 'IFRAME' || el.tagName === 'FRAME';
       if (isFrame) {
         let accessible = true;
@@ -307,6 +434,13 @@
       if (role === 'clickable') { ctl(el, role, depth); return; }
       let d = depth;
       if (role === 'form') { const r = refOf(el); const n = clean(el.getAttribute('aria-label') || '') || (el.getAttribute('aria-labelledby') && textOfIds(el, el.getAttribute('aria-labelledby'))) || el.getAttribute('name') || ''; emit(depth, `form${n ? ' ' + q(n) : ''} [${r}]:`); d++; }
+      else if (opts.collapseFooter && el !== root && (role === 'contentinfo' || (el.tagName === 'FOOTER' && !el.closest('article,aside'))) && el.querySelectorAll('a[href]').length >= 5) {
+        const n = el.querySelectorAll('a[href]').length;
+        const f = el.querySelectorAll('input:not([type=hidden]),select,textarea').length;
+        const r = refOf(el);
+        emit(depth, `footer [${r}]: ${n} link${n === 1 ? '' : 's'}${f ? ` and ${f} field${f === 1 ? '' : 's'}` : ''} omitted; snapshot ref=${r} to expand`);
+        return;
+      }
       else if (LANDMARK[el.tagName] || (role && ['main', 'navigation', 'dialog', 'alert', 'alertdialog', 'status', 'banner', 'region', 'listbox', 'menu', 'tablist'].includes(role))) {
         const n = clean(el.getAttribute('aria-label') || '');
         emit(depth, `${role || LANDMARK[el.tagName]}${n ? ' ' + q(n) : ''}:`); d++;
@@ -317,16 +451,39 @@
       else if (!role && !el.shadowRoot && el.tagName !== 'SLOT' && el.tagName !== 'LEGEND') {
         // Plain container with nothing interesting inside: collapse to one text line.
         if (!el.querySelector('a[href],button,input,select,textarea,[role],[contenteditable],[tabindex],[onclick],summary,h1,h2,h3,h4,h5,h6,img,form,iframe,table,dialog,fieldset')) {
-          if (!interactiveOnly && !noText) { const t = clean(el.innerText || el.textContent); if (t) emit(depth, `text ${q(t.slice(0, 300))}`); }
+          if (!interactiveOnly && !noText && !truncated) {
+            const r = readableText(el);
+            omittedText += r.omitted;
+            const t = r.omitted ? r.text : (clean(el.innerText) || r.text);
+            if (t) emitText(depth, t);
+          }
           return;
         }
       }
       if (el.tagName === 'LEGEND') return;
       for (const k of kids(el)) walk(k, d, noText);
     }
-    const root = opts.ref ? elOf(opts.ref) : document.documentElement;
     walk(root, 0, false);
-    return { url: location.href, title: document.title, lines, truncated, refs: counter };
+    // A heading's ref reads its whole section: the siblings after it up to the next heading of the same
+    // or a higher level (Wikipedia wraps each heading in a div, so step out of such a wrapper first).
+    if (opts.ref && /^H[1-6]$/.test(root.tagName)) {
+      const level = +root.tagName[1];
+      const headingIn = (n) => {
+        if (/^H[1-6]$/.test(n.tagName)) return n;
+        const h = n.firstElementChild;
+        return h && /^H[1-6]$/.test(h.tagName) && n.children.length <= 3 ? h : null;
+      };
+      let start = root;
+      if (root.parentElement && root.parentElement !== document.body && headingIn(root.parentElement) === root) start = root.parentElement;
+      for (let n = start.nextElementSibling; n && !truncated; n = n.nextElementSibling) {
+        const h = headingIn(n);
+        if (h && +h.tagName[1] <= level) break;
+        walk(n, 0, false);
+      }
+    }
+    memo = null;
+    if (omittedText) emit(0, `note: ${omittedText} invisible text run(s) omitted (opacity 0, zero font size, far off-screen or same colour as the background)`);
+    return { url: location.href, title: document.title, lines, truncated, refs: counter, omittedText };
   }
 
   // ---------------------------------------------------------------- forms
@@ -389,10 +546,11 @@
     const own = new Set([el, ...(el.labels || [])]);
     const scope = el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement : el.parentElement;
     if (!scope) return null;
-    const nodes = [...scope.querySelectorAll('*')];
-    const idx = nodes.indexOf(el);
-    for (let i = idx + 1; i < nodes.length; i++) {
-      const cand = nodes[i];
+    // Walk forward from the control a bounded number of elements: its message sits right after it. Scanning
+    // the whole grandparent per field made large flat forms quadratic.
+    const tw = el.ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+    tw.currentNode = el;
+    for (let steps = 0, cand = tw.nextNode(); cand && steps < 60; cand = tw.nextNode(), steps++) {
       if (cand.matches('input,select,textarea,button') || cand.querySelector('input,select,textarea,button')) {
         if (cand.contains(el)) continue;
         break;
@@ -671,6 +829,11 @@
   }
   function finish(ref) {
     const el = elOf(ref);
+    // Widgets such as bootstrap-datepicker only learn the typed text from a keyup; without one they
+    // rewrite the box from their own (empty) state when they close. Send one harmless keyup.
+    if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value) {
+      try { el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'a', code: 'KeyA', keyCode: 65, which: 65 })); } catch {}
+    }
     if (typeof el.blur === 'function') el.blur();
     return true;
   }
@@ -775,7 +938,8 @@
     if (!options.length) return { picked: null, available: [] };
     const labels = options.map((o) => clean(o.textContent));
     let idx = labels.findIndex((l) => norm(l) === w);
-    if (idx < 0) { const hits = labels.map((l, i) => [l, i]).filter(([l]) => norm(l).includes(w) || w.includes(norm(l))); if (hits.length === 1) idx = hits[0][1]; }
+    // Exact (normalized) match only: a partial pick would diverge from the request, and the verifier
+    // refuses substring equivalence. Misses return the available labels so the caller can choose.
     if (idx < 0) return { picked: null, available: labels.slice(0, 15) };
     clickEl(options[idx]);
     return { picked: labels[idx], available: [] };
@@ -934,9 +1098,66 @@
   }
   function unmark() { const h = document.getElementById('__wm_marks'); if (h) h.remove(); return true; }
 
+  // ---------------------------------------------------------------- human-verification challenges
+  // Ostler never solves these. It reports them so the agent stops retrying and hands off to the user.
+  // Only walls that block the page count: the invisible reCAPTCHA badge and hidden widgets do not.
+  const CHALLENGE_SRC = [
+    [/google\.com\/recaptcha|recaptcha\.net/i, 'reCAPTCHA'],
+    [/hcaptcha\.com/i, 'hCaptcha'],
+    [/challenges\.cloudflare\.com/i, 'Cloudflare Turnstile'],
+    [/arkoselabs\.com|funcaptcha\.com/i, 'Arkose'],
+    [/captcha-delivery\.com/i, 'DataDome'],
+  ];
+  const CHALLENGE_BOX = [
+    ['.g-recaptcha', 'reCAPTCHA'], ['.h-captcha', 'hCaptcha'], ['.cf-turnstile', 'Cloudflare Turnstile'],
+  ];
+  function bigVisible(el) {
+    if (!rendered(el)) return false;
+    if (el.closest && el.closest('.grecaptcha-badge')) return false; // the invisible-v3 badge
+    const r = el.getBoundingClientRect();
+    return r.width >= 200 && r.height >= 50;
+  }
+  function challenge() {
+    for (const f of deepQueryAll(document.documentElement, 'iframe')) {
+      const src = f.getAttribute('src') || '';
+      const hit = CHALLENGE_SRC.find(([re]) => re.test(src));
+      if (hit && bigVisible(f)) return { vendor: hit[1], kind: 'widget' };
+    }
+    for (const [sel, vendor] of CHALLENGE_BOX) {
+      for (const el of deepQueryAll(document.documentElement, sel)) if (bigVisible(el)) return { vendor, kind: 'widget' };
+    }
+    // Interstitials replace the whole page, so they are short and say so in the title or body.
+    const text = (document.body && document.body.innerText || '').trim();
+    const title = document.title || '';
+    if (text.length < 2500) {
+      // A real wall has no ordinary content: a page with a form on it that merely mentions verification is not one.
+      const hasInputs = deepQueryAll(document.documentElement, 'input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select').some(rendered);
+      if (/^(just a moment|attention required|verifying you are human|are you a robot|robot check|security check)/i.test(title)
+        || (!hasInputs && /(verify(ing)? (that )?you are (a )?human|checking if the site connection is secure|unusual traffic from your computer|confirm you are not a robot|press (&|and) hold|bots use duckduckgo too|confirm this search was made by a human)/i.test(text))) {
+        const vendor = /duckduckgo/i.test(text) ? 'DuckDuckGo' : /cloudflare/i.test(text + title) ? 'Cloudflare' : location.hostname.replace(/^www\./, '');
+        return { vendor, kind: 'interstitial' };
+      }
+    }
+    // DuckDuckGo serves a result-less page (menu and promo links only) to browsers it distrusts.
+    if (/(^|\.)duckduckgo\.com$/.test(location.hostname) && /[?&]q=/.test(location.search) && !/^\/(html|lite)\//.test(location.pathname)
+        && !document.querySelector('[data-testid="result"],article[data-nrn],.react-results--main li,.result,#links .result,.results_links')) {
+      return { vendor: 'duckduckgo.com (no results were served to this browser)', kind: 'block' };
+    }
+    // Block pages from sites that refuse automated browsers outright. They hold no content, so a short
+    // page whose title/URL/text says "denied/blocked/suspended/captcha" is a wall, not a result.
+    if (text.length < 1500) {
+      const blob = title + ' ' + location.href + ' ' + text.slice(0, 600);
+      if (/^(captcha\b|access denied|access to this page has been denied|access temporarily suspended|request blocked|pardon our interruption|403 forbidden|you have been blocked|sorry, you have been blocked)|captcha - |blocked\.html|\/sorry\/|access temporarily suspended|automated (access|queries)|detected unusual (traffic|activity)|your request has been blocked/i.test(blob)) {
+        const vendor = location.hostname.replace(/^www\./, '');
+        return { vendor, kind: 'block' };
+      }
+    }
+    return null;
+  }
+
   window.__wm = {
     snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
-    settle, textPresent, selectorPresent,
+    settle, textPresent, selectorPresent, challenge,
     el: (ref) => elOf(ref),
     pending: pendingDeep,
     version: 1,

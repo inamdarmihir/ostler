@@ -1,10 +1,13 @@
 [package]
 name = "ostler-cdp"
-description = "Ostler: cdp component"
+description = "Minimal Chrome DevTools Protocol client and Chrome launcher (internal crate of Ostler)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
 rust-version.workspace = true
 
 [lints]
@@ -17,6 +20,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "process", "io-util", "time", "sync", "fs"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "process", "io-util", "time", "sync", "fs", "net"] }
 tokio-tungstenite = "0.29.0"
 tracing = "0.1.44"
+
+[target.'cfg(unix)'.dependencies]
+command-fds = { version = "0.3.3", features = ["tokio"] }

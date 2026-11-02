@@ -1,0 +1,17 @@
+<!doctype html><meta charset=utf-8><title>Combobox diverge</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}[role=listbox]{list-style:none;margin:0;padding:0;border:1px solid #999}[role=option]{padding:.4rem}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Where are you based?</h1>
+<form id="f">
+  <label for="co" id="colabel">Country</label>
+  <input id="co" role="combobox" aria-autocomplete="list" aria-controls="lb" aria-expanded="false" autocomplete="off">
+  <ul id="lb" role="listbox" aria-labelledby="colabel" hidden></ul>
+  <button type="submit">Save</button>
+</form>
+<script>
+// Picking "United States" fills in a different, longer option: the page diverges from the request.
+const all=['United States','United States Minor Outlying Islands','Uruguay'];
+const inp=document.getElementById('co'),lb=document.getElementById('lb');
+function open(q){const m=all.filter(c=>c.toLowerCase().includes(q.toLowerCase()));lb.innerHTML=m.map(c=>'<li role="option">'+c+'</li>').join('');lb.hidden=!m.length;inp.setAttribute('aria-expanded',!lb.hidden)}
+inp.addEventListener('input',()=>open(inp.value));inp.addEventListener('focus',()=>open(inp.value));
+lb.addEventListener('mousedown',e=>{if(e.target.matches('[role=option]')){inp.value=e.target.textContent==='United States'?'United States Minor Outlying Islands':e.target.textContent;lb.hidden=true}});
+document.getElementById('f').addEventListener('submit',e=>e.preventDefault());
+</script>

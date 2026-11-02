@@ -58,6 +58,21 @@ fn score(key: &str, field: &Field) -> f32 {
     if !nl.is_empty() && nl == nk {
         return 0.9;
     }
+    // "email" vs "E-mail address": the key equals a run of the label's words written together.
+    let squashed_key: String = nk.split(' ').collect();
+    let words: Vec<&str> = nl.split(' ').filter(|w| !w.is_empty()).collect();
+    for i in 0..words.len() {
+        let mut run = String::new();
+        for w in &words[i..] {
+            run.push_str(w);
+            if run == squashed_key && run.len() > words[i].len() {
+                return 0.82;
+            }
+            if run.len() >= squashed_key.len() {
+                break;
+            }
+        }
+    }
     let kt = content_tokens(k);
     let lt = content_tokens(&field.label);
     if kt.is_empty() || lt.is_empty() {
@@ -183,6 +198,24 @@ mod tests {
             .iter()
             .map(|(k, v)| (k.to_string(), v.clone()))
             .collect()
+    }
+
+    #[test]
+    fn a_key_matches_a_hyphenated_label_and_stays_unambiguous() {
+        let fields = vec![
+            f("e1", "Name", Some("custname")),
+            f("e2", "E-mail address", Some("custemail")),
+        ];
+        let r = resolve_values(&fields, &vals(&[("email", json!("a@b.c"))]));
+        assert_eq!(r.matched.len(), 1, "{r:?}");
+        assert_eq!(r.matched[0].0, 1);
+        // Two equally plausible fields must not be guessed between.
+        let fields = vec![f("e1", "E-mail", None), f("e2", "Confirm e-mail", None)];
+        let r = resolve_values(&fields, &vals(&[("email", json!("a@b.c"))]));
+        assert!(r.matched.len() <= 1);
+        if let Some(m) = r.matched.first() {
+            assert_eq!(m.0, 0, "exact-ish field should win: {r:?}");
+        }
     }
 
     #[test]

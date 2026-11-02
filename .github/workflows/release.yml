@@ -1,0 +1,60 @@
+name: Release
+# Push a tag like v0.2.0 to build prebuilt binaries and attach them to a GitHub release.
+# The binaries are what site/install.sh, `cargo binstall ostler` and the npm wrapper download.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the crate version
+        run: |
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version $v"; exit 1; }
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,        target: aarch64-apple-darwin }
+          - { os: macos-13,        target: x86_64-apple-darwin }
+          # Built on an older glibc so the binary runs on current LTS distributions.
+          - { os: ubuntu-22.04,    target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { key: "${{ matrix.target }}" }
+      - run: cargo build --release --locked -p ostler
+      - name: Smoke test the binary
+        run: ./target/release/ostler --version
+      - name: Package
+        run: scripts/package.sh "${{ matrix.target }}" target/release/ostler dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ostler-${{ matrix.target }}
+          path: dist/*
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Combined checksums
+        run: cd dist && cat *.sha256 > SHA256SUMS
+      - name: Create the release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "Ostler ${GITHUB_REF_NAME}" \
+            --notes "Install: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."

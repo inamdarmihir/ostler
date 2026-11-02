@@ -93,6 +93,66 @@ impl Client {
     }
 }
 
+fn ref_of(text: &str, label: &str) -> String {
+    text.lines()
+        .find(|l| l.contains(label))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|s| s.split(']').next())
+        .unwrap_or_else(|| panic!("no ref for {label}: {text}"))
+        .to_string()
+}
+
+#[tokio::test]
+async fn navigation_and_click_honesty() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+
+    // A normal-looking page served as 404 says so.
+    let (err, t) = c.tool("navigate", json!({"url": srv.url("/missing")})).await;
+    assert!(!err, "{t}");
+    assert!(t.contains("Navigated (HTTP 404: page not found"), "{t}");
+
+    // An empty 403 fails the navigation; the number and meaning are in the error.
+    let (err, t) = c
+        .tool("navigate", json!({"url": srv.url("/forbidden")}))
+        .await;
+    assert!(err, "{t}");
+    assert!(
+        t.contains("HTTP 403") && t.contains("refusing automated access"),
+        "{t}"
+    );
+
+    // PDFs are labelled, whether Chrome renders or downloads them.
+    let (_, t) = c.tool("navigate", json!({"url": srv.url("/doc.pdf")})).await;
+    assert!(
+        t.contains("PDF/non-HTML document (content-type application/pdf)"),
+        "{t}"
+    );
+
+    // Redirect to a login page is flagged.
+    let (err, t) = c.tool("navigate", json!({"url": srv.url("/members")})).await;
+    assert!(!err, "{t}");
+    assert!(t.contains("Note: redirected to a sign-in page"), "{t}");
+
+    // A button that does nothing says so.
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/noop.html")}))
+        .await;
+    let r = ref_of(&nav, "Does nothing");
+    let (_, t) = c.tool("click", json!({"ref": r, "observe": "none"})).await;
+    assert!(t.contains("Result: no visible change"), "{t}");
+
+    // A target=_blank link reports the popup in the click result itself.
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/popup.html")}))
+        .await;
+    let r = ref_of(&nav, "Open the form in a new tab");
+    let (_, t) = c.tool("click", json!({"ref": r, "observe": "none"})).await;
+    assert!(t.contains("Result: a popup opened as tab t2"), "{t}");
+}
+
 #[tokio::test]
 async fn agent_session_with_memory() {
     let srv = FixtureServer::start();
@@ -190,6 +250,120 @@ async fn agent_session_with_memory() {
             && stats.contains("form_fill"),
         "{stats}"
     );
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}
+
+#[tokio::test]
+async fn what_was_learned_survives_a_site_redesign() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "ephemeral"]).await else {
+        return;
+    };
+    for (k, v) in [
+        ("email", "ada@example.com"),
+        ("company", "Analytical Engines"),
+    ] {
+        assert!(
+            !c.tool("memory_remember", json!({"key": k, "value": v}))
+                .await
+                .0
+        );
+    }
+
+    // v1 declares autocomplete tokens, so memory fills it with an exact signal and learns the mapping.
+    c.tool(
+        "navigate",
+        json!({"url": srv.url("/redesign_v1.html"), "observe": "none"}),
+    )
+    .await;
+    let (_, fill) = c.tool("form_fill", json!({"auto": "required"})).await;
+    assert!(
+        fill.contains("Filled 2/2") && fill.contains("via autocomplete"),
+        "{fill}"
+    );
+    let (_, sub) = c.tool("form_submit", json!({})).await;
+    assert!(sub.starts_with("Submitted"), "{sub}");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        c.tool(
+            "navigate",
+            json!({"url": srv.url("/redesign_v1.html"), "observe": "none"}),
+        )
+        .await;
+        let (_, insp) = c.tool("form_inspect", json!({})).await;
+        if insp.contains("filled successfully 1x") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "playbook never appeared: {insp}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // v2 is a different form: reordered, a new field, and no autocomplete tokens. The skill carries over.
+    srv.reset();
+    c.tool(
+        "navigate",
+        json!({"url": srv.url("/redesign_v2.html"), "observe": "none"}),
+    )
+    .await;
+    let (_, insp) = c.tool("form_inspect", json!({})).await;
+    assert!(
+        insp.contains("similar form on this site was learned") && insp.contains("2 field mappings"),
+        "{insp}"
+    );
+    let (err, fill) = c.tool("form_fill", json!({"auto": "required"})).await;
+    assert!(
+        !err && fill.contains("Filled 2/2") && fill.contains("via similar_form"),
+        "{fill}"
+    );
+    assert!(
+        !fill.contains("Promo code"),
+        "an optional field with no fact stays empty: {fill}"
+    );
+    let (_, sub) = c.tool("form_submit", json!({})).await;
+    assert!(sub.starts_with("Submitted"), "{sub}");
+    let got = srv.last().unwrap();
+    assert_eq!(
+        (
+            got["reach"].as_str(),
+            got["org"].as_str(),
+            got["promo"].as_str()
+        ),
+        (
+            Some("ada@example.com"),
+            Some("Analytical Engines"),
+            Some("")
+        )
+    );
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}
+
+#[tokio::test]
+async fn a_verification_wall_is_reported_and_the_agent_is_told_what_to_do() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&[]).await else {
+        return;
+    };
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/captcha_widget.html")}))
+        .await;
+    assert!(
+        nav.starts_with("CHALLENGE: reCAPTCHA challenge is on this page")
+            && nav.contains("does not solve or bypass")
+            && nav.contains("headless"),
+        "{nav}"
+    );
+    // Headless: waiting for a person who cannot see the window would only burn time, so say so at once.
+    let (err, wait) = c.tool("wait_for_human", json!({"timeout_s": 2})).await;
+    assert!(err && wait.contains("--headed"), "{wait}");
+    // An ordinary page carries no notice, and no challenge means nothing to wait for.
+    let (_, ok) = c
+        .tool("navigate", json!({"url": srv.url("/basic.html")}))
+        .await;
+    assert!(!ok.contains("CHALLENGE"), "{ok}");
+    let (err, none) = c.tool("wait_for_human", json!({})).await;
+    assert!(!err && none.contains("No verification challenge"), "{none}");
     drop(c.stdin);
     let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
 }
@@ -417,6 +591,79 @@ async fn tabs_share_cookies_and_context_and_popups_become_tabs() {
     }
     let (err, list) = c.tool("tabs", json!({"action": "list"})).await;
     assert!(!err && list.contains("about:blank"), "{list}");
+    drop(c.stdin);
+    let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
+}
+
+/// Text that is not inside an untrusted wrapper.
+fn outside_wrappers(text: &str) -> String {
+    let (open, close) = ("<page_content untrusted=\"true\">", "</page_content>");
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find(open) {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + open.len()..];
+        match after.find(close) {
+            Some(j) => rest = &after[j + close.len()..],
+            None => return out, // unterminated: everything after is inside
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+#[tokio::test]
+async fn page_text_never_reaches_a_trusted_line() {
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    let srv = FixtureServer::start();
+    // The page puts attacker text in its title, body, a label, an alert(), a validation message and a
+    // hidden element. Whatever tool the agent calls, that text may only appear inside the wrapper, and
+    // the wrapper may not be closed early from inside.
+    let mut outputs = vec![
+        c.tool("navigate", json!({"url": srv.url("/injection.html")}))
+            .await
+            .1,
+        c.tool("snapshot", json!({})).await.1,
+        c.tool("form_inspect", json!({})).await.1,
+        c.tool("look", json!({})).await.1,
+        c.tool("tabs", json!({"action": "list"})).await.1,
+        c.tool("form_fill", json!({"values": {"Name": "x"}}))
+            .await
+            .1,
+    ];
+    outputs.push(c.tool("form_submit", json!({})).await.1);
+    outputs.push(c.tool("click", json!({"ref": "e1"})).await.1);
+
+    let all = outputs.join("\n----\n");
+    for (i, text) in outputs.iter().enumerate() {
+        let opens = text.matches("<page_content").count();
+        let closes = text.matches("</page_content").count();
+        assert_eq!(
+            opens, closes,
+            "output {i} has unbalanced wrapper tags:\n{text}"
+        );
+        let outside = outside_wrappers(text);
+        assert!(
+            !outside.contains("ATTACK_") && !outside.contains("SYSTEM:"),
+            "output {i} has page text on a trusted line:\n{text}"
+        );
+    }
+    // Sanity: the attacker text did reach the agent, just quarantined (so the test is not vacuous)...
+    assert!(
+        all.contains("ATTACK_BODY") && all.contains("ATTACK_LABEL"),
+        "{all}"
+    );
+    assert!(
+        all.contains("ATTACK_TITLE") && all.contains("ATTACK_ALERT"),
+        "{all}"
+    );
+    // ...and the invisible text never did.
+    assert!(
+        !all.contains("ATTACK_HIDDEN"),
+        "hidden text reached the agent:\n{all}"
+    );
     drop(c.stdin);
     let _ = tokio::time::timeout(Duration::from_secs(10), c.child.wait()).await;
 }

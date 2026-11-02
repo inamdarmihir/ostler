@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Sign up</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}</style>
+<h1>Sign up</h1>
+<form action="/submit" method="post">
+  <label for="e">Email</label><input id="e" name="email" type="email">
+  <!-- A stand-in for a reCAPTCHA checkbox: same container class and size, no network access. -->
+  <div class="g-recaptcha" data-sitekey="test" style="width:304px;height:78px;border:1px solid #ccc;margin-top:1rem" id="cap">I'm not a robot</div>
+  <button type="submit">Create account</button>
+</form>
+<button type="button" id="solve" onclick="document.getElementById('cap').remove();this.remove()">Simulate the person solving it</button>

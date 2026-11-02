@@ -347,6 +347,28 @@ async fn inspect_then_fill_and_submit_with_input_required_and_confirmation() {
 }
 
 #[tokio::test]
+async fn a_verification_wall_comes_back_as_input_required() {
+    let Some((s, fx)) = start(|_| {}).await else {
+        return;
+    };
+    let r = s
+        .send(
+            data(json!({ "url": fx.url("/captcha_widget.html"), "values": {"Email": "ada@example.com"}, "submit": true })),
+            json!({}),
+        )
+        .await;
+    let task = &r["result"]["task"];
+    assert_eq!(task["status"]["state"], "TASK_STATE_INPUT_REQUIRED", "{r}");
+    let dump = task.to_string();
+    assert!(
+        dump.contains("does not solve or bypass") && dump.contains("reCAPTCHA"),
+        "{dump}"
+    );
+    // Nothing was typed or submitted behind the wall.
+    assert!(fx.submissions().is_empty());
+}
+
+#[tokio::test]
 async fn auto_submit_skips_the_confirmation_round() {
     let Some((s, fx)) = start(|c| c.auto_submit = true).await else {
         return;
@@ -439,6 +461,7 @@ async fn a_url_outside_the_allowlist_fails_the_task_not_the_server() {
             policy: Policy {
                 allowed_domains: vec!["example.org".into()],
                 allow_file: false,
+                ..Default::default()
             },
             profile: Profile::All,
             memory: None,

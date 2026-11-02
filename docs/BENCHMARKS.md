@@ -7,7 +7,7 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 
 ## What these benchmarks do and do not show
 
-- They run against the **local fixtures** in `fixtures/` (10 pages built to reproduce documented form-filling failure modes). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. A real-site evaluation is the next milestone ([roadmap](../README.md#roadmap)).
+- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (10 pages built to reproduce documented form-filling failure modes). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. A real-site evaluation is the next milestone ([roadmap](../README.md#roadmap)).
 - The "per-field" baseline is **our own engine driven the way snapshot-per-action tools are driven** (one call per field, each returning a full page snapshot). It isolates the effect of the interaction pattern. It is **not** a measurement of Playwright MCP, agent-browser or any other product. Tools that offer batched form fills would sit between the two columns.
 - LLM prices, LLM turn latency and cloud prices are **illustrative parameters** (flags on the harness). Token counts are `bytes / 4`, an estimate.
 
@@ -93,7 +93,7 @@ Real Qdrant server, multi-tenant (`tenant` keyword payload index with `is_tenant
 ## 5. Reproduce
 
 ```sh
-cargo build --release -p ostler-bench -p ostler-cli
+cargo build --release -p ostler-bench -p ostler
 ./target/release/ostler-bench --json out/forms.json forms --reps 3
 ./target/release/ostler-bench --json out/footprint.json footprint
 ./target/release/ostler-bench --json out/concurrency.json concurrency --sessions 1,2,4,8 --lean

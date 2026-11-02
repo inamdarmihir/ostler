@@ -7,7 +7,10 @@ version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/inamdarmihir/ostler"
-rust-version = "1.82"
+homepage = "https://inamdarmihir.github.io/ostler/"
+readme = "README.md"
+authors = ["Mihir Inamdar"]
+rust-version = "1.89"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

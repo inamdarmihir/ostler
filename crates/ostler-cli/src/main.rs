@@ -98,6 +98,10 @@ struct A2aArgs {
     /// Treat `submit: true` as already confirmed (skips the input-required confirmation step).
     #[arg(long)]
     a2a_auto_submit: bool,
+    /// Remote agents may reach loopback, private and cloud-metadata addresses when no --allow-domain is set.
+    /// Off by default in A2A mode: a remote agent should not be able to probe the machine's own network.
+    #[arg(long)]
+    allow_private_networks: bool,
 }
 
 async fn run_a2a(a: A2aArgs) -> Result<()> {
@@ -107,8 +111,13 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
     if s.profile_dir.is_some() {
         eprintln!("ostler: --profile-dir is ignored in A2A mode (each conversation needs its own browser profile).");
     }
+    let block_private = !a.allow_private_networks;
     if s.allow_domains.is_empty() {
-        eprintln!("ostler: warning: no --allow-domain set, so remote agents can send this browser to any website. Restrict it.");
+        if block_private {
+            eprintln!("ostler: warning: no --allow-domain set, so remote agents can send this browser to any public website (private and internal addresses are blocked). Restrict it.");
+        } else {
+            eprintln!("ostler: warning: no --allow-domain set and --allow-private-networks given, so remote agents can reach any website and this machine's own network. Restrict it.");
+        }
     }
     if let Some(m) = &memory {
         if let Err(e) = m.init().await {
@@ -121,6 +130,9 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
         Policy {
             allowed_domains: s.allow_domains.clone(),
             allow_file: s.allow_file,
+            upload_dirs: s.upload_dirs.clone(),
+            block_private_networks: block_private,
+            accept_dialogs: s.accept_dialogs,
         },
         s.learn,
         s.require_confirm_submit,
@@ -450,6 +462,16 @@ enum MemoryCmd {
     Forget {
         key: String,
     },
+    /// What Ostler has learned: per-form skills, with wins, losses and trusted field mappings.
+    Skills {
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Forget stale, unproven skills and old episodes (not verified for this many days).
+    Prune {
+        #[arg(long, default_value_t = 90)]
+        days: u64,
+    },
     /// Delete everything saved for this tenant.
     Wipe {
         #[arg(long)]
@@ -519,11 +541,20 @@ struct ServeArgs {
     /// Persistent Chrome profile (keeps logins). Default is a throwaway profile.
     #[arg(long)]
     profile_dir: Option<PathBuf>,
-    /// Only allow these domains (and subdomains). Repeatable.
+    /// Only allow these domains (and subdomains), optionally pinned to a port (example.com:8443). Repeatable.
     #[arg(long = "allow-domain")]
     allow_domains: Vec<String>,
     #[arg(long)]
     allow_file: bool,
+    /// Directory file fields may be filled from. Repeatable. Without one, uploads are refused.
+    #[arg(long = "upload-dir")]
+    upload_dirs: Vec<PathBuf>,
+    /// With no --allow-domain, refuse loopback, private, link-local (cloud metadata) and internal hosts.
+    #[arg(long)]
+    block_private_networks: bool,
+    /// Answer the page's confirm() and prompt() dialogs with OK. By default they are dismissed.
+    #[arg(long)]
+    accept_dialogs: bool,
     /// Require confirm=true on form_submit so a human can approve irreversible actions.
     #[arg(long)]
     require_confirm_submit: bool,
@@ -597,6 +628,9 @@ async fn main() -> Result<()> {
                 policy: Policy {
                     allowed_domains: a.allow_domains,
                     allow_file: a.allow_file,
+                    upload_dirs: a.upload_dirs,
+                    block_private_networks: a.block_private_networks,
+                    accept_dialogs: a.accept_dialogs,
                 },
                 profile,
                 memory,
@@ -671,6 +705,51 @@ async fn main() -> Result<()> {
                         "no such fact"
                     }
                 ),
+                MemoryCmd::Skills { limit } => {
+                    let skills = m.skills(limit).await?;
+                    if skills.is_empty() {
+                        println!("Nothing learned yet. Skills appear after a form you filled is accepted.");
+                    }
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    for p in skills {
+                        let age_days = now.saturating_sub(p.verified_ts) / 86_400;
+                        let mapped: Vec<String> = p
+                            .fields
+                            .iter()
+                            .filter(|f| f.trusted())
+                            .map(|f| {
+                                format!("{} <- {}", f.label, f.profile_key.as_deref().unwrap_or(""))
+                            })
+                            .collect();
+                        println!(
+                            "{} [{}]  {} won / {} lost ({:.0}%), verified {}{}",
+                            p.host,
+                            &p.fingerprint[..p.fingerprint.len().min(8)],
+                            p.wins.max(p.uses),
+                            p.losses,
+                            p.win_rate() * 100.0,
+                            if p.verified_ts == 0 {
+                                "never".to_string()
+                            } else {
+                                format!("{age_days}d ago")
+                            },
+                            p.learned_from
+                                .as_deref()
+                                .map(|f| format!(", learned from [{}]", &f[..f.len().min(8)]))
+                                .unwrap_or_default()
+                        );
+                        for m in mapped {
+                            println!("    {m}");
+                        }
+                    }
+                }
+                MemoryCmd::Prune { days } => {
+                    let n = m.prune(days * 86_400).await?;
+                    println!("pruned {n} stale records");
+                }
                 MemoryCmd::Wipe { yes } => {
                     if !yes {
                         bail!(
@@ -732,11 +811,21 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
             Err(e) => {
                 ok = false;
                 println!("Memory: FAILED: {e}");
+                let msg = e.to_string();
+                if msg.contains("error sending request") || msg.contains("connect") {
+                    println!("  fix: Qdrant is not reachable. Check the URL with `ostler config show`, or start a local one: docker run -p 6333:6333 qdrant/qdrant");
+                } else if msg.contains("401") || msg.contains("403") {
+                    println!("  fix: Qdrant rejected the API key. Re-run `ostler init`, or `ostler config set qdrant_api_key <key>`.");
+                } else if msg.contains("-dim vectors") {
+                    println!("  fix: this collection was created with a different embedding model; use the same `--embedding-model`, or a different tenant/cluster.");
+                }
             }
         },
     }
-    println!("\nNext: `ostler setup claude|codex|cursor|vscode|json` prints the exact config for your client.");
-    if !ok {
+    if ok {
+        println!("\nAll good. Next: `ostler setup claude --apply` (or codex | cursor | vscode | json) to connect your agent.\nAfter rebuilding ostler, reconnect your MCP client (Claude Code: /mcp) to pick up the new binary.");
+    } else {
+        println!("\nFix the items above and run `ostler doctor` again. Chrome is required; memory is optional (unset QDRANT_URL to run without it).");
         std::process::exit(1);
     }
     Ok(())

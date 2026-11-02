@@ -27,6 +27,14 @@ pub enum BrowserError {
     Other(String),
 }
 
+/// A human-verification wall on the current page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Challenge {
+    pub vendor: String,
+    /// True when the challenge replaced the page ("Just a moment..."), false for an embedded widget.
+    pub interstitial: bool,
+}
+
 pub type Result<T> = std::result::Result<T, BrowserError>;
 
 #[derive(Default)]
@@ -36,24 +44,30 @@ struct Shared {
     committed: AtomicU64,
     same_doc: AtomicU64,
     loaded: AtomicU64,
+    /// Count of `settle` calls that hit their time limit with work still pending.
+    unsettled: AtomicU64,
     dialogs: Mutex<Vec<String>>,
     /// `--require-confirm-submit`: block every non-GET request unless a confirmed `form_submit` is running.
     gate: AtomicBool,
     armed: AtomicBool,
     blocked: Mutex<Vec<String>>,
+    /// Latest main-frame document response (status, content type): redirects overwrite, so the final one wins.
+    doc: Mutex<Option<(u16, String)>>,
 }
 
 #[derive(Default)]
-struct PageState {
+pub(crate) struct PageState {
     prev_lines: Vec<String>,
     prev_url: String,
+    /// Fields filled and verified since the last submit: (ref, label, value). Re-read before submitting.
+    pub(crate) filled: Vec<(String, String, String)>,
 }
 
 #[derive(Clone)]
 pub struct Page {
     pub(crate) session: Session,
     shared: Arc<Shared>,
-    state: Arc<Mutex<PageState>>,
+    pub(crate) state: Arc<Mutex<PageState>>,
     pub(crate) policy: Arc<Policy>,
 }
 
@@ -98,6 +112,72 @@ pub struct ActionOutcome {
     pub title: String,
     pub warnings: Vec<String>,
     pub dialogs: Vec<String>,
+    /// HTTP status of the main document when this action loaded one.
+    pub status: Option<u16>,
+    /// Plain observations (not problems), e.g. "redirected to a sign-in page".
+    pub notes: Vec<String>,
+    /// False when the page's markup was identical before and after a click.
+    pub changed: bool,
+}
+
+/// Turn a failed `Page.navigate` into something an agent can act on.
+pub fn explain_nav_error(err: &str, url: &str, status: Option<u16>, ctype: Option<&str>) -> String {
+    let mut s = format!("{err} ({url})");
+    if let Some(st) = status {
+        let why = match st {
+            401 | 403 => "the site is refusing automated access",
+            429 => "rate limited (too many requests); wait before retrying or use another source",
+            404 | 410 => "page not found",
+            500..=599 => "server error; try again later or use another source",
+            _ => "",
+        };
+        let why = if why.is_empty() {
+            String::new()
+        } else {
+            format!(": {why}")
+        };
+        s = format!("HTTP {st}{why} - {s}");
+    } else {
+        let hint = friendly_net_error(err, url);
+        if !hint.is_empty() {
+            s = format!("{hint} [{err}] ({url})");
+        }
+    }
+    if let Some(ct) = ctype.filter(|c| is_unreadable_type(c)) {
+        s.push_str(&format!(". {}", non_html_note(ct)));
+    }
+    s
+}
+
+fn is_unreadable_type(ct: &str) -> bool {
+    let ct = ct.to_lowercase();
+    !(ct.is_empty()
+        || ct.contains("html")
+        || ct.contains("xml")
+        || ct.starts_with("text/")
+        || ct.contains("json"))
+}
+
+fn non_html_note(ct: &str) -> String {
+    let kind = if ct.to_lowercase().contains("pdf") {
+        "PDF/non-HTML document"
+    } else {
+        "Binary or non-HTML file"
+    };
+    format!("{kind} (content-type {ct}); Ostler cannot read it, fetch it another way")
+}
+
+fn looks_like_login(url: &str, title: &str) -> bool {
+    let path = url::Url::parse(url)
+        .map(|u| u.path().to_lowercase())
+        .unwrap_or_default();
+    let t = title.to_lowercase();
+    [
+        "authwall", "login", "signin", "sign-in", "sign_in", "log-in",
+    ]
+    .iter()
+    .any(|k| path.contains(k))
+        || ["sign in", "log in", "login"].iter().any(|k| t.contains(k))
 }
 
 const CONTEXT_GONE: [&str; 4] = [
@@ -143,6 +223,8 @@ impl Page {
         // forbidden origin (cookies and body included) before any after-the-fact check could notice.
         page.sync_fetch().await?;
 
+        // Main-document HTTP status comes from the network layer; the page itself never shows it.
+        s.call("Network.enable", json!({})).await?;
         let mut events = s.events();
         let shared = page.shared.clone();
         let sess = s.clone();
@@ -162,6 +244,15 @@ impl Page {
                     "Page.navigatedWithinDocument" if is_main(ev.params["frameId"].as_str()) => {
                         shared.same_doc.fetch_add(1, Ordering::SeqCst);
                     }
+                    "Network.responseReceived"
+                        if ev.params["type"].as_str() == Some("Document")
+                            && is_main(ev.params["frameId"].as_str()) =>
+                    {
+                        let r = &ev.params["response"];
+                        let status = r["status"].as_u64().unwrap_or(0) as u16;
+                        let mime = r["mimeType"].as_str().unwrap_or("").to_string();
+                        *shared.doc.lock().unwrap() = Some((status, mime));
+                    }
                     "Fetch.requestPaused" => {
                         let id = ev.params["requestId"].clone();
                         let url = ev.params["request"]["url"]
@@ -173,22 +264,23 @@ impl Page {
                             .unwrap_or("GET")
                             .to_uppercase();
                         let is_doc = ev.params["resourceType"].as_str() == Some("Document");
-                        let mut verdict = fetch_policy.check(&url);
-                        if verdict.is_ok()
-                            && shared.gate.load(Ordering::SeqCst)
-                            && !shared.armed.load(Ordering::SeqCst)
-                            && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
-                        {
-                            shared
-                                .blocked
-                                .lock()
-                                .unwrap()
-                                .push(format!("{method} {url}"));
-                            verdict = Err("blocked by --require-confirm-submit".into());
-                        }
-                        let sess = sess.clone();
-                        // Separate task: never let a slow reply stall the event loop.
+                        let (policy, shared, sess) =
+                            (fetch_policy.clone(), shared.clone(), sess.clone());
+                        // Separate task: never let a slow reply (or a DNS lookup) stall the event loop.
                         tokio::spawn(async move {
+                            let mut verdict = policy.check_resolved(&url).await;
+                            if verdict.is_ok()
+                                && shared.gate.load(Ordering::SeqCst)
+                                && !shared.armed.load(Ordering::SeqCst)
+                                && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
+                            {
+                                shared
+                                    .blocked
+                                    .lock()
+                                    .unwrap()
+                                    .push(format!("{method} {url}"));
+                                verdict = Err("blocked by --require-confirm-submit".into());
+                            }
                             let _ = match (verdict, is_doc) {
                                 (Ok(()), _) => {
                                     sess.call("Fetch.continueRequest", json!({ "requestId": id }))
@@ -224,16 +316,20 @@ impl Page {
                     "Page.javascriptDialogOpening" => {
                         let kind = ev.params["type"].as_str().unwrap_or("dialog");
                         let msg = ev.params["message"].as_str().unwrap_or("");
-                        shared
-                            .dialogs
-                            .lock()
-                            .unwrap()
-                            .push(format!("{kind}: {msg}"));
+                        // alert and beforeunload ask for nothing. confirm and prompt ask for a decision the
+                        // page is about to act on ("Delete everything?"), so a browser nobody is watching
+                        // says no unless it was told otherwise.
+                        let accept =
+                            matches!(kind, "alert" | "beforeunload") || fetch_policy.accept_dialogs;
+                        shared.dialogs.lock().unwrap().push(format!(
+                            "{} {kind}: {msg}",
+                            if accept { "accepted" } else { "dismissed" }
+                        ));
                         let default = ev.params["defaultPrompt"].as_str().unwrap_or("");
                         let _ = sess
                             .call(
                                 "Page.handleJavaScriptDialog",
-                                json!({ "accept": true, "promptText": default }),
+                                json!({ "accept": accept, "promptText": default }),
                             )
                             .await;
                     }
@@ -247,9 +343,23 @@ impl Page {
     // ------------------------------------------------------------------ evaluation
 
     /// Evaluate an expression in the page, retrying across navigations.
+    ///
+    /// Only for expressions that are safe to run twice (reads). When the page is replaced mid-call
+    /// the whole expression is run again on the new page, so anything with side effects must use
+    /// [`Page::eval_once`].
     pub async fn eval(&self, expression: &str) -> Result<Value> {
+        self.eval_attempts(expression, 8).await
+    }
+
+    /// Evaluate at most once. If the page is replaced while the script runs, the script may or may not
+    /// have finished, so report that instead of replaying it on whatever page came next.
+    pub async fn eval_once(&self, expression: &str) -> Result<Value> {
+        self.eval_attempts(expression, 1).await
+    }
+
+    async fn eval_attempts(&self, expression: &str, attempts: u32) -> Result<Value> {
         let mut last = String::new();
-        for attempt in 0..8 {
+        for attempt in 0..attempts {
             if attempt > 0 {
                 sleep(Duration::from_millis(60)).await;
             }
@@ -292,24 +402,55 @@ impl Page {
                     .unwrap_or("")
                     .trim_start_matches("Error: ")
                     .to_string();
+                if first.starts_with("unknown ref") {
+                    return Err(BrowserError::Other(first));
+                }
                 return Err(BrowserError::Js(first));
             }
             return Ok(res["result"].get("value").cloned().unwrap_or(Value::Null));
         }
+        if attempts == 1 {
+            return Err(BrowserError::Navigation(format!(
+                "the page changed while the action was running ({last}); it may or may not have completed"
+            )));
+        }
         Err(BrowserError::Js(format!("page kept navigating: {last}")))
     }
 
-    /// Call a function on the injected runtime: `__wm.name(args...)`.
-    pub async fn rt(&self, name: &str, args: &[Value]) -> Result<Value> {
+    fn rt_expr(name: &str, args: &[Value]) -> String {
         let argv = args
             .iter()
             .map(Value::to_string)
             .collect::<Vec<_>>()
             .join(",");
-        let expr = format!(
+        format!(
             "(typeof __wm==='undefined'?(()=>{{throw new Error('page runtime unavailable on this page')}})():__wm.{name}({argv}))"
-        );
-        self.eval(&expr).await
+        )
+    }
+
+    /// Call a read-only function on the injected runtime: `__wm.name(args...)`. Retried across navigations.
+    pub async fn rt(&self, name: &str, args: &[Value]) -> Result<Value> {
+        self.eval(&Self::rt_expr(name, args)).await
+    }
+
+    /// A human-verification wall (CAPTCHA widget or "verify you are human" interstitial) that blocks
+    /// this page right now. Ostler reports these; it never tries to solve or evade them.
+    pub async fn challenge(&self) -> Result<Option<Challenge>> {
+        let v = self.rt("challenge", &[]).await?;
+        Ok(v.as_object().map(|o| Challenge {
+            vendor: o
+                .get("vendor")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            interstitial: matches!(o.get("kind").and_then(Value::as_str), Some("interstitial" | "block")),
+        }))
+    }
+
+    /// Call a runtime function that changes the page (click, write, pick). Never retried: refs are
+    /// per-document, so a replay after a navigation would act on a different element or fail confusingly.
+    pub async fn rt_effect(&self, name: &str, args: &[Value]) -> Result<Value> {
+        self.eval_once(&Self::rt_expr(name, args)).await
     }
 
     /// Skip downloading images, video, audio and fonts. Forms rarely need them and they dominate bytes on real sites.
@@ -346,14 +487,27 @@ impl Page {
     // ------------------------------------------------------------------ navigation
 
     pub async fn navigate(&self, url: &str) -> Result<ActionOutcome> {
-        self.policy.check(url).map_err(BrowserError::Policy)?;
+        self.policy
+            .check_resolved(url)
+            .await
+            .map_err(BrowserError::Policy)?;
         let loaded_before = self.shared.loaded.load(Ordering::SeqCst);
+        *self.shared.doc.lock().unwrap() = None;
         let res = self
             .session
             .call("Page.navigate", json!({ "url": url }))
             .await?;
         if let Some(err) = res["errorText"].as_str() {
-            return Err(BrowserError::Navigation(format!("{err} ({url})")));
+            // The response event can trail the navigate reply by a few ms.
+            sleep(Duration::from_millis(150)).await;
+            let doc = self.shared.doc.lock().unwrap().clone();
+            let status = doc.as_ref().map(|d| d.0).filter(|s| *s > 0);
+            return Err(BrowserError::Navigation(explain_nav_error(
+                err,
+                url,
+                status,
+                doc.as_ref().map(|d| d.1.as_str()),
+            )));
         }
         // Same-document navigations (hash changes) never fire a load event.
         if res.get("loaderId").is_some() {
@@ -361,7 +515,21 @@ impl Page {
                 .await;
         }
         self.settle(3000, 150).await;
-        self.finish_outcome(true, vec![]).await
+        let mut out = self.finish_outcome(true, vec![]).await?;
+        let strip = |u: &str| {
+            u.split('#')
+                .next()
+                .unwrap_or("")
+                .trim_end_matches('/')
+                .to_string()
+        };
+        if strip(&out.url) != strip(url)
+            && !looks_like_login(url, "")
+            && looks_like_login(&out.url, &out.title)
+        {
+            out.notes.push("redirected to a sign-in page".into());
+        }
+        Ok(out)
     }
 
     async fn wait_loaded(&self, loaded_before: u64, timeout: Duration) -> bool {
@@ -376,9 +544,19 @@ impl Page {
     }
 
     pub async fn settle(&self, max_ms: u64, quiet_ms: u64) -> Value {
-        self.rt("settle", &[json!(max_ms), json!(quiet_ms)])
+        let v = self
+            .rt("settle", &[json!(max_ms), json!(quiet_ms)])
             .await
-            .unwrap_or(Value::Null)
+            .unwrap_or(Value::Null);
+        if v.get("settled").and_then(Value::as_bool) == Some(false) {
+            self.shared.unsettled.fetch_add(1, Ordering::SeqCst);
+        }
+        v
+    }
+
+    /// Number of timed-out settles so far; fill_form diffs this to report unstable pages.
+    pub(crate) fn unsettled_count(&self) -> u64 {
+        self.shared.unsettled.load(Ordering::SeqCst)
     }
 
     /// Run `action`, then wait for whatever it caused (navigation or in-page updates) to finish.
@@ -391,6 +569,7 @@ impl Page {
         let committed = self.shared.committed.load(Ordering::SeqCst);
         let same_doc = self.shared.same_doc.load(Ordering::SeqCst);
         let loaded = self.shared.loaded.load(Ordering::SeqCst);
+        *self.shared.doc.lock().unwrap() = None;
         let value = action().await?;
         // Give a navigation a moment to begin; most start within a frame or two.
         let probe = Instant::now() + Duration::from_millis(180);
@@ -423,7 +602,7 @@ impl Page {
             url: String::new(),
             title: String::new(),
         });
-        if let Err(msg) = self.policy.check(&info.url) {
+        if let Err(msg) = self.policy.check_resolved(&info.url).await {
             // A redirect or link led somewhere forbidden: leave immediately.
             let _ = self
                 .session
@@ -441,7 +620,16 @@ impl Page {
         }
         let dialogs = self.take_dialogs();
         if !dialogs.is_empty() {
-            warnings.push("JavaScript dialogs were auto-accepted".into());
+            warnings.push("JavaScript dialogs appeared (confirm and prompt are dismissed unless --accept-dialogs)".into());
+        }
+        let doc = if navigated {
+            self.shared.doc.lock().unwrap().clone()
+        } else {
+            None
+        };
+        let mut notes = vec![];
+        if let Some((_, ct)) = doc.as_ref().filter(|d| is_unreadable_type(&d.1)) {
+            notes.push(non_html_note(ct));
         }
         Ok(ActionOutcome {
             navigated,
@@ -449,13 +637,46 @@ impl Page {
             title: info.title,
             warnings,
             dialogs,
+            status: doc.map(|d| d.0).filter(|s| *s > 0),
+            notes,
+            changed: true,
         })
     }
 
     pub async fn back(&self) -> Result<ActionOutcome> {
-        let (_, out) = self
+        // Nothing to go back to when the previous history entry is the tab's initial blank page.
+        if let Ok(h) = self.session.call("Page.getNavigationHistory", json!({})).await {
+            let idx = h["currentIndex"].as_i64().unwrap_or(0);
+            let prev = if idx > 0 {
+                h["entries"][(idx - 1) as usize]["url"].as_str().unwrap_or("")
+            } else {
+                ""
+            };
+            if idx <= 0 || prev == "about:blank" || prev.is_empty() {
+                let cur = h["entries"][idx.max(0) as usize].clone();
+                return Ok(ActionOutcome {
+                    url: cur["url"].as_str().unwrap_or("").to_string(),
+                    title: cur["title"].as_str().unwrap_or("").to_string(),
+                    notes: vec!["Still on the same page: this tab has no earlier page in its history (a tab opened by a popup or by tabs new starts empty; use tabs to switch to the original one)".into()],
+                    changed: false,
+                    ..Default::default()
+                });
+            }
+        }
+        let before = self
+            .eval("location.href")
+            .await
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        let (_, mut out) = self
             .after(|| async { self.eval("history.back()").await })
             .await?;
+        if out.url == before {
+            out.notes
+                .push("Still on the same page: this tab has no earlier page in its history (a tab opened by a popup starts empty; use tabs to switch to the original one)".into());
+            out.changed = false;
+        }
         Ok(out)
     }
 
@@ -463,7 +684,17 @@ impl Page {
 
     /// Network interception is on whenever there is something to enforce: an allowlist or the submit gate.
     async fn sync_fetch(&self) -> Result<()> {
-        if self.policy.restricts() || self.shared.gate.load(Ordering::SeqCst) {
+        if self.policy.restricts() {
+            // An allowlist must see every request, whatever its type: an <img src>, a stylesheet or a font
+            // carries data out exactly as well as fetch() does.
+            self.session
+                .call(
+                    "Fetch.enable",
+                    json!({ "patterns": [{ "urlPattern": "*", "requestStage": "Request" }] }),
+                )
+                .await?;
+        } else if self.shared.gate.load(Ordering::SeqCst) {
+            // The submit gate only cares about requests that can have a body.
             let patterns: Vec<Value> = ["Document", "XHR", "Fetch", "Ping", "EventSource", "Other"]
                 .iter()
                 .map(|t| json!({ "urlPattern": "*", "resourceType": t, "requestStage": "Request" }))
@@ -489,7 +720,7 @@ impl Page {
     /// somewhere forbidden between tool calls).
     pub async fn guard(&self) -> Result<()> {
         let info = self.info().await?;
-        if let Err(msg) = self.policy.check(&info.url) {
+        if let Err(msg) = self.policy.check_resolved(&info.url).await {
             let _ = self
                 .session
                 .call("Page.navigate", json!({ "url": "about:blank" }))
@@ -502,10 +733,17 @@ impl Page {
         Ok(())
     }
 
+    /// True when `url` is the page the last snapshot described (ignoring query and hash), so a delta is meaningful.
+    pub fn baseline_matches(&self, url: &str) -> bool {
+        let st = self.state.lock().unwrap();
+        !st.prev_lines.is_empty() && page_key(&st.prev_url) == page_key(url)
+    }
+
     pub async fn snapshot(&self, opts: SnapshotOpts) -> Result<SnapshotOut> {
         self.guard().await?;
         let o = json!({
             "interactiveOnly": opts.mode == SnapshotMode::Interactive,
+            "collapseFooter": opts.mode != SnapshotMode::Full,
             "ref": opts.scope,
             "maxChars": opts.max_chars.unwrap_or(20000),
         });
@@ -522,10 +760,28 @@ impl Page {
         let title = v["title"].as_str().unwrap_or("").to_string();
         let truncated = v["truncated"].as_bool().unwrap_or(false);
 
+        // Interactive views leave out text, so a later delta (which includes text) would have nothing to
+        // compare with and print the whole page. Record the text-inclusive baseline silently.
+        let baseline: Option<Vec<String>> = if opts.mode == SnapshotMode::Interactive && opts.scope.is_none() {
+            let o2 = json!({ "interactiveOnly": false, "collapseFooter": true, "maxChars": 20000 });
+            self.rt("snapshot", &[o2]).await.ok().map(|v2| {
+                v2["lines"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|l| l.as_str().map(String::from)).collect())
+                    .unwrap_or_default()
+            })
+        } else {
+            None
+        };
         let mut st = self.state.lock().unwrap();
-        let same_page = st.prev_url == url && opts.scope.is_none();
+        // Delta also applies across URLs of the same page (query/hash differ, e.g. search results).
+        let same_page = page_key(&st.prev_url) == page_key(&url) && opts.scope.is_none();
         let body = if opts.mode == SnapshotMode::Delta && same_page && !st.prev_lines.is_empty() {
             let (added, removed, unchanged) = diff_lines(&st.prev_lines, &lines);
+            // Separators such as `text "|"` churn without meaning; never report them as changes.
+            let meaningful = |l: &String| l.chars().any(|c| c.is_alphanumeric());
+            let added: Vec<String> = added.into_iter().filter(meaningful).collect();
+            let removed: Vec<String> = removed.into_iter().filter(meaningful).collect();
             let mut s = format!("(delta: {unchanged} unchanged lines omitted)\n");
             if added.is_empty() && removed.is_empty() {
                 s.push_str("no changes\n");
@@ -552,6 +808,9 @@ impl Page {
         if opts.scope.is_none() && opts.mode != SnapshotMode::Interactive {
             st.prev_lines = lines.clone();
             st.prev_url = url.clone();
+        } else if let Some(b) = baseline {
+            st.prev_lines = b;
+            st.prev_url = url.clone();
         }
         Ok(SnapshotOut {
             url,
@@ -564,7 +823,18 @@ impl Page {
 
     // ------------------------------------------------------------------ input
 
+    /// Cheap fingerprint of the page's markup, to tell a click that did nothing from one that updated the page.
+    async fn page_sig(&self) -> Option<String> {
+        self.eval(
+            "(()=>{const h=document.documentElement.outerHTML;let x=0;for(let i=0;i<h.length;i++)x=(x*31+h.charCodeAt(i))|0;return location.href+'|'+h.length+'|'+x})()",
+        )
+        .await
+        .ok()
+        .and_then(|v| v.as_str().map(String::from))
+    }
+
     pub async fn click(&self, r: &str) -> Result<ActionOutcome> {
+        let before = self.page_sig().await;
         let (warn, mut out) = self
             .after(|| async {
                 let info = self.rt("clickInfo", &[json!(r)]).await?;
@@ -579,7 +849,11 @@ impl Page {
                             info["covered_by"].as_str().unwrap_or("another element")
                         ));
                     }
-                    self.rt("jsClick", &[json!(r)]).await?;
+                    match self.rt_effect("jsClick", &[json!(r)]).await {
+                        // The click replaced the page it was running in: that is the click working.
+                        Ok(_) | Err(BrowserError::Navigation(_)) => {}
+                        Err(e) => return Err(e),
+                    }
                 } else {
                     self.mouse_click(info["x"].as_f64().unwrap_or(0.0), info["y"].as_f64().unwrap_or(0.0)).await?;
                 }
@@ -588,6 +862,11 @@ impl Page {
             .await?;
         if let Some(w) = warn {
             out.warnings.push(w);
+        }
+        if !out.navigated {
+            if let (Some(b), Some(a)) = (before, self.page_sig().await) {
+                out.changed = b != a;
+            }
         }
         Ok(out)
     }
@@ -622,7 +901,7 @@ impl Page {
             return Err(BrowserError::Other(format!("{r} is read-only")));
         }
         if text.is_empty() {
-            self.rt("setNative", &[json!(r), json!("")]).await?;
+            self.rt_effect("setNative", &[json!(r), json!("")]).await?;
         } else {
             self.session
                 .call("Input.insertText", json!({ "text": text }))
@@ -638,7 +917,7 @@ impl Page {
                 if submit {
                     self.press_raw("Enter").await?;
                 } else {
-                    self.rt("finish", &[json!(r)]).await?;
+                    self.rt_effect("finish", &[json!(r)]).await?;
                 }
                 Ok(())
             })
@@ -713,10 +992,11 @@ impl Page {
     }
 
     pub async fn upload(&self, r: &str, paths: &[String]) -> Result<()> {
+        // Only files inside a configured --upload-dir, and the browser gets the resolved path, so a symlink
+        // swapped in afterwards cannot redirect it.
+        let mut real = Vec::with_capacity(paths.len());
         for p in paths {
-            if !std::path::Path::new(p).is_file() {
-                return Err(BrowserError::Other(format!("file not found: {p}")));
-            }
+            real.push(self.policy.check_upload(p).map_err(BrowserError::Policy)?);
         }
         let obj = self
             .session
@@ -731,7 +1011,7 @@ impl Page {
         self.session
             .call(
                 "DOM.setFileInputFiles",
-                json!({ "files": paths, "objectId": object_id }),
+                json!({ "files": real, "objectId": object_id }),
             )
             .await?;
         Ok(())
@@ -799,6 +1079,10 @@ impl Page {
         jpeg: bool,
     ) -> Result<Vec<u8>> {
         self.guard().await?;
+        // A capture needs a rendered frame, and Chrome does not produce one for a tab that is not in front
+        // (a popup opened by the page, or another tab the agent switched from, takes the front). Without
+        // this a full-page capture of a tall page waits out the 30 s timeout.
+        let _ = self.session.call("Page.bringToFront", json!({})).await;
         let mut params = json!({ "format": if jpeg { "jpeg" } else { "png" } });
         if jpeg {
             params["quality"] = json!(70);
@@ -857,16 +1141,40 @@ impl Page {
 }
 
 /// Multiset line diff: (added, removed, unchanged count).
+/// URL without query and fragment.
+fn page_key(url: &str) -> &str {
+    url.split(['?', '#']).next().unwrap_or(url)
+}
+
+/// Line identity for diffing: ref numbers are dropped so renumbering is not a change.
+fn line_key(l: &str) -> String {
+    let mut out = String::with_capacity(l.len());
+    let mut rest = l;
+    while let Some(i) = rest.find(" [e") {
+        let tail = &rest[i + 3..];
+        let n = tail.bytes().take_while(u8::is_ascii_digit).count();
+        if n > 0 && tail[n..].starts_with(']') {
+            out.push_str(&rest[..i]);
+            rest = &tail[n + 1..];
+        } else {
+            out.push_str(&rest[..i + 3]);
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn diff_lines(prev: &[String], next: &[String]) -> (Vec<String>, Vec<String>, usize) {
     use std::collections::HashMap;
-    let mut counts: HashMap<&str, i64> = HashMap::new();
+    let mut counts: HashMap<String, i64> = HashMap::new();
     for l in prev {
-        *counts.entry(l.as_str()).or_default() += 1;
+        *counts.entry(line_key(l)).or_default() += 1;
     }
     let mut added = vec![];
     let mut unchanged = 0;
     for l in next {
-        match counts.get_mut(l.as_str()) {
+        match counts.get_mut(&line_key(l)) {
             Some(c) if *c > 0 => {
                 *c -= 1;
                 unchanged += 1;
@@ -876,7 +1184,7 @@ fn diff_lines(prev: &[String], next: &[String]) -> (Vec<String>, Vec<String>, us
     }
     let mut removed = vec![];
     for l in prev {
-        if let Some(c) = counts.get_mut(l.as_str()) {
+        if let Some(c) = counts.get_mut(&line_key(l)) {
             if *c > 0 {
                 *c -= 1;
                 removed.push(l.clone());
@@ -909,4 +1217,37 @@ mod tests {
         assert_eq!(removed, vec!["x"]);
         assert_eq!(same, 1);
     }
+}
+
+/// Turn a raw Chromium `net::ERR_*` code into something an agent can act on.
+fn friendly_net_error(err: &str, url: &str) -> String {
+    let host = url
+        .split("://")
+        .nth(1)
+        .and_then(|r| r.split(['/', '?', '#']).next())
+        .unwrap_or(url);
+    let hint = match err.trim_start_matches("net::") {
+        "ERR_NAME_NOT_RESOLVED" => format!(
+            "{host} does not resolve: the domain is misspelled, does not exist, or DNS is unreachable. Check the spelling or search for the site instead"
+        ),
+        e if e.starts_with("ERR_CERT_") || e.starts_with("ERR_SSL_") => format!(
+            "{host} has a certificate/TLS problem (expired, self-signed, wrong host or untrusted). Ostler does not click through certificate warnings; tell the user or use a different source"
+        ),
+        "ERR_HTTP_RESPONSE_CODE_FAILURE" => format!(
+            "{host} answered with an HTTP error status (4xx/5xx) and no page body. Often the page does not exist (404) or the site is refusing automated browsers (403/429). Try the site's homepage or another source"
+        ),
+        "ERR_ABORTED" => format!(
+            "navigation to {host} was aborted. This is what a file download looks like (Ostler does not save downloads), or the page replaced itself with another navigation. Try snapshot to see where the tab is now"
+        ),
+        "ERR_CONNECTION_REFUSED" => format!("{host} refused the connection: nothing is listening there or the port is wrong"),
+        "ERR_CONNECTION_TIMED_OUT" | "ERR_TIMED_OUT" => format!("{host} did not answer in time: it is down, slow, or blocking this network"),
+        "ERR_CONNECTION_RESET" | "ERR_CONNECTION_CLOSED" | "ERR_EMPTY_RESPONSE" => format!(
+            "{host} closed the connection without answering. Sites that block bots often do this; try another source"
+        ),
+        "ERR_TOO_MANY_REDIRECTS" => format!("{host} redirects in a loop. Cookies may be blocked, or the site rejects this browser"),
+        "ERR_BLOCKED_BY_CLIENT" | "ERR_BLOCKED_BY_RESPONSE" => format!("{host} was blocked (by policy or by the site's response headers)"),
+        "ERR_INTERNET_DISCONNECTED" | "ERR_NETWORK_CHANGED" => "no network connection".to_string(),
+        _ => String::new(),
+    };
+    hint
 }

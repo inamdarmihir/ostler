@@ -1,0 +1,17 @@
+{
+  "name": "ostler",
+  "version": "0.2.0",
+  "description": "Browser for AI agents (MCP): fills forms in one call, verifies every value, learns from each fill. Downloads the prebuilt Ostler binary on first run.",
+  "mcpName": "io.github.inamdarmihir/ostler",
+  "bin": { "ostler": "bin/ostler.js" },
+  "files": ["bin/ostler.js", "README.md", "LICENSE"],
+  "keywords": ["mcp", "model-context-protocol", "browser", "ai-agents", "forms", "qdrant", "automation"],
+  "license": "Apache-2.0",
+  "author": "Mihir Inamdar",
+  "homepage": "https://inamdarmihir.github.io/ostler/",
+  "repository": { "type": "git", "url": "git+https://github.com/inamdarmihir/ostler.git", "directory": "npm" },
+  "bugs": "https://github.com/inamdarmihir/ostler/issues",
+  "engines": { "node": ">=18" },
+  "os": ["darwin", "linux"],
+  "cpu": ["x64", "arm64"]
+}
