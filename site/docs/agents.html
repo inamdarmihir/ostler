@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Use with your agent - Ostler docs</title>
+<meta name="description" content="Claude Code, Codex, Cursor, VS Code and any MCP client.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/agents.html">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Use with your agent - Ostler docs"><meta property="og:description" content="Claude Code, Codex, Cursor, VS Code and any MCP client.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/agents.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html" aria-current="page">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
+<article class="prose"><h1>Use with your agent</h1>
+<p class="lede">Claude Code, Codex, Cursor, VS Code and any MCP client.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li></ul></details>
+<p>Ostler is an MCP server over stdio. Any MCP client can launch it. <code>ostler setup &lt;client&gt;</code> prints the exact config, using this binary's <strong>absolute path</strong>. That avoids "command not found" when an app's <code>PATH</code> differs from your shell's.</p>
+<div class="table-wrap"><table><thead><tr><th>client</th><th>command</th><th>result</th></tr></thead><tbody><tr><td>Claude Code</td><td><code>ostler setup claude --apply</code></td><td>runs <code>claude mcp add</code> for you</td></tr><tr><td>Codex</td><td><code>ostler setup codex</code></td><td>prints the block for <code>~/.codex/config.toml</code></td></tr><tr><td>Cursor</td><td><code>ostler setup cursor</code></td><td>prints JSON for <code>~/.cursor/mcp.json</code></td></tr><tr><td>VS Code</td><td><code>ostler setup vscode</code></td><td>prints JSON for <code>.vscode/mcp.json</code></td></tr><tr><td>anything else</td><td><code>ostler setup json</code></td><td>generic <code>mcpServers</code> JSON</td></tr></tbody></table></div>
+<p>Only Claude Code is applied automatically. Other clients' files are never modified: you paste or merge the printed snippet. Extra <code>serve</code> flags go after <code>--</code>:</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup claude --apply -- --lean --tools forms</code></pre></div>
+<aside class="callout callout-note" role="note"><p class="callout-title">Note</p><p>Client config formats change between releases. If one of these does not load, check that client's current MCP documentation. The server itself only needs <code>ostler serve</code> on stdio.</p></aside>
+<h2 id="claude-code">Claude Code<a class="anchor" href="#claude-code" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup claude --apply
+<span class="tok-c"># manual equivalent:</span>
+claude mcp add ostler -- ostler serve</code></pre></div>
+<p>Reconnect with <code>/mcp</code> after installing or rebuilding.</p>
+<h2 id="codex">Codex<a class="anchor" href="#codex" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup codex</code></pre></div>
+<p>Prints a block for <code>~/.codex/config.toml</code>. Paste or merge it:</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code>[mcp_servers.ostler]
+command = "/absolute/path/to/ostler"
+args = ["serve"]</code></pre></div>
+<h2 id="cursor">Cursor<a class="anchor" href="#cursor" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup cursor</code></pre></div>
+<p>Prints JSON for <code>~/.cursor/mcp.json</code> (or <code>.cursor/mcp.json</code> in a project):</p>
+<div class="code" data-lang="json"><pre tabindex="0"><code>{
+  <span class="tok-k">"mcpServers"</span>: {
+    <span class="tok-k">"ostler"</span>: {
+      <span class="tok-k">"command"</span>: <span class="tok-s">"/absolute/path/to/ostler"</span>,
+      <span class="tok-k">"args"</span>: [<span class="tok-s">"serve"</span>]
+    }
+  }
+}</code></pre></div>
+<h2 id="vs-code">VS Code<a class="anchor" href="#vs-code" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup vscode</code></pre></div>
+<p>Prints JSON for <code>.vscode/mcp.json</code>. VS Code uses a <code>servers</code> key and an explicit transport type:</p>
+<div class="code" data-lang="json"><pre tabindex="0"><code>{
+  <span class="tok-k">"servers"</span>: {
+    <span class="tok-k">"ostler"</span>: {
+      <span class="tok-k">"type"</span>: <span class="tok-s">"stdio"</span>,
+      <span class="tok-k">"command"</span>: <span class="tok-s">"/absolute/path/to/ostler"</span>,
+      <span class="tok-k">"args"</span>: [<span class="tok-s">"serve"</span>]
+    }
+  }
+}</code></pre></div>
+<h2 id="any-other-mcp-client">Any other MCP client<a class="anchor" href="#any-other-mcp-client" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup json</code></pre></div>
+<p>prints the common <code>mcpServers</code> shape. The only requirement is that the client starts <code>ostler serve</code> and speaks MCP over stdio. <code>ostler serve</code> should print one <code>ready</code> line on stderr and wait; stdout carries only MCP messages.</p>
+<h2 id="a-good-agent-workflow">A good agent workflow<a class="anchor" href="#a-good-agent-workflow" aria-label="Link to this section">#</a></h2>
+<ol><li><code>navigate</code> returns the page's interactive elements.</li><li><code>form_inspect</code> returns typed fields and shows what memory knows about this form.</li><li><code>form_fill</code> with <code>{label: value}</code> for what you know; add <code>auto: "required"</code> to fill the rest from memory.</li><li><code>form_submit</code>, then read the status: <em>Submitted</em>, <em>Advanced</em> (next step: repeat 2 to 4), or <em>NOT SUBMITTED</em> with the page's validation messages.</li></ol>
+<p><code>ostler inspect &lt;url&gt;</code> prints the form model as JSON for debugging.</p>
+<h2 id="control-what-the-agent-sees-and-can-do">Control what the agent sees and can do<a class="anchor" href="#control-what-the-agent-sees-and-can-do" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>flag</th><th>effect</th></tr></thead><tbody><tr><td><code>--tools core|forms|all</code></td><td>which tools the agent sees (12, 16 or 21). Fewer tools means less schema in every turn</td></tr><tr><td><code>--allow-domain example.com</code> (repeatable)</td><td>only that domain and subdomains, every request and WebSockets included; <code>example.com:8443</code> pins a port</td></tr><tr><td><code>--require-confirm-submit</code></td><td><code>form_submit</code> fails unless the agent passes <code>confirm=true</code>, so a human can approve</td></tr><tr><td><code>--upload-dir DIR</code> (repeatable)</td><td>file fields may be filled from this directory; without it uploads are refused</td></tr><tr><td><code>--block-private-networks</code></td><td>with no allowlist, refuse loopback, private, metadata and internal hosts</td></tr><tr><td><code>--accept-dialogs</code></td><td>answer the page's <code>confirm()</code> and <code>prompt()</code> with OK; they are dismissed by default</td></tr><tr><td><code>--lean</code></td><td>lower memory; no images, fonts or media</td></tr><tr><td><code>--profile-dir DIR</code></td><td>persistent Chrome profile (keeps logins); one profile per server</td></tr><tr><td><code>--headed</code></td><td>visible browser, for watching it work and for <code>wait_for_human</code></td></tr><tr><td><code>--learn</code></td><td>save non-sensitive values typed after an accepted submit (off by default)</td></tr></tbody></table></div>
+<p>The full flag list is on the <a href="configuration.html">Configuration and CLI</a> page, and the reasoning is in the <a href="security.html">Security model</a>.</p>
+<h2 id="tabs-share-one-browser-context">Tabs share one browser context<a class="anchor" href="#tabs-share-one-browser-context" aria-label="Link to this section">#</a></h2>
+<p>Cookies and logins carry across tabs. The <code>context</code> tool is a small key/value notepad that every tab and every later call can read, for things like "applicant = Ada, order id = 4471". It survives a browser restart. Popups arrive as tabs under the same domain policy.</p>
+<h2 id="other-agents-a2a">Other agents: A2A<a class="anchor" href="#other-agents-a2a" aria-label="Link to this section">#</a></h2>
+<p>If another agent, rather than a coding agent, should hand Ostler a form, use <a href="a2a.html">A2A</a> instead of MCP.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/agents.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="install.html"><span>Previous</span><strong>Install</strong></a>
+<a class="pager-next" rel="next" href="forms.html"><span>Next</span><strong>Forms and verification</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>

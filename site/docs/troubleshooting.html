@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Troubleshooting - Ostler docs</title>
+<meta name="description" content="Symptoms, causes and fixes. Start with ostler doctor.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/troubleshooting.html">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Troubleshooting - Ostler docs"><meta property="og:description" content="Symptoms, causes and fixes. Start with ostler doctor.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/troubleshooting.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html" aria-current="page">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Help</p>
+<article class="prose"><h1>Troubleshooting</h1>
+<p class="lede">Symptoms, causes and fixes. Start with ostler doctor.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#searching-the-web">Searching the web</a></li></ul></details>
+<p>Start with <code>ostler doctor</code>. It launches Chrome, round-trips a page and (if <code>QDRANT_URL</code> is set) checks Qdrant.</p>
+<div class="table-wrap"><table><thead><tr><th>symptom</th><th>likely cause</th><th>fix</th></tr></thead><tbody><tr><td>Client says it can't start <code>ostler</code> / command not found</td><td>the client has a different <code>PATH</code> than your shell</td><td>use <code>ostler setup &lt;client&gt;</code>, which writes the binary's <strong>absolute path</strong></td></tr><tr><td><code>Chrome: could not find Chrome or Chromium</code></td><td>none on the usual paths</td><td>install one (the message has the command for your OS), or set <code>OSTLER_CHROME=/path/to/chrome</code></td></tr><tr><td><code>the Chrome path "…" does not exist</code></td><td><code>OSTLER_CHROME</code> or <code>--chrome-path</code> points at a missing file</td><td>fix the path, or unset it to auto-detect (a wrong explicit path is an error on purpose, never silently replaced)</td></tr><tr><td>Launch fails with "exited before DevTools was ready" on Linux/Docker</td><td>running as root, or no sandbox support</td><td>set <code>OSTLER_NO_SANDBOX=1</code>; in containers also give Chrome a larger <code>/dev/shm</code> (<code>--shm-size=1g</code>)</td></tr><tr><td>The first call after Chrome crashed reports a restart</td><td>the server relaunches Chrome and tells the agent; open tabs and page state are lost</td><td>re-navigate and continue; if it keeps failing, restart the MCP server (in Claude Code: <code>/mcp</code>, reconnect)</td></tr><tr><td>Server prints nothing and the agent sees no tools</td><td>stdout must carry only MCP messages; something else wrote to it, or the client expects another transport</td><td>run <code>ostler serve</code> in a terminal: it should print one <code>ready</code> line on stderr and wait</td></tr><tr><td><code>form_fill</code> says <code>UNMATCHED key</code></td><td>no field label/name matches that key</td><td>call <code>form_inspect</code>, then pass the exact label or the <code>eNN</code> ref</td></tr><tr><td><code>ambiguous</code> in a fill report</td><td>several fields match equally well</td><td>use the ref (<code>e12</code>) from <code>form_inspect</code> instead of a label</td></tr><tr><td><code>NOT SUBMITTED</code> with a validation message</td><td>the page rejected the values</td><td>fix the named fields and call <code>form_submit</code> again</td></tr><tr><td>Memory: <code>FAILED</code> in doctor</td><td>wrong <code>QDRANT_URL</code>/key, or Cloud Inference not enabled on the cluster</td><td>doctor prints a specific fix (unreachable, rejected key, or embedding-size mismatch). Check the URL includes the port (<code>:6333</code>), enable Inference in the Qdrant Cloud console, or use <code>--embeddings dev-hash</code> against open-source Qdrant (not semantic). Memory is optional: unset <code>QDRANT_URL</code> to run without it</td></tr><tr><td>A tool result starts with <code>Note: memory is unavailable (...)</code></td><td>Qdrant failed twice in a row (down, slow past the 4 s request limit, or returning 5xx); lookups are skipped for 30 s, then one request retries</td><td>the form tools keep working: pass values in the request. Fix Qdrant (<code>ostler doctor</code>), no restart needed</td></tr><tr><td><code>... is a cloud metadata address (always blocked ...)</code></td><td>the agent tried 169.254.169.254, <code>fe80::/10</code> or <code>metadata.google.internal</code></td><td>intended. If you really need it, add it to <code>--allow-domain</code></td></tr><tr><td>A submit comes back as <code>Nothing changed</code> on a page that stays put</td><td>the site posts in the background and says nothing visible afterwards, so Ostler cannot tell it worked</td><td>check with <code>snapshot</code>; do not resubmit blindly (it may have gone through)</td></tr><tr><td><code>npx -y ostler …</code> is slow the first time, or fails offline</td><td>the launcher downloads the binary once (cached in <code>~/.cache/ostler</code>)</td><td>run <code>npx -y ostler doctor</code> once while online; or install the binary with <code>install.sh</code> / <code>cargo install ostler</code> and point your client at it</td></tr><tr><td><code>checksum mismatch … Not installing</code></td><td>the download was corrupted or altered</td><td>nothing was installed or run. Retry; if it persists, install from source and open an issue</td></tr><tr><td>Agent context fills up</td><td>too many tools or large snapshots</td><td><code>--tools forms</code>, <code>--lean</code>, and ask for <code>form_inspect</code> instead of full <code>snapshot</code></td></tr><tr><td>A tool result starts with <code>CHALLENGE:</code></td><td>a CAPTCHA or "verify you are human" page is blocking</td><td>Ostler never solves or evades these. Run with <code>--headed</code>, complete it in the window, then the agent calls <code>wait_for_human</code>. A persistent <code>--profile-dir</code> with a logged-in session triggers fewer challenges</td></tr><tr><td><code>browser exited before DevTools was ready (is another Ostler or Chrome already using profile …)</code></td><td>Chrome allows one process per profile and two servers (two agent windows, subagents) share one <code>--profile-dir</code></td><td>give each server its own <code>--profile-dir</code>, or omit it (throwaway profile per server; any number can run at once)</td></tr><tr><td>Google, DuckDuckGo or Bing return a wall or no results</td><td>search engines challenge headless browsers; Ostler is built for forms and does not evade these</td><td>use your agent's own search tool for search and Ostler for the target site. If you must search through Ostler, run one <code>--headed</code> server with its own <code>--profile-dir</code> and solve the check yourself</td></tr><tr><td>A site blocks the browser or shows a CAPTCHA</td><td>automation detection</td><td>Ostler does not evade it; see <a href="#searching-the-web">Searching the web</a></td></tr><tr><td>Rebuilt <code>ostler</code> but the agent still behaves as before</td><td>the client keeps the old server process</td><td>reconnect the MCP client (Claude Code: <code>/mcp</code>; others: restart it)</td></tr></tbody></table></div>
+<h2 id="searching-the-web">Searching the web<a class="anchor" href="#searching-the-web" aria-label="Link to this section">#</a></h2>
+<p>Ostler drives a real Chrome, but from a fresh, headless session many sites treat it as a bot. What to expect (it varies by network and over time):</p>
+<ul><li><strong>Google, DuckDuckGo, Brave, Startpage, Reddit, news sites such as the NYT:</strong> often a bot wall or CAPTCHA. Ostler reports it and hands off to a person; it never tries to solve or get around it.</li><li><strong>Bing:</strong> usually loads (but it may ignore <code>first=</code> / "Page 2" and serve page 1 again to a headless session), but may return results unrelated to your query ("Some results have been removed"). When a search-results URL's visible text matches fewer than about half of the query's words, <code>navigate</code> adds <code>Warning: results do not seem to match the query "..."</code>. Treat the results as unreliable and try another engine or <code>--headed</code>.</li></ul>
+<p>What helps, honestly:</p>
+<ol><li>Run <code>--headed</code> with a persistent <code>--profile-dir</code>, one profile per server (Chrome locks a profile while it is in use). A person clears a CAPTCHA or signs in once in the visible window; cookies persist for later runs.</li><li>When the agent hits a wall it calls <code>wait_for_human</code>: it pauses, you solve the page in the window, and it resumes from the same page.</li><li>For pure discovery (finding which pages to read), use a search API; it is more reliable than scraping a results page. Ostler is best at reading the pages you already have URLs for and at filling forms.</li></ol>
+<p>Do not spoof the user agent or try to hide automation; it is unreliable and not something Ostler supports.</p>
+<p>If it still fails, open an issue with the output of <code>ostler doctor</code> and your OS and Chrome version.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/TROUBLESHOOTING.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="review.html"><span>Previous</span><strong>Design review</strong></a>
+<a class="pager-next" rel="next" href="changelog.html"><span>Next</span><strong>Changelog</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#searching-the-web">Searching the web</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tools reference - Ostler docs</title>
+<meta name="description" content="All 21 MCP tools, their parameters and profiles.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/tools.html">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Tools reference - Ostler docs"><meta property="og:description" content="All 21 MCP tools, their parameters and profiles.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/tools.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html" aria-current="page">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Reference</p>
+<article class="prose"><h1>Tools reference</h1>
+<p class="lede">All 21 MCP tools, their parameters and profiles.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#browse-profile-core">Browse (profile: core)</a></li><li class="toc-l3"><a href="#navigate">navigate</a></li><li class="toc-l3"><a href="#snapshot">snapshot</a></li><li class="toc-l3"><a href="#click">click</a></li><li class="toc-l3"><a href="#type">type</a></li><li class="toc-l3"><a href="#press">press</a></li><li class="toc-l3"><a href="#wait_for">wait_for</a></li><li class="toc-l3"><a href="#wait_for_human">wait_for_human</a></li><li class="toc-l3"><a href="#screenshot">screenshot</a></li><li class="toc-l3"><a href="#look">look</a></li><li class="toc-l3"><a href="#back">back</a></li><li class="toc-l2"><a href="#tabs-and-shared-notes-profile-core">Tabs and shared notes (profile: core)</a></li><li class="toc-l3"><a href="#tabs">tabs</a></li><li class="toc-l3"><a href="#context">context</a></li><li class="toc-l2"><a href="#forms-profile-forms">Forms (profile: forms)</a></li><li class="toc-l3"><a href="#form_inspect">form_inspect</a></li><li class="toc-l3"><a href="#form_fill">form_fill</a></li><li class="toc-l3"><a href="#form_submit">form_submit</a></li><li class="toc-l3"><a href="#fill_field">fill_field</a></li><li class="toc-l2"><a href="#memory-profile-all">Memory (profile: all)</a></li><li class="toc-l3"><a href="#memory_remember">memory_remember</a></li><li class="toc-l3"><a href="#memory_recall">memory_recall</a></li><li class="toc-l3"><a href="#memory_list">memory_list</a></li><li class="toc-l3"><a href="#memory_forget">memory_forget</a></li><li class="toc-l3"><a href="#stats">stats</a></li><li class="toc-l2"><a href="#design-notes">Design notes</a></li></ul></details>
+<p>Ostler exposes 21 MCP tools in three profiles. <code>--tools core|forms|all</code> (or <code>OSTLER_TOOLS</code>) controls how many the agent sees. The full set is about 5.9 KB of schema, roughly 1.5k tokens on every turn, and a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); <code>--verbose</code> brings the debug detail back.</p>
+<div class="table-wrap"><table><thead><tr><th>profile</th><th>tools</th><th class="al-right">count</th></tr></thead><tbody><tr><td><code>core</code></td><td>browse, tabs and context tools</td><td class="al-right">12</td></tr><tr><td><code>forms</code></td><td>core plus the form tools</td><td class="al-right">16</td></tr><tr><td><code>all</code> (default)</td><td>forms plus memory tools and <code>stats</code></td><td class="al-right">21</td></tr></tbody></table></div>
+<p>Page-derived text in results (page content, titles, URLs, dialog text, the <code>look</code> legend) is wrapped in <code>&lt;page_content untrusted="true"&gt;</code>. The server instructions tell the model not to follow it. See <a href="security.html">Security model</a>.</p>
+<h2 id="browse-profile-core">Browse (profile: core)<a class="anchor" href="#browse-profile-core" aria-label="Link to this section">#</a></h2>
+<h3 id="navigate"><code>navigate</code><a class="anchor" href="#navigate" aria-label="Link to this section">#</a></h3>
+<p>Open a URL. Returns page state with interactive elements, so no separate snapshot call is needed.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>url</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>observe</code></td><td><code>interactive</code> | <code>full</code> | <code>none</code></td><td>default <code>interactive</code></td></tr></tbody></table></div>
+<p>It reports the HTTP status (<code>Navigated (HTTP 404)</code>) with a plain-language reason, labels PDFs, downloads and redirects to a sign-in page, and explains navigation errors. A CAPTCHA or "verify you are human" page produces a <code>CHALLENGE:</code> line at the top. On a search-results URL whose visible text matches fewer than about half of the query's words, it adds a <code>Warning: results do not seem to match the query</code>.</p>
+<h3 id="snapshot"><code>snapshot</code><a class="anchor" href="#snapshot" aria-label="Link to this section">#</a></h3>
+<p>Read the page as text with element refs (<code>e1</code>, <code>e2</code>, …). Use delta to see only changes. Pass the ref of a heading to read just that section.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>mode</code></td><td><code>full</code> | <code>delta</code> | <code>interactive</code></td><td></td></tr><tr><td><code>ref</code></td><td>string</td><td>limit to a subtree</td></tr><tr><td><code>max_chars</code></td><td>integer</td><td></td></tr></tbody></table></div>
+<p>Long text is split into several lines with an explicit <code>… [N more chars cut]</code> marker. Text a person cannot see is left out and counted.</p>
+<h3 id="click"><code>click</code><a class="anchor" href="#click" aria-label="Link to this section">#</a></h3>
+<p>Click an element by ref. The result ends with a <code>Result:</code> line: navigated, popup opened as tab <code>tN</code>, page updated, or no visible change.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>ref</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>observe</code></td><td><code>delta</code> | <code>full</code> | <code>none</code></td><td>default <code>delta</code></td></tr></tbody></table></div>
+<h3 id="type"><code>type</code><a class="anchor" href="#type" aria-label="Link to this section">#</a></h3>
+<p>Type into an element by ref, replacing its content.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>ref</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>text</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>submit</code></td><td>boolean</td><td>press Enter after</td></tr><tr><td><code>observe</code></td><td><code>delta</code> | <code>full</code> | <code>none</code></td><td>default <code>delta</code></td></tr></tbody></table></div>
+<h3 id="press"><code>press</code><a class="anchor" href="#press" aria-label="Link to this section">#</a></h3>
+<p>Press a key, for example <code>Enter</code>, <code>Tab</code>, <code>Escape</code>, <code>Control+a</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>key</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>observe</code></td><td><code>delta</code> | <code>full</code> | <code>none</code></td><td>default <code>delta</code></td></tr></tbody></table></div>
+<h3 id="wait_for"><code>wait_for</code><a class="anchor" href="#wait_for" aria-label="Link to this section">#</a></h3>
+<p>Wait until text appears or disappears, or a CSS selector shows, or just pause for <code>ms</code> milliseconds (max 10000).</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>text</code></td><td>string</td><td>wait for it to appear</td></tr><tr><td><code>text_gone</code></td><td>string</td><td>wait for it to disappear</td></tr><tr><td><code>selector</code></td><td>string</td><td>CSS selector</td></tr><tr><td><code>timeout_ms</code></td><td>integer</td><td></td></tr><tr><td><code>ms</code></td><td>integer</td><td>plain pause</td></tr></tbody></table></div>
+<h3 id="wait_for_human"><code>wait_for_human</code><a class="anchor" href="#wait_for_human" aria-label="Link to this section">#</a></h3>
+<p>A CAPTCHA or verification wall is blocking the page: wait for the user to complete it in the browser window. Needs <code>--headed</code>. Ostler never solves these itself.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>timeout_s</code></td><td>integer</td><td>default 120, max 600</td></tr></tbody></table></div>
+<h3 id="screenshot"><code>screenshot</code><a class="anchor" href="#screenshot" aria-label="Link to this section">#</a></h3>
+<p>Capture a PNG of the page or one element.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>ref</code></td><td>string</td><td>one element</td></tr><tr><td><code>full_page</code></td><td>boolean</td><td></td></tr></tbody></table></div>
+<h3 id="look"><code>look</code><a class="anchor" href="#look" aria-label="Link to this section">#</a></h3>
+<p>See where to click: a screenshot with every clickable element boxed and numbered by its ref, plus a legend saying what each does (type here, submits the form, error, …). Use the refs with <code>click</code>, <code>type</code> and <code>fill_field</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>max</code></td><td>integer</td><td></td></tr></tbody></table></div>
+<p>Boxes come from DOM geometry and are coloured by role: green submits, blue inputs, purple links, red has an error. Elements hidden under a cookie banner, modal or sticky bar are left out and counted, so the agent closes the overlay first. It covers only the visible viewport. The overlay is removed afterwards. With <code>--lean</code>, screenshots omit images.</p>
+<h3 id="back"><code>back</code><a class="anchor" href="#back" aria-label="Link to this section">#</a></h3>
+<p>Go back in history. Takes no parameters. At the start of a tab's history it says so instead of landing on <code>about:blank</code>.</p>
+<h2 id="tabs-and-shared-notes-profile-core">Tabs and shared notes (profile: core)<a class="anchor" href="#tabs-and-shared-notes-profile-core" aria-label="Link to this section">#</a></h2>
+<h3 id="tabs"><code>tabs</code><a class="anchor" href="#tabs" aria-label="Link to this section">#</a></h3>
+<p>Manage tabs. They share cookies and the <code>context</code> tool. Popups open as new tabs.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>action</code></td><td><code>list</code> | <code>new</code> | <code>switch</code> | <code>close</code>, <strong>required</strong></td><td></td></tr><tr><td><code>tab</code></td><td>string</td><td>tab id, for example <code>t2</code></td></tr><tr><td><code>url</code></td><td>string</td><td>for <code>new</code></td></tr></tbody></table></div>
+<h3 id="context"><code>context</code><a class="anchor" href="#context" aria-label="Link to this section">#</a></h3>
+<p>Notes shared by every tab and later calls: <code>get</code>, <code>set</code>, <code>delete</code>, <code>list</code>. Keep short facts, not page dumps. Survives a browser restart.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>action</code></td><td><code>get</code> | <code>set</code> | <code>delete</code> | <code>list</code>, <strong>required</strong></td><td></td></tr><tr><td><code>key</code></td><td>string</td><td></td></tr><tr><td><code>value</code></td><td>string</td><td></td></tr></tbody></table></div>
+<h2 id="forms-profile-forms">Forms (profile: forms)<a class="anchor" href="#forms-profile-forms" aria-label="Link to this section">#</a></h2>
+<h3 id="form_inspect"><code>form_inspect</code><a class="anchor" href="#form_inspect" aria-label="Link to this section">#</a></h3>
+<p>List the page's forms as typed fields (label, kind, required, options, errors) plus submit controls and what memory knows about this form.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>form</code></td><td>string</td><td>form ref</td></tr></tbody></table></div>
+<h3 id="form_fill"><code>form_fill</code><a class="anchor" href="#form_fill" aria-label="Link to this section">#</a></h3>
+<p>Fill many fields at once from <code>{label | name | ref: value}</code>. Handles selects, radios, checkbox groups, dates, files, comboboxes and dependent dropdowns, and verifies each field by reading it back. <code>auto: "required"</code> or <code>"all"</code> fills the rest from memory.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>values</code></td><td>object</td><td><code>{label | name | ref: value}</code></td></tr><tr><td><code>form</code></td><td>string</td><td>form ref</td></tr><tr><td><code>auto</code></td><td><code>off</code> | <code>required</code> | <code>all</code></td><td>fill the rest from memory</td></tr><tr><td><code>min_confidence</code></td><td>number</td><td></td></tr></tbody></table></div>
+<p>The report names each field <code>OK</code>, or says <code>UNMATCHED</code> (no field matches the key), <code>ambiguous</code> (several match equally well, so use the ref), or a read-back mismatch. It lists fields still empty and required, and says <code>unsettled</code> (a count) when the page was still busy at the end of the fill. File fields are refused unless <code>--upload-dir</code> allows the directory.</p>
+<h3 id="form_submit"><code>form_submit</code><a class="anchor" href="#form_submit" aria-label="Link to this section">#</a></h3>
+<p>Click the form's submit or next control and report whether it was accepted, advanced to another step, or failed validation.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>form</code></td><td>string</td><td></td></tr><tr><td><code>control</code></td><td>string</td><td>submit button ref</td></tr><tr><td><code>confirm</code></td><td>boolean</td><td>required when the server runs with <code>--require-confirm-submit</code></td></tr></tbody></table></div>
+<p>Result: <code>Submitted</code>, <code>Advanced</code> (next step), <code>NOT SUBMITTED</code> with the page's own messages, or <code>Nothing changed</code> when the form stays put and says nothing. Just before clicking it re-reads the fields it verified and reports any the page cleared or rewrote (<code>CHANGED BEFORE SUBMIT</code>).</p>
+<h3 id="fill_field"><code>fill_field</code><a class="anchor" href="#fill_field" aria-label="Link to this section">#</a></h3>
+<p>Set one field by ref (any kind, including custom widgets).</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>ref</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>value</code></td><td>any, <strong>required</strong></td><td></td></tr></tbody></table></div>
+<h2 id="memory-profile-all">Memory (profile: all)<a class="anchor" href="#memory-profile-all" aria-label="Link to this section">#</a></h2>
+<p>These need memory enabled (a Qdrant URL, or <code>--memory ephemeral</code>). See <a href="memory.html">Memory and privacy</a>.</p>
+<h3 id="memory_remember"><code>memory_remember</code><a class="anchor" href="#memory_remember" aria-label="Link to this section">#</a></h3>
+<p>Save a fact about the user for future forms (for example email, company). Secrets are refused.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>key</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>value</code></td><td>any, <strong>required</strong></td><td></td></tr><tr><td><code>description</code></td><td>string</td><td></td></tr><tr><td><code>autocomplete</code></td><td>string</td><td>HTML autocomplete token, for example <code>given-name</code></td></tr></tbody></table></div>
+<h3 id="memory_recall"><code>memory_recall</code><a class="anchor" href="#memory_recall" aria-label="Link to this section">#</a></h3>
+<p>Semantic search over saved facts.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>query</code></td><td>string, <strong>required</strong></td><td></td></tr><tr><td><code>limit</code></td><td>integer</td><td></td></tr></tbody></table></div>
+<h3 id="memory_list"><code>memory_list</code><a class="anchor" href="#memory_list" aria-label="Link to this section">#</a></h3>
+<p>List all saved facts. Takes no parameters.</p>
+<h3 id="memory_forget"><code>memory_forget</code><a class="anchor" href="#memory_forget" aria-label="Link to this section">#</a></h3>
+<p>Delete a saved fact by key.</p>
+<div class="table-wrap"><table><thead><tr><th>parameter</th><th>type</th><th>notes</th></tr></thead><tbody><tr><td><code>key</code></td><td>string, <strong>required</strong></td><td></td></tr></tbody></table></div>
+<h3 id="stats"><code>stats</code><a class="anchor" href="#stats" aria-label="Link to this section">#</a></h3>
+<p>Session cost and latency counters: calls, milliseconds, estimated tokens, browser memory. Takes no parameters.</p>
+<h2 id="design-notes">Design notes<a class="anchor" href="#design-notes" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>Observation is part of the action.</strong> <code>navigate</code> returns the interactive elements; clicks and typing return only what changed. <code>observe: none</code> opts out but still records a baseline.</li><li><strong>Actions are never replayed after a navigation.</strong> Calls that change the page report that the page changed instead of re-running.</li><li><strong>A crashed Chrome is relaunched</strong> and the agent is told. Open tabs and page state are lost.</li></ul>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/tools.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="configuration.html"><span>Previous</span><strong>Configuration and CLI</strong></a>
+<a class="pager-next" rel="next" href="security.html"><span>Next</span><strong>Security model</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#browse-profile-core">Browse (profile: core)</a></li><li class="toc-l3"><a href="#navigate">navigate</a></li><li class="toc-l3"><a href="#snapshot">snapshot</a></li><li class="toc-l3"><a href="#click">click</a></li><li class="toc-l3"><a href="#type">type</a></li><li class="toc-l3"><a href="#press">press</a></li><li class="toc-l3"><a href="#wait_for">wait_for</a></li><li class="toc-l3"><a href="#wait_for_human">wait_for_human</a></li><li class="toc-l3"><a href="#screenshot">screenshot</a></li><li class="toc-l3"><a href="#look">look</a></li><li class="toc-l3"><a href="#back">back</a></li><li class="toc-l2"><a href="#tabs-and-shared-notes-profile-core">Tabs and shared notes (profile: core)</a></li><li class="toc-l3"><a href="#tabs">tabs</a></li><li class="toc-l3"><a href="#context">context</a></li><li class="toc-l2"><a href="#forms-profile-forms">Forms (profile: forms)</a></li><li class="toc-l3"><a href="#form_inspect">form_inspect</a></li><li class="toc-l3"><a href="#form_fill">form_fill</a></li><li class="toc-l3"><a href="#form_submit">form_submit</a></li><li class="toc-l3"><a href="#fill_field">fill_field</a></li><li class="toc-l2"><a href="#memory-profile-all">Memory (profile: all)</a></li><li class="toc-l3"><a href="#memory_remember">memory_remember</a></li><li class="toc-l3"><a href="#memory_recall">memory_recall</a></li><li class="toc-l3"><a href="#memory_list">memory_list</a></li><li class="toc-l3"><a href="#memory_forget">memory_forget</a></li><li class="toc-l3"><a href="#stats">stats</a></li><li class="toc-l2"><a href="#design-notes">Design notes</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>
