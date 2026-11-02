@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security model - Ostler docs</title>
+<meta name="description" content="The threat model: what Ostler does, and what it does not do.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/security.html">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Security model - Ostler docs"><meta property="og:description" content="The threat model: what Ostler does, and what it does not do.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/security.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html" aria-current="page">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Reference</p>
+<article class="prose"><h1>Security model</h1>
+<p class="lede">The threat model: what Ostler does, and what it does not do.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#reporting-a-vulnerability">Reporting a vulnerability</a></li><li class="toc-l2"><a href="#threat-model">Threat model</a></li><li class="toc-l2"><a href="#verify-it-yourself">Verify it yourself</a></li><li class="toc-l2"><a href="#what-is-stored-where">What is stored, where</a></li></ul></details>
+<p>This page is the repository's <code>SECURITY.md</code>. For how the memory-related rows work in practice, see <a href="memory.html">Memory and privacy</a>.</p>
+<p>Ostler lets an AI agent drive a real browser and stores some user data. Treat it like any tool that can act on your behalf.</p>
+<h2 id="reporting-a-vulnerability">Reporting a vulnerability<a class="anchor" href="#reporting-a-vulnerability" aria-label="Link to this section">#</a></h2>
+<p>Please use GitHub's private vulnerability reporting for this repository ("Security" tab → "Report a vulnerability"). Do not open a public issue for something exploitable. There is no bounty. This is a pre-1.0 project maintained by individuals; we will acknowledge reports as quickly as we can.</p>
+<h2 id="threat-model">Threat model<a class="anchor" href="#threat-model" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>threat</th><th>what we do</th><th>what we do not do</th></tr></thead><tbody><tr><td><strong>Prompt injection from a web page</strong></td><td>Page-derived text is wrapped in <code>&lt;page_content untrusted="true"&gt;</code>: page content, but also titles, URLs, dialog text and the <code>look</code> legend, which used to sit on trusted lines. Text a person cannot see (opacity 0, zero font size, far off-screen, same colour as the background) is left out and counted, so a hidden instruction never reaches the model. Server instructions tell the model not to follow page text.</td><td>We cannot stop a model from being persuaded by text a person can also see. Hidden-text detection judges colour only against a solid background; gradients, images and <code>clip</code>-style screen-reader text are not treated as hidden. Use <code>--allow-domain</code> and <code>--require-confirm-submit</code> for anything sensitive.</td></tr><tr><td><strong>Agent navigates somewhere it should not</strong></td><td>Domain allowlist enforced inside the browser. Every request the page makes is held and checked whatever its type (documents, images, stylesheets, scripts, <code>fetch</code>/XHR, beacons, event streams), and Chrome is started with a resolver rule that makes every other host unresolvable, which also covers WebSockets and the first request of a popup. Entries may pin a port (<code>example.com:8443</code>). Only http(s); <code>file:</code> needs <code>--allow-file</code>. Tested with a canary server on a non-allowlisted origin: no request arrives through <code>&lt;img&gt;</code>, a stylesheet, <code>fetch</code>, XHR, a beacon, a WebSocket, <code>EventSource</code>, a form POST, a redirect, a meta refresh, a script navigation or <code>window.open</code>, by hostname or by IP literal. With no allowlist, <code>--block-private-networks</code> refuses loopback, private, link-local (cloud metadata), CGNAT and internal-looking hosts, and names that resolve to them. Independently of that flag, navigating to a literal link-local address (169.254.0.0/16 including 169.254.169.254, <code>fe80::/10</code>, <code>fd00:ec2::254</code>) or a well-known metadata hostname (<code>metadata.google.internal</code>) is refused unless you allowlist it.</td><td>An entry without a port allows every port on that host. Ports are checked on the requests interception sees; the browser-wide resolver rule works on hosts only, so treat a port pin as defence in depth, not isolation, for WebSockets. The private-network check resolves a name before Chrome does, so a DNS-rebinding server can answer differently the second time: use an allowlist where that matters. <code>--block-private-networks</code> is off by default for <code>serve</code> because coding agents browse local dev servers (and the demo fixtures live on loopback); it is on by default for <code>a2a</code>. The always-on metadata check covers navigations and literal addresses only: without an allowlist, a page's own sub-requests and names that merely resolve to a metadata address are not checked. Not a sandbox against a compromised browser.</td></tr><tr><td><strong>Irreversible submissions</strong></td><td><code>--require-confirm-submit</code> blocks every non-GET request unless it happens inside <code>form_submit</code> with <code>confirm=true</code>.</td><td>Off by default. A GET with side effects, and WebSockets, are not covered. <strong>Known gap (found in review, not yet fixed):</strong> the first request of a popup window and requests from a cross-site iframe are not intercepted, so a hostile page can still make a popup or an embedded frame POST data without <code>confirm=true</code>; with <code>--allow-domain host:port</code> pins the popup's first request can likewise reach another port. A submit that is cancelled mid-flight now closes the gate again. Fixing the gap needs Chrome to pause new targets before they start (<code>Target.setAutoAttach</code> with <code>waitForDebuggerOnStart</code>).</td></tr><tr><td><strong>File exfiltration through an upload field</strong></td><td>File fields are refused unless you pass <code>--upload-dir DIR</code>. A path is resolved first (<code>..</code> and symlinks included) and must land inside an allowed directory; the browser is handed the resolved path.</td><td>Anything inside an allowed directory can be attached to any page the agent visits, so keep it small and free of secrets.</td></tr><tr><td><strong>A page's own "are you sure?" dialog</strong></td><td><code>confirm()</code> and <code>prompt()</code> are dismissed, so a site's "Delete everything?" is not confirmed by a browser nobody is watching, and the agent is told what happened. <code>alert()</code> and <code>beforeunload</code> are acknowledged.</td><td><code>--accept-dialogs</code> restores auto-accept for sites that need it. A dismissed confirm can leave a flow stuck; the agent sees the dialog text and can ask you.</td></tr><tr><td><strong>A remote agent over A2A</strong></td><td>Loopback by default; bearer token required to listen elsewhere; <code>Origin</code> and <code>Host</code> checks against browser-based attacks; per-conversation browsers; submit needs an explicit confirm; private and internal addresses are refused unless you pass <code>--allow-private-networks</code>.</td><td>No TLS (use a reverse proxy). All conversations share one memory tenant. Always pass <code>--allow-domain</code>. See <a href="a2a.html">docs/A2A.md</a>.</td></tr><tr><td><strong>Secrets in memory</strong></td><td>The memory API refuses password/token/card-like keys and card-number-like values; sensitive fields are never auto-filled from memory nor stored by <code>--learn</code>; sensitive values are masked in tool output; playbooks store structure only, never values.</td><td>Detection is heuristic (names, <code>autocomplete</code> tokens, digit patterns). A secret stored under an innocuous key with an innocuous value will not be caught.</td></tr><tr><td><strong>Cross-user data exposure</strong></td><td>Every memory point carries a <code>tenant</code>; every query filters on it; isolation is tested on a real Qdrant. With <code>--isolation collection</code> each tenant has its own collections and <code>ostler memory token</code> mints a JWT Qdrant itself limits to them (tested on Qdrant 1.20: other tenants answer 403).</td><td>The default shares collections, so a leaked admin key exposes every tenant. Collection isolation needs <code>jwt_rbac</code> and an admin who creates the collections.</td></tr><tr><td><strong>Someone who can read your Qdrant (operator, leaked key, backup)</strong></td><td>Payloads are sealed on your machine (AES-256-GCM); site names, labels, keys and point ids are keyed hashes; episodes are redacted of emails and numbers; plain <code>http://</code> to a remote Qdrant is refused.</td><td>The vector is not hidden: with <code>--embeddings cloud</code> the field text is sent to Qdrant Cloud Inference, and vectors of labels reveal roughly what they say. Use <code>--embeddings ollama</code> to keep text local. Tenant name, win/loss counters, timing and point counts stay visible. The key is a file or env var, not in the OS keychain; lose it and sealed memory is unreadable.</td></tr><tr><td><strong>Malicious page attacking the runtime</strong></td><td>The injected runtime avoids <code>eval</code> and never executes page-supplied strings; it works on DOM objects.</td><td>The runtime shares a JS world with the page, so a hostile page could tamper with it (e.g. to mislead reads). Do not rely on it for adversarial pages.</td></tr><tr><td><strong>Local exposure</strong></td><td>Chrome is launched with a throwaway profile and talks to Ostler over a pipe (<code>--remote-debugging-pipe</code>). There is no debugging port, so no other local user can connect to the browser, and Chrome exits by itself if Ostler dies. Tested: no listening socket in the browser's process tree (the WebSocket mode shows one).</td><td><code>OSTLER_CDP_TRANSPORT=ws</code> brings back the old unauthenticated localhost port, for debugging only. With <code>--profile-dir</code> your logged-in sessions live on disk, readable by your own account and by any process running as you.</td></tr></tbody></table></div>
+<p>Not audited. No security review has been done by a third party.</p>
+<h2 id="verify-it-yourself">Verify it yourself<a class="anchor" href="#verify-it-yourself" aria-label="Link to this section">#</a></h2>
+<p>Each claim above has a test that runs against a real Chrome (<code>OSTLER_REQUIRE_CHROME=1</code> makes a missing Chrome a failure instead of a skip):</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>OSTLER_REQUIRE_CHROME=1 cargo test -p ostler-browser --test security_e2e   <span class="tok-c"># allowlist canary, uploads, dialogs, ports, private networks</span>
+OSTLER_REQUIRE_CHROME=1 cargo test -p ostler --test mcp_e2e page_text_never_reaches_a_trusted_line
+OSTLER_REQUIRE_CHROME=1 cargo test -p ostler-browser --test forms_e2e text_a_person_cannot_see
+OSTLER_REQUIRE_CHROME=1 cargo test -p ostler-cdp --test no_debug_port        <span class="tok-c"># no listening socket</span>
+cargo test -p ostler-browser --lib policy                                     <span class="tok-c"># URL, port, private-range and upload-path rules</span></code></pre></div>
+<p>The allowlist test puts a canary server on a host outside the allowlist and loads a page that tries to reach it through an image, a stylesheet, <code>fetch</code>, XHR, a beacon, a WebSocket, <code>EventSource</code>, a form POST, a redirect, a meta refresh, a script navigation and <code>window.open</code>. A control run with no allowlist must reach the canary, so "nothing arrived" cannot be a broken test. The allowlist, screenshot and trust-boundary (<code>page_text_never_reaches_a_trusted_line</code>) tests were run against the code before their fixes and failed there. The upload, dialog, port, private-network and debugging-port tests pair each protection with its opt-out or a control run, so they cannot pass by testing nothing.</p>
+<h2 id="what-is-stored-where">What is stored, where<a class="anchor" href="#what-is-stored-where" aria-label="Link to this section">#</a></h2>
+<ul><li>Qdrant (your cluster): facts you saved, form playbooks (field labels and which fact filled them), episodes (error messages from forms), all tagged with your tenant. By default these are encrypted before upload (<code>--seal</code>); the key is <code>memory.key</code> beside your config file or <code>OSTLER_MEMORY_KEY</code>.</li><li>Disk: nothing by default; a Chrome profile only if you pass <code>--profile-dir</code>.</li><li>Telemetry: none.</li></ul>
+<p><code>ostler memory wipe --yes</code> deletes everything for a tenant.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/SECURITY.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="tools.html"><span>Previous</span><strong>Tools reference</strong></a>
+<a class="pager-next" rel="next" href="a2a.html"><span>Next</span><strong>A2A</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#reporting-a-vulnerability">Reporting a vulnerability</a></li><li class="toc-l2"><a href="#threat-model">Threat model</a></li><li class="toc-l2"><a href="#verify-it-yourself">Verify it yourself</a></li><li class="toc-l2"><a href="#what-is-stored-where">What is stored, where</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>
