@@ -300,6 +300,16 @@ pub fn submit(o: &SubmitOutcome, verbose: bool) -> String {
     for e in &o.page_errors {
         let _ = writeln!(out, "  PAGE ERROR: {}", q(e));
     }
+    for d in &o.drift {
+        let _ = writeln!(
+            out,
+            "  CHANGED BEFORE SUBMIT {} {}: was {}, now {} (the page rewrote or cleared it; fill it again or try another format)",
+            d.r#ref,
+            q(&d.label),
+            q(&d.was),
+            q(&d.now)
+        );
+    }
     if !o.excerpt.is_empty() {
         let _ = writeln!(out, "Page says:");
         for l in o.excerpt.iter().take(if verbose { usize::MAX } else { 6 }) {

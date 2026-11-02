@@ -51,19 +51,23 @@ struct Shared {
     gate: AtomicBool,
     armed: AtomicBool,
     blocked: Mutex<Vec<String>>,
+    /// Latest main-frame document response (status, content type): redirects overwrite, so the final one wins.
+    doc: Mutex<Option<(u16, String)>>,
 }
 
 #[derive(Default)]
-struct PageState {
+pub(crate) struct PageState {
     prev_lines: Vec<String>,
     prev_url: String,
+    /// Fields filled and verified since the last submit: (ref, label, value). Re-read before submitting.
+    pub(crate) filled: Vec<(String, String, String)>,
 }
 
 #[derive(Clone)]
 pub struct Page {
     pub(crate) session: Session,
     shared: Arc<Shared>,
-    state: Arc<Mutex<PageState>>,
+    pub(crate) state: Arc<Mutex<PageState>>,
     pub(crate) policy: Arc<Policy>,
 }
 
@@ -108,6 +112,72 @@ pub struct ActionOutcome {
     pub title: String,
     pub warnings: Vec<String>,
     pub dialogs: Vec<String>,
+    /// HTTP status of the main document when this action loaded one.
+    pub status: Option<u16>,
+    /// Plain observations (not problems), e.g. "redirected to a sign-in page".
+    pub notes: Vec<String>,
+    /// False when the page's markup was identical before and after a click.
+    pub changed: bool,
+}
+
+/// Turn a failed `Page.navigate` into something an agent can act on.
+pub fn explain_nav_error(err: &str, url: &str, status: Option<u16>, ctype: Option<&str>) -> String {
+    let mut s = format!("{err} ({url})");
+    if let Some(st) = status {
+        let why = match st {
+            401 | 403 => "the site is refusing automated access",
+            429 => "rate limited (too many requests); wait before retrying or use another source",
+            404 | 410 => "page not found",
+            500..=599 => "server error; try again later or use another source",
+            _ => "",
+        };
+        let why = if why.is_empty() {
+            String::new()
+        } else {
+            format!(": {why}")
+        };
+        s = format!("HTTP {st}{why} - {s}");
+    } else {
+        let hint = friendly_net_error(err, url);
+        if !hint.is_empty() {
+            s = format!("{hint} [{err}] ({url})");
+        }
+    }
+    if let Some(ct) = ctype.filter(|c| is_unreadable_type(c)) {
+        s.push_str(&format!(". {}", non_html_note(ct)));
+    }
+    s
+}
+
+fn is_unreadable_type(ct: &str) -> bool {
+    let ct = ct.to_lowercase();
+    !(ct.is_empty()
+        || ct.contains("html")
+        || ct.contains("xml")
+        || ct.starts_with("text/")
+        || ct.contains("json"))
+}
+
+fn non_html_note(ct: &str) -> String {
+    let kind = if ct.to_lowercase().contains("pdf") {
+        "PDF/non-HTML document"
+    } else {
+        "Binary or non-HTML file"
+    };
+    format!("{kind} (content-type {ct}); Ostler cannot read it, fetch it another way")
+}
+
+fn looks_like_login(url: &str, title: &str) -> bool {
+    let path = url::Url::parse(url)
+        .map(|u| u.path().to_lowercase())
+        .unwrap_or_default();
+    let t = title.to_lowercase();
+    [
+        "authwall", "login", "signin", "sign-in", "sign_in", "log-in",
+    ]
+    .iter()
+    .any(|k| path.contains(k))
+        || ["sign in", "log in", "login"].iter().any(|k| t.contains(k))
 }
 
 const CONTEXT_GONE: [&str; 4] = [
@@ -153,6 +223,8 @@ impl Page {
         // forbidden origin (cookies and body included) before any after-the-fact check could notice.
         page.sync_fetch().await?;
 
+        // Main-document HTTP status comes from the network layer; the page itself never shows it.
+        s.call("Network.enable", json!({})).await?;
         let mut events = s.events();
         let shared = page.shared.clone();
         let sess = s.clone();
@@ -171,6 +243,15 @@ impl Page {
                     }
                     "Page.navigatedWithinDocument" if is_main(ev.params["frameId"].as_str()) => {
                         shared.same_doc.fetch_add(1, Ordering::SeqCst);
+                    }
+                    "Network.responseReceived"
+                        if ev.params["type"].as_str() == Some("Document")
+                            && is_main(ev.params["frameId"].as_str()) =>
+                    {
+                        let r = &ev.params["response"];
+                        let status = r["status"].as_u64().unwrap_or(0) as u16;
+                        let mime = r["mimeType"].as_str().unwrap_or("").to_string();
+                        *shared.doc.lock().unwrap() = Some((status, mime));
                     }
                     "Fetch.requestPaused" => {
                         let id = ev.params["requestId"].clone();
@@ -321,6 +402,9 @@ impl Page {
                     .unwrap_or("")
                     .trim_start_matches("Error: ")
                     .to_string();
+                if first.starts_with("unknown ref") {
+                    return Err(BrowserError::Other(first));
+                }
                 return Err(BrowserError::Js(first));
             }
             return Ok(res["result"].get("value").cloned().unwrap_or(Value::Null));
@@ -359,7 +443,7 @@ impl Page {
                 .and_then(Value::as_str)
                 .unwrap_or("unknown")
                 .to_string(),
-            interstitial: o.get("kind").and_then(Value::as_str) == Some("interstitial"),
+            interstitial: matches!(o.get("kind").and_then(Value::as_str), Some("interstitial" | "block")),
         }))
     }
 
@@ -408,12 +492,22 @@ impl Page {
             .await
             .map_err(BrowserError::Policy)?;
         let loaded_before = self.shared.loaded.load(Ordering::SeqCst);
+        *self.shared.doc.lock().unwrap() = None;
         let res = self
             .session
             .call("Page.navigate", json!({ "url": url }))
             .await?;
         if let Some(err) = res["errorText"].as_str() {
-            return Err(BrowserError::Navigation(format!("{err} ({url})")));
+            // The response event can trail the navigate reply by a few ms.
+            sleep(Duration::from_millis(150)).await;
+            let doc = self.shared.doc.lock().unwrap().clone();
+            let status = doc.as_ref().map(|d| d.0).filter(|s| *s > 0);
+            return Err(BrowserError::Navigation(explain_nav_error(
+                err,
+                url,
+                status,
+                doc.as_ref().map(|d| d.1.as_str()),
+            )));
         }
         // Same-document navigations (hash changes) never fire a load event.
         if res.get("loaderId").is_some() {
@@ -421,7 +515,21 @@ impl Page {
                 .await;
         }
         self.settle(3000, 150).await;
-        self.finish_outcome(true, vec![]).await
+        let mut out = self.finish_outcome(true, vec![]).await?;
+        let strip = |u: &str| {
+            u.split('#')
+                .next()
+                .unwrap_or("")
+                .trim_end_matches('/')
+                .to_string()
+        };
+        if strip(&out.url) != strip(url)
+            && !looks_like_login(url, "")
+            && looks_like_login(&out.url, &out.title)
+        {
+            out.notes.push("redirected to a sign-in page".into());
+        }
+        Ok(out)
     }
 
     async fn wait_loaded(&self, loaded_before: u64, timeout: Duration) -> bool {
@@ -461,6 +569,7 @@ impl Page {
         let committed = self.shared.committed.load(Ordering::SeqCst);
         let same_doc = self.shared.same_doc.load(Ordering::SeqCst);
         let loaded = self.shared.loaded.load(Ordering::SeqCst);
+        *self.shared.doc.lock().unwrap() = None;
         let value = action().await?;
         // Give a navigation a moment to begin; most start within a frame or two.
         let probe = Instant::now() + Duration::from_millis(180);
@@ -513,19 +622,61 @@ impl Page {
         if !dialogs.is_empty() {
             warnings.push("JavaScript dialogs appeared (confirm and prompt are dismissed unless --accept-dialogs)".into());
         }
+        let doc = if navigated {
+            self.shared.doc.lock().unwrap().clone()
+        } else {
+            None
+        };
+        let mut notes = vec![];
+        if let Some((_, ct)) = doc.as_ref().filter(|d| is_unreadable_type(&d.1)) {
+            notes.push(non_html_note(ct));
+        }
         Ok(ActionOutcome {
             navigated,
             url: info.url,
             title: info.title,
             warnings,
             dialogs,
+            status: doc.map(|d| d.0).filter(|s| *s > 0),
+            notes,
+            changed: true,
         })
     }
 
     pub async fn back(&self) -> Result<ActionOutcome> {
-        let (_, out) = self
+        // Nothing to go back to when the previous history entry is the tab's initial blank page.
+        if let Ok(h) = self.session.call("Page.getNavigationHistory", json!({})).await {
+            let idx = h["currentIndex"].as_i64().unwrap_or(0);
+            let prev = if idx > 0 {
+                h["entries"][(idx - 1) as usize]["url"].as_str().unwrap_or("")
+            } else {
+                ""
+            };
+            if idx <= 0 || prev == "about:blank" || prev.is_empty() {
+                let cur = h["entries"][idx.max(0) as usize].clone();
+                return Ok(ActionOutcome {
+                    url: cur["url"].as_str().unwrap_or("").to_string(),
+                    title: cur["title"].as_str().unwrap_or("").to_string(),
+                    notes: vec!["Still on the same page: this tab has no earlier page in its history (a tab opened by a popup or by tabs new starts empty; use tabs to switch to the original one)".into()],
+                    changed: false,
+                    ..Default::default()
+                });
+            }
+        }
+        let before = self
+            .eval("location.href")
+            .await
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        let (_, mut out) = self
             .after(|| async { self.eval("history.back()").await })
             .await?;
+        if out.url == before {
+            out.notes
+                .push("Still on the same page: this tab has no earlier page in its history (a tab opened by a popup starts empty; use tabs to switch to the original one)".into());
+            out.changed = false;
+        }
         Ok(out)
     }
 
@@ -582,10 +733,17 @@ impl Page {
         Ok(())
     }
 
+    /// True when `url` is the page the last snapshot described (ignoring query and hash), so a delta is meaningful.
+    pub fn baseline_matches(&self, url: &str) -> bool {
+        let st = self.state.lock().unwrap();
+        !st.prev_lines.is_empty() && page_key(&st.prev_url) == page_key(url)
+    }
+
     pub async fn snapshot(&self, opts: SnapshotOpts) -> Result<SnapshotOut> {
         self.guard().await?;
         let o = json!({
             "interactiveOnly": opts.mode == SnapshotMode::Interactive,
+            "collapseFooter": opts.mode != SnapshotMode::Full,
             "ref": opts.scope,
             "maxChars": opts.max_chars.unwrap_or(20000),
         });
@@ -602,10 +760,28 @@ impl Page {
         let title = v["title"].as_str().unwrap_or("").to_string();
         let truncated = v["truncated"].as_bool().unwrap_or(false);
 
+        // Interactive views leave out text, so a later delta (which includes text) would have nothing to
+        // compare with and print the whole page. Record the text-inclusive baseline silently.
+        let baseline: Option<Vec<String>> = if opts.mode == SnapshotMode::Interactive && opts.scope.is_none() {
+            let o2 = json!({ "interactiveOnly": false, "collapseFooter": true, "maxChars": 20000 });
+            self.rt("snapshot", &[o2]).await.ok().map(|v2| {
+                v2["lines"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|l| l.as_str().map(String::from)).collect())
+                    .unwrap_or_default()
+            })
+        } else {
+            None
+        };
         let mut st = self.state.lock().unwrap();
-        let same_page = st.prev_url == url && opts.scope.is_none();
+        // Delta also applies across URLs of the same page (query/hash differ, e.g. search results).
+        let same_page = page_key(&st.prev_url) == page_key(&url) && opts.scope.is_none();
         let body = if opts.mode == SnapshotMode::Delta && same_page && !st.prev_lines.is_empty() {
             let (added, removed, unchanged) = diff_lines(&st.prev_lines, &lines);
+            // Separators such as `text "|"` churn without meaning; never report them as changes.
+            let meaningful = |l: &String| l.chars().any(|c| c.is_alphanumeric());
+            let added: Vec<String> = added.into_iter().filter(meaningful).collect();
+            let removed: Vec<String> = removed.into_iter().filter(meaningful).collect();
             let mut s = format!("(delta: {unchanged} unchanged lines omitted)\n");
             if added.is_empty() && removed.is_empty() {
                 s.push_str("no changes\n");
@@ -632,6 +808,9 @@ impl Page {
         if opts.scope.is_none() && opts.mode != SnapshotMode::Interactive {
             st.prev_lines = lines.clone();
             st.prev_url = url.clone();
+        } else if let Some(b) = baseline {
+            st.prev_lines = b;
+            st.prev_url = url.clone();
         }
         Ok(SnapshotOut {
             url,
@@ -644,7 +823,18 @@ impl Page {
 
     // ------------------------------------------------------------------ input
 
+    /// Cheap fingerprint of the page's markup, to tell a click that did nothing from one that updated the page.
+    async fn page_sig(&self) -> Option<String> {
+        self.eval(
+            "(()=>{const h=document.documentElement.outerHTML;let x=0;for(let i=0;i<h.length;i++)x=(x*31+h.charCodeAt(i))|0;return location.href+'|'+h.length+'|'+x})()",
+        )
+        .await
+        .ok()
+        .and_then(|v| v.as_str().map(String::from))
+    }
+
     pub async fn click(&self, r: &str) -> Result<ActionOutcome> {
+        let before = self.page_sig().await;
         let (warn, mut out) = self
             .after(|| async {
                 let info = self.rt("clickInfo", &[json!(r)]).await?;
@@ -672,6 +862,11 @@ impl Page {
             .await?;
         if let Some(w) = warn {
             out.warnings.push(w);
+        }
+        if !out.navigated {
+            if let (Some(b), Some(a)) = (before, self.page_sig().await) {
+                out.changed = b != a;
+            }
         }
         Ok(out)
     }
@@ -946,16 +1141,40 @@ impl Page {
 }
 
 /// Multiset line diff: (added, removed, unchanged count).
+/// URL without query and fragment.
+fn page_key(url: &str) -> &str {
+    url.split(['?', '#']).next().unwrap_or(url)
+}
+
+/// Line identity for diffing: ref numbers are dropped so renumbering is not a change.
+fn line_key(l: &str) -> String {
+    let mut out = String::with_capacity(l.len());
+    let mut rest = l;
+    while let Some(i) = rest.find(" [e") {
+        let tail = &rest[i + 3..];
+        let n = tail.bytes().take_while(u8::is_ascii_digit).count();
+        if n > 0 && tail[n..].starts_with(']') {
+            out.push_str(&rest[..i]);
+            rest = &tail[n + 1..];
+        } else {
+            out.push_str(&rest[..i + 3]);
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn diff_lines(prev: &[String], next: &[String]) -> (Vec<String>, Vec<String>, usize) {
     use std::collections::HashMap;
-    let mut counts: HashMap<&str, i64> = HashMap::new();
+    let mut counts: HashMap<String, i64> = HashMap::new();
     for l in prev {
-        *counts.entry(l.as_str()).or_default() += 1;
+        *counts.entry(line_key(l)).or_default() += 1;
     }
     let mut added = vec![];
     let mut unchanged = 0;
     for l in next {
-        match counts.get_mut(l.as_str()) {
+        match counts.get_mut(&line_key(l)) {
             Some(c) if *c > 0 => {
                 *c -= 1;
                 unchanged += 1;
@@ -965,7 +1184,7 @@ fn diff_lines(prev: &[String], next: &[String]) -> (Vec<String>, Vec<String>, us
     }
     let mut removed = vec![];
     for l in prev {
-        if let Some(c) = counts.get_mut(l.as_str()) {
+        if let Some(c) = counts.get_mut(&line_key(l)) {
             if *c > 0 {
                 *c -= 1;
                 removed.push(l.clone());
@@ -998,4 +1217,37 @@ mod tests {
         assert_eq!(removed, vec!["x"]);
         assert_eq!(same, 1);
     }
+}
+
+/// Turn a raw Chromium `net::ERR_*` code into something an agent can act on.
+fn friendly_net_error(err: &str, url: &str) -> String {
+    let host = url
+        .split("://")
+        .nth(1)
+        .and_then(|r| r.split(['/', '?', '#']).next())
+        .unwrap_or(url);
+    let hint = match err.trim_start_matches("net::") {
+        "ERR_NAME_NOT_RESOLVED" => format!(
+            "{host} does not resolve: the domain is misspelled, does not exist, or DNS is unreachable. Check the spelling or search for the site instead"
+        ),
+        e if e.starts_with("ERR_CERT_") || e.starts_with("ERR_SSL_") => format!(
+            "{host} has a certificate/TLS problem (expired, self-signed, wrong host or untrusted). Ostler does not click through certificate warnings; tell the user or use a different source"
+        ),
+        "ERR_HTTP_RESPONSE_CODE_FAILURE" => format!(
+            "{host} answered with an HTTP error status (4xx/5xx) and no page body. Often the page does not exist (404) or the site is refusing automated browsers (403/429). Try the site's homepage or another source"
+        ),
+        "ERR_ABORTED" => format!(
+            "navigation to {host} was aborted. This is what a file download looks like (Ostler does not save downloads), or the page replaced itself with another navigation. Try snapshot to see where the tab is now"
+        ),
+        "ERR_CONNECTION_REFUSED" => format!("{host} refused the connection: nothing is listening there or the port is wrong"),
+        "ERR_CONNECTION_TIMED_OUT" | "ERR_TIMED_OUT" => format!("{host} did not answer in time: it is down, slow, or blocking this network"),
+        "ERR_CONNECTION_RESET" | "ERR_CONNECTION_CLOSED" | "ERR_EMPTY_RESPONSE" => format!(
+            "{host} closed the connection without answering. Sites that block bots often do this; try another source"
+        ),
+        "ERR_TOO_MANY_REDIRECTS" => format!("{host} redirects in a loop. Cookies may be blocked, or the site rejects this browser"),
+        "ERR_BLOCKED_BY_CLIENT" | "ERR_BLOCKED_BY_RESPONSE" => format!("{host} was blocked (by policy or by the site's response headers)"),
+        "ERR_INTERNET_DISCONNECTED" | "ERR_NETWORK_CHANGED" => "no network connection".to_string(),
+        _ => String::new(),
+    };
+    hint
 }

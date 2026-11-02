@@ -35,6 +35,8 @@ It uses this binary's absolute path, so it works even when the client's `PATH` d
 - Codex: `[mcp_servers.ostler]` with `command = "ostler"`, `args = ["serve"]`
 - Cursor / others: `{ "mcpServers": { "ostler": { "command": "ostler", "args": ["serve"] } } }`
 
+After installing or rebuilding `ostler`, reconnect the MCP client (Claude Code: `/mcp`; others: restart it) so it starts the new binary.
+
 > Client config formats change between releases. If one of these does not load, check that client's current MCP documentation; the server itself only needs `ostler serve` on stdio.
 
 ## Memory with Qdrant

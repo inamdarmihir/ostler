@@ -823,7 +823,7 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
         },
     }
     if ok {
-        println!("\nAll good. Next: `ostler setup claude --apply` (or codex | cursor | vscode | json) to connect your agent.");
+        println!("\nAll good. Next: `ostler setup claude --apply` (or codex | cursor | vscode | json) to connect your agent.\nAfter rebuilding ostler, reconnect your MCP client (Claude Code: /mcp) to pick up the new binary.");
     } else {
         println!("\nFix the items above and run `ostler doctor` again. Chrome is required; memory is optional (unset QDRANT_URL to run without it).");
         std::process::exit(1);

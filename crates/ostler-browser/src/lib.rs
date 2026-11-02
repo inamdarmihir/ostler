@@ -5,7 +5,7 @@ mod page;
 mod policy;
 
 pub use fill::{
-    AutoMode, FieldError, FieldResult, FillReport, FillRequest, FillStatus, MissingField,
+    AutoMode, FieldDrift, FieldError, FieldResult, FillReport, FillRequest, FillStatus, MissingField,
     SubmitOutcome, SubmitStatus, Suggester, Suggestion,
 };
 pub use ostler_cdp::LaunchOptions;
@@ -191,6 +191,18 @@ impl Browser {
     /// Things that happened to tabs on their own (popups) since the last call.
     pub fn take_notes(&self) -> Vec<String> {
         std::mem::take(&mut *self.notes.lock().unwrap())
+    }
+
+    /// Wait up to `max` for a note (a popup opening) and take everything pending.
+    pub async fn wait_notes(&self, max: std::time::Duration) -> Vec<String> {
+        let end = tokio::time::Instant::now() + max;
+        loop {
+            let n = self.take_notes();
+            if !n.is_empty() || tokio::time::Instant::now() >= end {
+                return n;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
     }
 
     pub async fn tabs(&self) -> Vec<TabInfo> {

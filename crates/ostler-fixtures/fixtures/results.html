@@ -1,0 +1,9 @@
+<!doctype html><title>Results</title><body><h1>Results</h1><div id=n></div><ul id=l></ul><a id=next href="results.html?p=2">Next page</a>
+<script>
+const p=location.search.includes('p=2')?2:1;
+const items=[];for(let i=1;i<=40;i++)items.push(i);
+const shown=p==2?items.slice(1).concat([41]):items;
+if(p==2){document.getElementById('n').innerHTML='<a href="results.html">Back to first</a> <a href="#extra">Extra</a>';}
+const l=document.getElementById('l');
+for(const i of shown){const li=document.createElement('li');li.innerHTML='<a href="#r'+i+'">Result '+i+' description text</a>';l.appendChild(li);}
+</script></body>

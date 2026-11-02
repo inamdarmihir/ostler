@@ -34,6 +34,22 @@ pub const PAGES: &[(&str, &str)] = &[
         "captcha_interstitial",
         include_str!("../fixtures/captcha_interstitial.html"),
     ),
+    ("article", include_str!("../fixtures/article.html")),
+    (
+        "bigfooter",
+        include_str!("../fixtures/bigfooter.html"),
+    ),
+    ("results", include_str!("../fixtures/results.html")),
+    (
+        "captcha_search_wall",
+        include_str!("../fixtures/captcha_search_wall.html"),
+    ),
+    ("noop", include_str!("../fixtures/noop.html")),
+    ("spa", include_str!("../fixtures/spa.html")),
+    ("drift", include_str!("../fixtures/drift.html")),
+    ("sections", include_str!("../fixtures/sections.html")),
+    ("picker", include_str!("../fixtures/picker.html")),
+    ("login", include_str!("../fixtures/login.html")),
     (
         "captcha_badge_only",
         include_str!("../fixtures/captcha_badge_only.html"),
@@ -140,6 +156,37 @@ impl FixtureServer {
                                 let page = "<!doctype html><title>Thanks</title><h1>Thank you</h1><p>Your message was received.</p>";
                                 let _ = req.respond(Response::from_string(page).with_header(html));
                             }
+                        }
+                        // A normal-looking page served with a 404 status (GitHub style).
+                        (Method::Get, "/missing") => {
+                            let body = include_str!("../fixtures/notfound.html");
+                            let _ = req.respond(
+                                Response::from_string(body)
+                                    .with_status_code(404)
+                                    .with_header(html),
+                            );
+                        }
+                        // An empty 403: Chrome reports ERR_HTTP_RESPONSE_CODE_FAILURE.
+                        (Method::Get, "/forbidden") => {
+                            let _ = req.respond(Response::from_string("").with_status_code(403));
+                        }
+                        (Method::Get, "/doc.pdf") => {
+                            let pdf =
+                                Header::from_bytes("Content-Type", "application/pdf").unwrap();
+                            let _ = req.respond(
+                                Response::from_data(
+                                    b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n".to_vec(),
+                                )
+                                .with_header(pdf),
+                            );
+                        }
+                        (Method::Get, "/members") => {
+                            let loc = Header::from_bytes("Location", "/login.html").unwrap();
+                            let _ = req.respond(
+                                Response::from_string("")
+                                    .with_status_code(302)
+                                    .with_header(loc),
+                            );
                         }
                         (Method::Get, "/") => {
                             let list: String = PAGES

@@ -1,0 +1,16 @@
+<!doctype html><meta charset=utf-8><title>Picker</title>
+<h1>Pick a day</h1>
+<form id="f" action="/submit" method="post">
+  <label for="day">Day</label>
+  <input id="day" name="day" type="text">
+  <button type="button" id="other">Other</button>
+  <button type="submit">Send</button>
+</form>
+<script>
+// Like bootstrap-datepicker: it only learns the typed text from keyup, and when the user clicks
+// elsewhere it rewrites the box from what it learned.
+let learned='';
+const d=document.getElementById('day');
+d.addEventListener('keyup',e=>{ if(![27,37,39,38,40,32,13,9].includes(e.keyCode)) learned=d.value; });
+document.addEventListener('mousedown',()=>{ d.value=learned; });
+</script>

@@ -255,6 +255,26 @@ fn scrub(detail: &str, provided: &[(String, Value, bool)]) -> String {
     res
 }
 
+/// Warning line when a search-results page does not seem to match its query (empty otherwise).
+/// Only the user's own query is echoed, defanged; page text is compared, never printed.
+async fn relevance_warning(b: &Browser, url: &str) -> String {
+    if crate::relevance::search_query(url).is_none() {
+        return String::new();
+    }
+    // A bot wall has its own hand-off; comparing its text with the query only adds a confusing warning.
+    if b.page().challenge().await.ok().flatten().is_some() {
+        return String::new();
+    }
+    let js = "(document.body&&document.body.innerText||'').slice(0,30000)";
+    let Ok(v) = b.page().eval(js).await else {
+        return String::new();
+    };
+    match crate::relevance::check(url, v.as_str().unwrap_or_default()) {
+        Some(q) => format!("Warning: results do not seem to match the query \"{}\"; the engine may be degrading results for this browser. Try another engine or --headed.\n", inert(&q)),
+        None => String::new(),
+    }
+}
+
 fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
     a.get(k).and_then(Value::as_str)
 }
@@ -476,7 +496,7 @@ impl App {
                             "Ask the user to complete it in the browser window, then call wait_for_human."
                         };
                         let line = format!(
-                            "CHALLENGE: {what}. Ostler does not solve or bypass these. Do not retry or click around it. {next}"
+                            "CHALLENGE: {what}. Ostler does not solve or bypass these. Do not retry or click around it. {next} Meanwhile, get the information from a different source (another search engine such as Bing, or another site)."
                         );
                         match out.content.first_mut() {
                             Some(Content::Text(t)) => *t = format!("{line}\n{t}"),
@@ -530,7 +550,18 @@ impl App {
         default: SnapshotMode,
     ) -> Result<String, String> {
         let mode = match mode {
-            Some("none") => return Ok(String::new()),
+            Some("none") => {
+                // Show nothing, but still remember the page so the next delta is small.
+                let _ = b
+                    .page()
+                    .snapshot(SnapshotOpts {
+                        mode: SnapshotMode::Interactive,
+                        max_chars: Some(8000),
+                        ..Default::default()
+                    })
+                    .await;
+                return Ok(String::new());
+            }
             Some("full") => SnapshotMode::Full,
             Some("delta") => SnapshotMode::Delta,
             Some("interactive") => SnapshotMode::Interactive,
@@ -540,10 +571,12 @@ impl App {
             .page()
             .snapshot(SnapshotOpts {
                 mode,
-                max_chars: Some(if mode == SnapshotMode::Full {
-                    20000
-                } else {
+                // A delta must use the same budget as the baseline it is compared with (20000), or the
+                // tail of a long page looks "removed".
+                max_chars: Some(if mode == SnapshotMode::Interactive {
                     8000
+                } else {
+                    20000
                 }),
                 ..Default::default()
             })
@@ -553,15 +586,27 @@ impl App {
         if s.truncated {
             t.push_str("(truncated; use snapshot with ref to read a part)\n");
         }
-        Ok(wrap(&t))
+        let mut out = wrap(&t);
+        if mode == SnapshotMode::Interactive {
+            out.push_str("\nOnly controls are listed; page text (article body, search snippets) is omitted. Call snapshot to read it.");
+        }
+        Ok(out)
     }
 
     fn action_text(&self, what: &str, o: &ostler_browser::ActionOutcome) -> String {
+        let http = match o.status {
+            Some(404 | 410) => " (HTTP 404: page not found; check the URL or search for it)".to_string(),
+            Some(st) if st >= 400 => format!(" (HTTP {st})"),
+            _ => String::new(),
+        };
         let mut s = format!(
-            "{what}. Now at: {} — {}\n",
+            "{what}{http}. Now at: {} — {}\n",
             quarantine(&o.title),
             quarantine(&o.url)
         );
+        for n in &o.notes {
+            s.push_str(&format!("Note: {}\n", inert(n)));
+        }
         for w in &o.warnings {
             s.push_str(&format!("Warning: {}\n", quarantine(w)));
         }
@@ -579,6 +624,7 @@ impl App {
                 br!(self, b, {
                     let o = b.page().navigate(&url).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text("Navigated", &o);
+                    t.push_str(&relevance_warning(b, &o.url).await);
                     t.push_str(
                         &self
                             .observe(b, obs.as_deref(), SnapshotMode::Interactive)
@@ -627,7 +673,25 @@ impl App {
                 br!(self, b, {
                     let o = b.page().click(&r).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text(&format!("Clicked {r}"), &o);
-                    let default = if o.navigated {
+                    if o.navigated {
+                        t.push_str(&format!("Result: navigated to {}\n", inert(&o.url)));
+                    } else {
+                        // A popup can open a beat after the click; give it a bounded moment before saying nothing happened.
+                        let wait = if o.changed { 0 } else { 400 };
+                        let popups = b.wait_notes(std::time::Duration::from_millis(wait)).await;
+                        if !popups.is_empty() {
+                            for p in popups {
+                                t.push_str(&format!("Result: {}\n", inert(&p)));
+                            }
+                        } else if o.changed {
+                            t.push_str("Result: page updated in place\n");
+                        } else {
+                            t.push_str(
+                                "Result: no visible change (no navigation, popup or page update)\n",
+                            );
+                        }
+                    }
+                    let default = if o.navigated && !b.page().baseline_matches(&o.url) {
                         SnapshotMode::Interactive
                     } else {
                         SnapshotMode::Delta
@@ -648,7 +712,7 @@ impl App {
                         .await
                         .map_err(|e| e.to_string())?;
                     let mut t = self.action_text(&format!("Typed into {r}"), &o);
-                    let default = if o.navigated {
+                    let default = if o.navigated && !b.page().baseline_matches(&o.url) {
                         SnapshotMode::Interactive
                     } else {
                         SnapshotMode::Delta
@@ -663,7 +727,7 @@ impl App {
                 br!(self, b, {
                     let o = b.page().press(&key).await.map_err(|e| e.to_string())?;
                     let mut t = self.action_text(&format!("Pressed {key}"), &o);
-                    let default = if o.navigated {
+                    let default = if o.navigated && !b.page().baseline_matches(&o.url) {
                         SnapshotMode::Interactive
                     } else {
                         SnapshotMode::Delta
@@ -675,6 +739,10 @@ impl App {
             "back" => {
                 br!(self, b, {
                     let o = b.page().back().await.map_err(|e| e.to_string())?;
+                    if !o.changed {
+                        // Nothing to go back to: say so and skip the page dump.
+                        return Ok(ToolOutput::text(self.action_text("Could not go back", &o)));
+                    }
                     let mut t = self.action_text("Went back", &o);
                     t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
                     Ok(ToolOutput::text(t))
@@ -684,8 +752,14 @@ impl App {
                 let text = arg_str(a, "text").map(String::from);
                 let gone = arg_str(a, "text_gone").map(String::from);
                 let sel = arg_str(a, "selector").map(String::from);
+                if let Some(ms) = a.get("ms").and_then(Value::as_u64) {
+                    tokio::time::sleep(Duration::from_millis(ms.min(10_000))).await;
+                    if text.is_none() && gone.is_none() && sel.is_none() {
+                        return Ok(ToolOutput::text(format!("Waited {}ms.", ms.min(10_000))));
+                    }
+                }
                 if text.is_none() && gone.is_none() && sel.is_none() {
-                    return Err("give at least one of text, text_gone, selector".into());
+                    return Err("give at least one of text, text_gone, selector, ms".into());
                 }
                 let timeout = Duration::from_millis(
                     a.get("timeout_ms")

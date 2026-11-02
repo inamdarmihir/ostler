@@ -389,6 +389,19 @@ async fn verification_walls_are_detected_but_not_over_reported() {
         .expect("interstitial detected");
     assert!(c.interstitial, "{c:?}");
 
+    // A search engine's bot wall is a form with only a submit button; it is still a wall.
+    b.page()
+        .navigate(&srv.url("/captcha_search_wall.html"))
+        .await
+        .unwrap();
+    let c = b
+        .page()
+        .challenge()
+        .await
+        .unwrap()
+        .expect("search wall detected");
+    assert_eq!((c.vendor.as_str(), c.interstitial), ("DuckDuckGo", true));
+
     // Not walls: an invisible-v3 badge, a plain form, a long page that merely mentions verification.
     for page in ["/captcha_badge_only.html", "/basic.html", "/longform.html"] {
         b.page().navigate(&srv.url(page)).await.unwrap();
@@ -1174,6 +1187,58 @@ async fn text_a_person_cannot_see_is_not_shown_to_the_agent() {
 }
 
 #[tokio::test]
+async fn long_text_is_split_and_cuts_are_marked() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/article.html")).await.unwrap();
+    let s = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(s.text.contains("FINALWORD."), "{}", s.text);
+    assert!(s.text.lines().all(|l| l.len() < 700), "{}", s.text);
+    assert!(s.text.contains("more chars cut]"), "{}", s.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn footer_collapses_and_expands_by_ref() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(full.text.contains("Link 30"), "{}", full.text);
+    let i = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(i.text.contains("30 links omitted; snapshot ref=e"), "{}", i.text);
+    assert!(!i.text.contains("Link 30"), "{}", i.text);
+    let r = i
+        .text
+        .split("snapshot ref=")
+        .nth(1)
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap()
+        .to_string();
+    let open = b
+        .page()
+        .snapshot(SnapshotOpts {
+            scope: Some(r),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(open.text.contains("Link 30"), "{}", open.text);
+    b.close().await;
+}
+
+#[tokio::test]
 async fn full_page_screenshot_does_not_stall_when_a_popup_took_the_front() {
     let Some((srv, b)) = setup().await else {
         return;
@@ -1197,5 +1262,206 @@ async fn full_page_screenshot_does_not_stall_when_a_popup_took_the_front() {
         "took {:?}",
         started.elapsed()
     );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn refs_survive_truncation_and_unknown_ref_is_actionable() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    let s = b
+        .page()
+        .snapshot(SnapshotOpts {
+            max_chars: Some(150),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(s.truncated);
+    // Past the cut, but numbered in document order (main: heading, Home link = e1; footer links follow).
+    b.page().click("e20").await.unwrap();
+    let err = b.page().click("e9999").await.unwrap_err().to_string();
+    assert!(err.contains("page changed") && err.contains("snapshot"), "{err}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn delta_after_navigating_to_similar_page_is_small() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/results.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    b.page().click("e42").await.unwrap_or_else(|e| panic!("{e}\n{}", full.text));
+    let d = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Delta,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(d.text.contains("Result 41"), "{}", d.text);
+    assert!(d.text.len() * 3 < full.text.len(), "{}", d.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn wrapper_with_click_handler_does_not_swallow_the_page() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/spa.html")).await.unwrap();
+    let i = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(i.text.contains("Best commute pick"), "{}", i.text);
+    assert!(i.text.contains("Compare"), "{}", i.text);
+    // A one-link card footer is not boilerplate: no "0/1 links omitted" noise.
+    assert!(!i.text.contains("footer ["), "{}", i.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn delta_right_after_navigate_is_small() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/results.html")).await.unwrap();
+    // The navigate view is interactive; the next delta must still have a baseline.
+    b.page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let d = b
+        .page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Delta,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(d.text.contains("no changes"), "{}", d.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn back_with_no_history_says_so() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    // The tab started on about:blank, which is not a page to return to.
+    let o = b.page().back().await.unwrap();
+    assert!(!o.changed, "{o:#?}");
+    assert!(o.notes.iter().any(|n| n.contains("no earlier page")), "{o:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn hash_and_query_changes_keep_the_delta_baseline() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    let url = srv.url("/results.html");
+    b.page().navigate(&url).await.unwrap();
+    b.page()
+        .snapshot(SnapshotOpts {
+            mode: SnapshotMode::Interactive,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(b.page().baseline_matches(&format!("{url}#top")));
+    assert!(b.page().baseline_matches(&format!("{url}?first=11")));
+    assert!(!b.page().baseline_matches(&srv.url("/basic.html")));
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_value_the_page_clears_after_filling_is_reported_at_submit() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/drift.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Day": "2026-12-25"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    tokio::time::sleep(std::time::Duration::from_millis(2200)).await;
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.drift.len(), 1, "{out:#?}");
+    assert_eq!(out.drift[0].was, "2026-12-25");
+    assert_eq!(out.drift[0].now, "");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_widget_that_learns_values_from_keyup_keeps_what_was_filled() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/picker.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Day": "12/25/2026"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    // Pressing anywhere else makes the widget rewrite the box from what it learned.
+    let snap = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let other = snap
+        .text
+        .lines()
+        .find(|l| l.contains("\"Other\""))
+        .and_then(|l| l.split("[").nth(1))
+        .and_then(|l| l.split("]").next())
+        .unwrap()
+        .to_string();
+    b.page().click(&other).await.unwrap();
+    let day = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    assert!(day.text.contains("12/25/2026"), "{}", day.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_heading_ref_reads_its_section_only() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/sections.html")).await.unwrap();
+    let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
+    let r = full
+        .text
+        .lines()
+        .find(|l| l.contains("\"Technology\""))
+        .and_then(|l| l.split("[").nth(1))
+        .and_then(|l| l.split("]").next())
+        .unwrap_or_else(|| panic!("no ref on heading: {}", full.text))
+        .to_string();
+    let s = b
+        .page()
+        .snapshot(SnapshotOpts {
+            scope: Some(r),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(s.text.contains("Feedforward microphones"), "{}", s.text);
+    assert!(s.text.contains("Detailed feedforward text"), "{}", s.text);
+    assert!(!s.text.contains("History text"), "{}", s.text);
+    assert!(!s.text.contains("Intro text"), "{}", s.text);
     b.close().await;
 }

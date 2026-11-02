@@ -159,6 +159,16 @@ pub struct SubmitOutcome {
     /// Headlines/text shown after submission (confirmation messages).
     pub excerpt: Vec<String>,
     pub next_form: Option<String>,
+    /// Filled fields the page changed between the fill and the submit click.
+    pub drift: Vec<FieldDrift>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FieldDrift {
+    pub r#ref: String,
+    pub label: String,
+    pub was: String,
+    pub now: String,
 }
 
 fn host_of(url: &str) -> String {
@@ -631,10 +641,41 @@ impl Page {
                         "typed input was not accepted; applied via native value setter".into(),
                     );
                 }
+                self.remember_fill(&live, &verdict, &again.value);
                 return finish_verdict(verdict, again.value, note, value);
             }
         }
+        self.remember_fill(&live, &verdict, &after.value);
         finish_verdict(verdict, after.value, note, value)
+    }
+
+    /// Keep what a field held when it was verified, so `submit` can notice if the page changes it afterwards.
+    fn remember_fill(&self, f: &ostler_forms::Field, v: &Verdict, observed: &Value) {
+        if *v == Verdict::Mismatch || !(f.kind.is_textual() || f.kind.is_native_value()) {
+            return;
+        }
+        let val = text_of(observed);
+        if val.is_empty() {
+            return;
+        }
+        let mut st = self.state.lock().unwrap();
+        st.filled.retain(|(r, _, _)| *r != f.r#ref);
+        st.filled.push((f.r#ref.clone(), f.display(), val));
+    }
+
+    /// Fields that no longer hold what they were verified with (a date picker or script cleared them).
+    async fn drifted_fields(&self) -> Vec<FieldDrift> {
+        let filled = std::mem::take(&mut self.state.lock().unwrap().filled);
+        let mut out = vec![];
+        for (r, label, was) in filled {
+            if let Ok(f) = self.field(&r).await {
+                let now = text_of(&f.value);
+                if now != was {
+                    out.push(FieldDrift { r#ref: r, label, was, now });
+                }
+            }
+        }
+        out
     }
 
     /// Re-read a field after filling it. Frameworks often re-mount the control in response to the very
@@ -743,6 +784,7 @@ impl Page {
                     })?
             }
         };
+        let drift = self.drifted_fields().await;
         let action = self.click(&ctl).await?;
         let after = self.forms().await.ok();
         let host = host_of(&action.url);
@@ -807,6 +849,7 @@ impl Page {
             page_errors,
             excerpt,
             next_form,
+            drift,
         })
     }
 }

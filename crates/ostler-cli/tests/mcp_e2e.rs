@@ -93,6 +93,66 @@ impl Client {
     }
 }
 
+fn ref_of(text: &str, label: &str) -> String {
+    text.lines()
+        .find(|l| l.contains(label))
+        .and_then(|l| l.split('[').nth(1))
+        .and_then(|s| s.split(']').next())
+        .unwrap_or_else(|| panic!("no ref for {label}: {text}"))
+        .to_string()
+}
+
+#[tokio::test]
+async fn navigation_and_click_honesty() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+
+    // A normal-looking page served as 404 says so.
+    let (err, t) = c.tool("navigate", json!({"url": srv.url("/missing")})).await;
+    assert!(!err, "{t}");
+    assert!(t.contains("Navigated (HTTP 404: page not found"), "{t}");
+
+    // An empty 403 fails the navigation; the number and meaning are in the error.
+    let (err, t) = c
+        .tool("navigate", json!({"url": srv.url("/forbidden")}))
+        .await;
+    assert!(err, "{t}");
+    assert!(
+        t.contains("HTTP 403") && t.contains("refusing automated access"),
+        "{t}"
+    );
+
+    // PDFs are labelled, whether Chrome renders or downloads them.
+    let (_, t) = c.tool("navigate", json!({"url": srv.url("/doc.pdf")})).await;
+    assert!(
+        t.contains("PDF/non-HTML document (content-type application/pdf)"),
+        "{t}"
+    );
+
+    // Redirect to a login page is flagged.
+    let (err, t) = c.tool("navigate", json!({"url": srv.url("/members")})).await;
+    assert!(!err, "{t}");
+    assert!(t.contains("Note: redirected to a sign-in page"), "{t}");
+
+    // A button that does nothing says so.
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/noop.html")}))
+        .await;
+    let r = ref_of(&nav, "Does nothing");
+    let (_, t) = c.tool("click", json!({"ref": r, "observe": "none"})).await;
+    assert!(t.contains("Result: no visible change"), "{t}");
+
+    // A target=_blank link reports the popup in the click result itself.
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/popup.html")}))
+        .await;
+    let r = ref_of(&nav, "Open the form in a new tab");
+    let (_, t) = c.tool("click", json!({"ref": r, "observe": "none"})).await;
+    assert!(t.contains("Result: a popup opened as tab t2"), "{t}");
+}
+
 #[tokio::test]
 async fn agent_session_with_memory() {
     let srv = FixtureServer::start();

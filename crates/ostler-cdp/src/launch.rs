@@ -150,6 +150,14 @@ impl Chrome {
                 (t.path().to_path_buf(), Some(t))
             }
         };
+        // Chrome allows one process per profile; a second launch on a shared --profile-dir exits at once.
+        let profile_hint = match &opts.user_data_dir {
+            Some(p) => format!(
+                " (is another Ostler or Chrome already using profile {}? one browser per profile; use a separate --profile-dir per server, or omit it)",
+                p.display()
+            ),
+            None => String::new(),
+        };
         let mut cmd = Command::new(exe);
         match transport {
             #[cfg(unix)]
@@ -250,9 +258,9 @@ impl Chrome {
             {
                 Ok(_) => {}
                 Err(CdpError::Closed) => {
-                    return Err(CdpError::Launch(
-                        "browser exited before DevTools was ready".into(),
-                    ))
+                    return Err(CdpError::Launch(format!(
+                        "browser exited before DevTools was ready{profile_hint}"
+                    )))
                 }
                 Err(CdpError::Timeout(..)) => {
                     return Err(CdpError::Launch(
@@ -280,9 +288,9 @@ impl Chrome {
         let ws_url = match tokio::time::timeout(Duration::from_secs(20), find).await {
             Ok(Some(url)) => url,
             Ok(None) => {
-                return Err(CdpError::Launch(
-                    "browser exited before DevTools was ready".into(),
-                ))
+                return Err(CdpError::Launch(format!(
+                    "browser exited before DevTools was ready{profile_hint}"
+                )))
             }
             Err(_) => {
                 return Err(CdpError::Launch(
