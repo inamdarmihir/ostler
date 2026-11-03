@@ -123,3 +123,17 @@ Cookies and logins carry across tabs. The `context` tool is a small key/value no
 ## Other agents: A2A
 
 If another agent, rather than a coding agent, should hand Ostler a form, use [A2A](a2a.html) instead of MCP.
+
+## Use the Chrome you already have
+
+Ostler can drive a Chrome you started yourself, so you keep your own window and sessions:
+
+1. Start Chrome with a debugging port on loopback and a dedicated profile (Chrome ignores the flag on its default profile; you start this, Ostler never opens the port for you):
+   - macOS: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=$HOME/.ostler/chrome-profile`
+   - Linux: `google-chrome --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=$HOME/.ostler/chrome-profile`
+2. Check it: `ostler doctor --cdp-url http://127.0.0.1:9222` (opens one blank tab, closes it).
+3. Register it: `ostler install --client claude-code -- --cdp-url http://127.0.0.1:9222`.
+
+The one-prompt flow: tell your agent "start Chrome with the command above, then run `ostler doctor --cdp-url http://127.0.0.1:9222`", then install as in step 3.
+
+Safety: only loopback URLs are accepted (a DevTools port has no authentication: anything that can reach it controls the browser, including every logged-in site), the URL is checked when `serve` starts, Ostler works in a tab of its own and closes only that tab on exit, and your browser keeps running. While the port is open, any local program can drive that Chrome, so use a dedicated profile and close it when done. `--cdp-url` conflicts with `--profile-dir`, is refused in A2A mode, and `--allow-domain` then relies on request interception without Chrome's DNS pinning.

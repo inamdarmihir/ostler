@@ -189,6 +189,8 @@ pub struct App {
     last_fill: StdMutex<Option<LastFill>>,
     /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
     notice: StdMutex<Option<String>>,
+    revealed: std::sync::atomic::AtomicBool,
+    list_changed: std::sync::atomic::AtomicBool,
     /// Notes the agent keeps for itself, shared by every tab and kept across browser restarts.
     context: StdMutex<BTreeMap<String, String>>,
     pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -326,8 +328,12 @@ fn quarantine(s: &str) -> String {
 /// end ("Ready: form_submit.") stay outside the wrapper so the agent still treats them as guidance; page
 /// text cannot forge one because every page string is quoted onto a single line before it gets here.
 fn wrap_detail(s: &str) -> String {
-    let is_hint =
-        |l: &str| l.trim().is_empty() || l.starts_with("Ready:") || l.starts_with("Step ");
+    let is_hint = |l: &str| {
+        l.trim().is_empty()
+            || l.starts_with("Ready:")
+            || l.starts_with("Step ")
+            || l.starts_with("Screenshot: call screenshot")
+    };
     let Some((head, rest)) = s.split_once('\n') else {
         return s.to_string();
     };
@@ -362,6 +368,8 @@ impl App {
             metrics: StdMutex::default(),
             last_fill: StdMutex::default(),
             notice: StdMutex::default(),
+            revealed: Default::default(),
+            list_changed: Default::default(),
             context: StdMutex::default(),
             pending: StdMutex::default(),
             started: Instant::now(),
@@ -390,6 +398,62 @@ impl App {
 
     pub fn profile(&self) -> Profile {
         self.cfg.profile
+    }
+
+    /// The tools to list right now (`auto` grows once a page with form fields has been seen).
+    pub fn listed_tools(&self) -> Vec<Value> {
+        tools::list_revealed(
+            self.cfg.profile,
+            self.revealed.load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
+    /// True once after the listed tools changed, so the server can send `tools/list_changed`.
+    pub fn take_list_changed(&self) -> bool {
+        self.list_changed
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// `auto` profile: reveal forms and memory tools when a page result shows form fields.
+    fn reveal_on_forms(&self, name: &str, out: &mut ToolOutput) {
+        use std::sync::atomic::Ordering::Relaxed;
+        if self.cfg.profile != Profile::Auto
+            || self.revealed.load(Relaxed)
+            || !matches!(
+                name,
+                "navigate" | "snapshot" | "click" | "type" | "press" | "back" | "scroll" | "hover"
+            )
+        {
+            return;
+        }
+        let fields = out
+            .content
+            .iter()
+            .filter_map(|c| match c {
+                Content::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .flat_map(|t| t.lines())
+            .filter(|l| {
+                [
+                    " textbox",
+                    " combobox",
+                    " listbox",
+                    " radio",
+                    " checkbox",
+                    " spinbutton",
+                ]
+                .iter()
+                .any(|r| l.contains(r))
+            })
+            .count();
+        if fields >= 2 {
+            self.revealed.store(true, Relaxed);
+            self.list_changed.store(true, Relaxed);
+            out.content.push(Content::Text(
+                "Form fields on this page. Now available: form_inspect, form_fill, form_submit, fill_field, memory_remember, memory_recall, memory_list, memory_forget.".into(),
+            ));
+        }
     }
 
     pub fn has_memory(&self) -> bool {
@@ -465,6 +529,7 @@ impl App {
             },
         };
         let mut out = out;
+        self.reveal_on_forms(name, &mut out);
         // A verification wall changes what the agent should do next, so say so right where it looks.
         if matches!(
             name,
@@ -718,6 +783,37 @@ impl App {
                     Ok(ToolOutput::text(t))
                 })
             }
+            "hover" => {
+                let r = need_str(a, "ref")?.to_string();
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let o = b.page().hover_action(&r).await.map_err(|e| e.to_string())?;
+                    let mut t = self.action_text(&format!("Hovered {r}"), &o);
+                    t.push_str(&self.observe(b, obs.as_deref(), SnapshotMode::Delta).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
+            "scroll" => {
+                let r = arg_str(a, "ref").map(String::from);
+                let dir = arg_str(a, "direction").unwrap_or("down").to_string();
+                let amount = a.get("amount").and_then(Value::as_i64);
+                let obs = arg_str(a, "observe").map(String::from);
+                br!(self, b, {
+                    let (pos, o) = b
+                        .page()
+                        .scroll(r.as_deref(), &dir, amount)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let what = match &r {
+                        Some(r) => format!("Scrolled {r} into view"),
+                        None => format!("Scrolled {dir}"),
+                    };
+                    let mut t = self.action_text(&what, &o);
+                    t.push_str(&format!("Position: {pos} px\n"));
+                    t.push_str(&self.observe(b, obs.as_deref(), SnapshotMode::Delta).await?);
+                    Ok(ToolOutput::text(t))
+                })
+            }
             "type" => {
                 let r = need_str(a, "ref")?.to_string();
                 let text = need_str(a, "text")?.to_string();
@@ -957,9 +1053,10 @@ impl App {
                         )
                         .await
                         .map_err(|e| e.to_string())?;
-                    Ok(ToolOutput::text(wrap_detail(&render::fill(
+                    Ok(ToolOutput::text(wrap_detail(&render::fill_shots(
                         &rep,
                         self.cfg.verbose,
+                        true,
                     ))))
                 })
             }
@@ -1039,9 +1136,10 @@ impl App {
 
     async fn form_fill(&self, a: &Value) -> Result<ToolOutput, String> {
         let rep = self.fill_report(a).await?;
-        Ok(ToolOutput::text(wrap_detail(&render::fill(
+        Ok(ToolOutput::text(wrap_detail(&render::fill_shots(
             &rep,
             self.cfg.verbose,
+            true,
         ))))
     }
 
@@ -1374,9 +1472,10 @@ impl App {
                 .map_err(|e| e.to_string())
         })?;
         self.learn_from_submit(&out);
-        Ok(ToolOutput::text(wrap_detail(&render::submit(
+        Ok(ToolOutput::text(wrap_detail(&render::submit_shots(
             &out,
             self.cfg.verbose,
+            true,
         ))))
     }
 

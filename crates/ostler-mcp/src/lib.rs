@@ -50,14 +50,14 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
                 id,
                 json!({
                     "protocolVersion": version,
-                    "capabilities": {"tools": {"listChanged": false}},
+                    "capabilities": {"tools": {"listChanged": app.profile() == Profile::Auto}},
                     "serverInfo": {"name": "ostler", "version": env!("CARGO_PKG_VERSION")},
                     "instructions": INSTRUCTIONS,
                 }),
             )
         }
         "ping" => ok(id, json!({})),
-        "tools/list" => ok(id, json!({"tools": tools::list(app.profile())})),
+        "tools/list" => ok(id, json!({"tools": app.listed_tools()})),
         "tools/call" => {
             let Some(name) = params.get("name").and_then(Value::as_str) else {
                 return Some(rpc_err(id, -32602, "tools/call requires a tool name"));
@@ -138,6 +138,12 @@ pub async fn serve_stdio(app: App) -> std::io::Result<()> {
         for m in msgs {
             if let Some(resp) = handle(&app, &m).await {
                 out.write_all(format!("{resp}\n").as_bytes()).await?;
+                if app.take_list_changed() {
+                    out.write_all(
+                        b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}\n",
+                    )
+                    .await?;
+                }
                 out.flush().await?;
             }
         }

@@ -10,8 +10,12 @@ pub enum Profile {
     /// core + forms
     Forms,
     /// forms + memory + stats
-    #[default]
     All,
+    /// Lists only the core tools until a page with form fields is seen, then adds forms and memory
+    /// (and sends `tools/list_changed`). Every tool stays callable, so a client that never refreshes
+    /// its list is told the names in the page result.
+    #[default]
+    Auto,
 }
 
 impl std::str::FromStr for Profile {
@@ -21,7 +25,10 @@ impl std::str::FromStr for Profile {
             "core" => Ok(Self::Core),
             "forms" => Ok(Self::Forms),
             "all" => Ok(Self::All),
-            other => Err(format!("unknown tool profile {other:?} (core|forms|all)")),
+            "auto" => Ok(Self::Auto),
+            other => Err(format!(
+                "unknown tool profile {other:?} (auto|core|forms|all)"
+            )),
         }
     }
 }
@@ -38,7 +45,7 @@ fn rank(p: Profile) -> u8 {
     match p {
         Profile::Core => 0,
         Profile::Forms => 1,
-        Profile::All => 2,
+        Profile::All | Profile::Auto => 2,
     }
 }
 
@@ -58,6 +65,10 @@ fn defs() -> Vec<Def> {
             props: json!({"ref":{"type":"string"},"text":{"type":"string"},"submit":{"type":"boolean","description":"press Enter after"},"observe":observe()}) },
         Def { name: "press", desc: "Press a key, e.g. Enter, Tab, Escape, Control+a.", min: Profile::Core, required: &["key"],
             props: json!({"key":{"type":"string"},"observe":observe()}) },
+        Def { name: "hover", desc: "Move the pointer over an element by ref (opens menus and tooltips).", min: Profile::Core, required: &["ref"],
+            props: json!({"ref":{"type":"string"},"observe":observe()}) },
+        Def { name: "scroll", desc: "Scroll an element into view (ref) or the page (direction up|down|top|bottom, optional amount in px). Reports position as scrolled/max.", min: Profile::Core, required: &[],
+            props: json!({"ref":{"type":"string"},"direction":{"type":"string","enum":["up","down","top","bottom"]},"amount":{"type":"integer"},"observe":observe()}) },
         Def { name: "wait_for", desc: "Wait until text appears/disappears or a CSS selector shows, or just pause for ms milliseconds (max 10000).", min: Profile::Core, required: &[],
             props: json!({"text":{"type":"string"},"text_gone":{"type":"string"},"selector":{"type":"string"},"timeout_ms":{"type":"integer"},"ms":{"type":"integer","description":"plain pause"}}) },
         Def { name: "wait_for_human", desc: "A CAPTCHA/verification wall is blocking the page: wait for the user to complete it in the browser window (needs --headed). Ostler never solves these itself.", min: Profile::Core, required: &[],
@@ -90,9 +101,19 @@ fn defs() -> Vec<Def> {
 }
 
 pub fn list(profile: Profile) -> Vec<Value> {
+    list_revealed(profile, false)
+}
+
+/// Tools to show now. Only `Auto` depends on `revealed` (a form page has been seen).
+pub fn list_revealed(profile: Profile, revealed: bool) -> Vec<Value> {
+    let shown = match profile {
+        Profile::Auto if revealed => Profile::All,
+        Profile::Auto => Profile::Core,
+        p => p,
+    };
     defs()
         .into_iter()
-        .filter(|d| rank(d.min) <= rank(profile))
+        .filter(|d| rank(d.min) <= rank(shown))
         .map(|d| {
             json!({
                 "name": d.name,
@@ -122,6 +143,19 @@ mod tests {
             list(Profile::All).len(),
         );
         assert!(c < f && f < a);
+    }
+
+    #[test]
+    fn auto_starts_core_and_reveals_everything() {
+        assert_eq!(
+            list_revealed(Profile::Auto, false).len(),
+            list(Profile::Core).len()
+        );
+        assert_eq!(
+            list_revealed(Profile::Auto, true).len(),
+            list(Profile::All).len()
+        );
+        assert_eq!(allowed(Profile::Auto, "form_fill"), Some(true));
     }
 
     #[test]

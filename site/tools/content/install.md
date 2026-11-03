@@ -15,10 +15,32 @@ Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You n
 ## Verify
 
 ```sh
-ostler doctor        # Chrome launches? Memory report (sealing, key, embeddings, isolation, transport); Qdrant reachable? Prints the fix when not
+ostler doctor        # Chrome launches? Memory report; Qdrant reachable? Every failing check prints the command that fixes it
+ostler doctor --fix  # apply only the safe fixes: create the config directory, chmod 600 an open key file
 ```
 
-`ostler doctor` explains launch failures: sandbox or root problems, a profile already in use, missing libraries, and otherwise how to see Chrome's own error.
+`ostler doctor` explains launch failures (sandbox or root problems, a profile already in use, missing libraries, Chrome not installed) with a concrete command for each. `--fix` never creates keys, installs software, edits client configs or touches the network.
+
+## Connect your agent
+
+```sh
+ostler install --list                  # clients and their config files
+ostler install --client claude-code    # or claude-desktop | cursor | vscode | windsurf | codex
+```
+
+This edits the client's config file for you: it refuses a file that is not valid JSON/TOML, makes a backup first, keeps your other servers and prints exactly what changed. Re-running it changes nothing; `--dry-run` previews and `--uninstall` removes the entry. Nothing else needs configuring: with no config at all, memory is in-process for the session and no Qdrant or key is involved.
+
+## Use your own Chrome (optional)
+
+Start Chrome yourself with a debugging port on loopback and a dedicated profile, then point Ostler at it:
+
+```sh
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=$HOME/.ostler/chrome-profile
+ostler doctor --cdp-url http://127.0.0.1:9222
+ostler install --client claude-code -- --cdp-url http://127.0.0.1:9222
+```
+
+Only loopback is accepted. Ostler never opens the port for you, works in its own tab and leaves your browser running. While the port is open any local program can drive that Chrome, so use a dedicated profile.
 
 ## Platforms
 
@@ -33,7 +55,7 @@ Rerun the same install command. `install.sh` replaces the binary in place. Then 
 
 ## Uninstall
 
-Delete the `ostler` binary (`~/.local/bin/ostler`, or `~/.cargo/bin/ostler`), and `~/.config/ostler` and `~/.cache/ostler` if you want the settings and the `npx` download gone.
+Run `ostler install --client <name> --uninstall` for each client you registered (it keeps your other servers and backs the file up). Delete the `ostler` binary (`~/.local/bin/ostler`, or `~/.cargo/bin/ostler`), and `~/.config/ostler` and `~/.cache/ostler` if you want the settings and the `npx` download gone.
 
 Memory lives in your Qdrant, not on disk here. `ostler memory wipe --yes` erases it, so run that first if you want it gone.
 

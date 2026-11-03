@@ -1,0 +1,21 @@
+<!doctype html><meta charset=utf-8><title>Delivery address</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>#sug{list-style:none;margin:0;padding:0;border:1px solid #999;background:#fff}#sug li{padding:.4rem;cursor:pointer}#sug li:hover{background:#eef}</style>
+<h1>Delivery address</h1>
+<form id="f">
+ <label for="q" id="ql">Street address</label>
+ <input id="q" name="street" role="combobox" aria-autocomplete="list" aria-controls="sug" aria-expanded="false" autocomplete="off">
+ <ul id="sug" role="listbox" aria-labelledby="ql" hidden></ul>
+ <label for="c">City</label><input id="c" name="city">
+ <label for="s">State</label><input id="s" name="state" maxlength="2">
+ <label for="z">ZIP code</label><input id="z" name="zip" maxlength="5">
+ <button type="submit">Save address</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);let t;
+const A=[{s:'1600 Amphitheatre Parkway',c:'Mountain View',st:'CA',z:'94043'},{s:'1600 Pennsylvania Avenue NW',c:'Washington',st:'DC',z:'20500'},{s:'350 Fifth Avenue',c:'New York',st:'NY',z:'10118'}];
+$('q').addEventListener('input',()=>{clearTimeout(t);const v=$('q').value.toLowerCase();t=setTimeout(()=>{
+ const m=v.length<3?[]:A.filter(a=>a.s.toLowerCase().includes(v)||v.includes(a.s.toLowerCase().slice(0,12)));
+ $('sug').innerHTML=m.map((a,i)=>'<li role="option" data-i="'+A.indexOf(a)+'">'+a.s+', '+a.c+', '+a.st+' '+a.z+'</li>').join('');$('sug').hidden=!m.length;$('q').setAttribute('aria-expanded',!$('sug').hidden)},200)});
+$('sug').addEventListener('mousedown',e=>{const li=e.target.closest('li');if(!li)return;const a=A[+li.dataset.i];
+ $('q').value=a.s;$('c').value=a.c;$('s').value=a.st;$('z').value=a.z;$('sug').hidden=true});
+$('f').addEventListener('submit',async e=>{e.preventDefault();await send(fdo(e.target));document.body.innerHTML='<h1>Address saved</h1>'});</script>

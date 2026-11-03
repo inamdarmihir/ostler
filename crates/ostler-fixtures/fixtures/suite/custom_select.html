@@ -1,0 +1,17 @@
+<!doctype html><meta charset=utf-8><title>Choose a plan</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>#lb{list-style:none;margin:0;padding:0;border:1px solid #888;background:#fff;position:absolute;width:300px}#lb li{padding:.4rem;cursor:pointer}#lb li[aria-selected=true]{background:#dde}#btn{width:300px;text-align:left;margin:0}</style>
+<h1>Choose a plan</h1>
+<form id="f">
+ <label id="pl">Billing cycle</label>
+ <button type="button" id="btn" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pl btn" aria-controls="lb">Select...</button>
+ <ul id="lb" role="listbox" aria-labelledby="pl" hidden>
+  <li role="option" data-v="monthly">Monthly</li><li role="option" data-v="yearly">Yearly (save 20%)</li><li role="option" data-v="lifetime">Lifetime</li></ul>
+ <label for="seats">Seats</label><input id="seats" name="seats" type="number" min="1" value="1">
+ <button type="submit" style="display:block;margin-top:5rem">Subscribe</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+let v='';const $=id=>document.getElementById(id);
+$('btn').addEventListener('click',()=>{$('lb').hidden=!$('lb').hidden;$('btn').setAttribute('aria-expanded',!$('lb').hidden)});
+$('lb').addEventListener('click',e=>{const li=e.target.closest('li');if(!li)return;v=li.dataset.v;$('btn').textContent=li.textContent;$('lb').hidden=true;
+ document.querySelectorAll('#lb li').forEach(x=>x.setAttribute('aria-selected',x===li))});
+$('f').addEventListener('submit',async e=>{e.preventDefault();await send({cycle:v,seats:$('seats').value});document.body.innerHTML='<h1>Subscribed</h1>'});</script>

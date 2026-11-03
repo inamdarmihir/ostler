@@ -1128,6 +1128,74 @@ impl Page {
         Ok(out)
     }
 
+    /// Move the pointer over an element (menus, tooltips and hover cards open this way) without clicking.
+    pub async fn hover_action(&self, r: &str) -> Result<ActionOutcome> {
+        let (_, out) = self
+            .after(|| async {
+                let info = self.rt("clickInfo", &[json!(r)]).await?;
+                if info["zero"].as_bool() == Some(true) {
+                    return Err(BrowserError::Other(format!(
+                        "{r} has no visible area to hover"
+                    )));
+                }
+                let (x, y) = (
+                    info["x"].as_f64().unwrap_or(0.0),
+                    info["y"].as_f64().unwrap_or(0.0),
+                );
+                self.session
+                    .call(
+                        "Input.dispatchMouseEvent",
+                        json!({ "type": "mouseMoved", "x": x, "y": y }),
+                    )
+                    .await?;
+                Ok(())
+            })
+            .await?;
+        Ok(out)
+    }
+
+    /// Scroll an element into view (`r`), or the page by `direction` (up | down | top | bottom, `amount`
+    /// pixels for up/down, default one screen). Returns a one-line position report.
+    pub async fn scroll(
+        &self,
+        r: Option<&str>,
+        direction: &str,
+        amount: Option<i64>,
+    ) -> Result<(String, ActionOutcome)> {
+        let dir = direction.to_string();
+        let (pos, out) = self
+            .after(|| async {
+                if let Some(r) = r {
+                    self.rt("rect", &[json!(r)]).await?;
+                } else {
+                    let step = match amount {
+                        Some(n) => n.clamp(1, 20000).to_string(),
+                        None => "window.innerHeight*0.9".into(),
+                    };
+                    let js = match dir.as_str() {
+                        "down" => format!("window.scrollBy(0,{step})"),
+                        "up" => format!("window.scrollBy(0,-({step}))"),
+                        "top" => "window.scrollTo(0,0)".into(),
+                        "bottom" => "window.scrollTo(0,document.documentElement.scrollHeight)".into(),
+                        other => {
+                            return Err(BrowserError::Other(format!(
+                                "unknown direction '{other}' (use up, down, top or bottom, or pass ref)"
+                            )))
+                        }
+                    };
+                    self.eval_once(&format!("(()=>{{{js};return 0}})()")).await?;
+                }
+                let v = self
+                    .eval(
+                        "(()=>{const e=document.scrollingElement||document.documentElement;const m=Math.max(0,e.scrollHeight-window.innerHeight);return Math.round(e.scrollTop)+'/'+Math.round(m)})()",
+                    )
+                    .await?;
+                Ok(v.as_str().unwrap_or("0/0").to_string())
+            })
+            .await?;
+        Ok((pos, out))
+    }
+
     async fn mouse_click(&self, x: f64, y: f64) -> Result<()> {
         let s = &self.session;
         s.call(

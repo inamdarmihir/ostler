@@ -10,8 +10,11 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use tiny_http::{Header, Method, Response, Server};
 
+pub mod suite;
+
 pub const PAGES: &[(&str, &str)] = &[
     ("basic", include_str!("../fixtures/basic.html")),
+    ("scrollhover", include_str!("../fixtures/scrollhover.html")),
     ("validation", include_str!("../fixtures/validation.html")),
     ("dependent", include_str!("../fixtures/dependent.html")),
     ("wizard", include_str!("../fixtures/wizard.html")),
@@ -122,6 +125,109 @@ pub const PAGES: &[(&str, &str)] = &[
         include_str!("../fixtures/datepicker_assumed.html"),
     ),
     ("reorder", include_str!("../fixtures/reorder.html")),
+    (
+        "suite_address_auto",
+        include_str!("../fixtures/suite/address_auto.html"),
+    ),
+    (
+        "suite_custom_select",
+        include_str!("../fixtures/suite/custom_select.html"),
+    ),
+    (
+        "suite_radio_cards",
+        include_str!("../fixtures/suite/radio_cards.html"),
+    ),
+    (
+        "suite_terms_scroll",
+        include_str!("../fixtures/suite/terms_scroll.html"),
+    ),
+    (
+        "suite_async_user",
+        include_str!("../fixtures/suite/async_user.html"),
+    ),
+    (
+        "suite_captcha_gate",
+        include_str!("../fixtures/suite/captcha_gate.html"),
+    ),
+    (
+        "suite_checkout",
+        include_str!("../fixtures/suite/checkout.html"),
+    ),
+    ("suite_chips", include_str!("../fixtures/suite/chips.html")),
+    (
+        "suite_consent",
+        include_str!("../fixtures/suite/consent.html"),
+    ),
+    ("suite_csrf", include_str!("../fixtures/suite/csrf.html")),
+    (
+        "suite_datalist",
+        include_str!("../fixtures/suite/datalist.html"),
+    ),
+    (
+        "suite_disabled_field",
+        include_str!("../fixtures/suite/disabled_field.html"),
+    ),
+    (
+        "suite_flight_dates",
+        include_str!("../fixtures/suite/flight_dates.html"),
+    ),
+    (
+        "suite_iframe_host",
+        include_str!("../fixtures/suite/iframe_host.html"),
+    ),
+    (
+        "suite_iframe_inner",
+        include_str!("../fixtures/suite/iframe_inner.html"),
+    ),
+    ("suite_job", include_str!("../fixtures/suite/job.html")),
+    (
+        "suite_license_dob",
+        include_str!("../fixtures/suite/license_dob.html"),
+    ),
+    (
+        "suite_missing_field",
+        include_str!("../fixtures/suite/missing_field.html"),
+    ),
+    (
+        "suite_phone_cc",
+        include_str!("../fixtures/suite/phone_cc.html"),
+    ),
+    (
+        "suite_radio_other",
+        include_str!("../fixtures/suite/radio_other.html"),
+    ),
+    (
+        "suite_reveal",
+        include_str!("../fixtures/suite/reveal.html"),
+    ),
+    (
+        "suite_richtext",
+        include_str!("../fixtures/suite/richtext.html"),
+    ),
+    (
+        "suite_server_reject",
+        include_str!("../fixtures/suite/server_reject.html"),
+    ),
+    (
+        "suite_shadow_nested",
+        include_str!("../fixtures/suite/shadow_nested.html"),
+    ),
+    (
+        "suite_signup_pw",
+        include_str!("../fixtures/suite/signup_pw.html"),
+    ),
+    (
+        "suite_switches",
+        include_str!("../fixtures/suite/switches.html"),
+    ),
+    (
+        "suite_tax_dob",
+        include_str!("../fixtures/suite/tax_dob.html"),
+    ),
+    (
+        "suite_wrong_format",
+        include_str!("../fixtures/suite/wrong_format.html"),
+    ),
 ];
 
 pub struct FixtureServer {
@@ -203,6 +309,27 @@ impl FixtureServer {
                                 .unwrap_or_default();
                             let _ = req.respond(
                                 Response::from_string(states(&c).to_string()).with_header(jsonh),
+                            );
+                        }
+                        // Ground truth for external drivers (benchmarks): what the server actually received.
+                        (Method::Get, "/__submissions") => {
+                            let body = Value::Array(subs.lock().unwrap().clone()).to_string();
+                            let _ = req.respond(Response::from_string(body).with_header(jsonh));
+                        }
+                        (Method::Post, "/__reset") => {
+                            subs.lock().unwrap().clear();
+                            let _ = req.respond(Response::from_string("{}").with_header(jsonh));
+                        }
+                        // A server that refuses a well-formed request with a message (expired voucher).
+                        (Method::Post, "/api/reject") => {
+                            let mut sink = String::new();
+                            let _ = req.as_reader().read_to_string(&mut sink);
+                            let _ = req.respond(
+                                Response::from_string(
+                                    "{\"error\":\"This voucher code has expired.\"}",
+                                )
+                                .with_status_code(422)
+                                .with_header(jsonh),
                             );
                         }
                         (Method::Post, "/submit") => {

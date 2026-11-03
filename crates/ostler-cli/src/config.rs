@@ -97,13 +97,96 @@ pub fn key_location() -> String {
 /// The key never appears on a command line: macOS `security` is driven through its interactive mode
 /// (`security -i`, commands on stdin) and Linux `secret-tool store` reads the secret from stdin. Reading
 /// uses `-w` / `lookup`, which print to stdout.
+///
+/// Every call goes through a [`Runner`], so the Linux behaviour (which cannot run on a Mac) is tested with a
+/// scripted fake, on any host.
 pub mod keychain {
     use std::io::Write;
+    use std::path::Path;
     use std::process::{Command, Stdio};
 
     use anyhow::{Context, Result};
 
-    const SERVICE: &str = "ostler-memory-key";
+    pub const SERVICE: &str = "ostler-memory-key";
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum Os {
+        Mac,
+        Linux,
+    }
+
+    impl Os {
+        pub fn host() -> Os {
+            if cfg!(target_os = "macos") {
+                Os::Mac
+            } else {
+                Os::Linux
+            }
+        }
+        fn tool(self) -> &'static str {
+            match self {
+                Os::Mac => "security",
+                Os::Linux => "secret-tool",
+            }
+        }
+    }
+
+    /// One invocation of the platform tool.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Cmd {
+        pub args: Vec<String>,
+        pub stdin: Option<String>,
+    }
+
+    /// What the tool did.
+    #[derive(Clone, Debug, PartialEq, Eq, Default)]
+    pub struct Out {
+        pub code: Option<i32>,
+        pub stdout: String,
+        pub stderr: String,
+    }
+
+    impl Out {
+        fn success(&self) -> bool {
+            self.code == Some(0)
+        }
+    }
+
+    /// Runs the platform tool. `Err` means it could not be run at all (not installed, hung, killed).
+    pub trait Runner {
+        fn run(&self, os: Os, cmd: &Cmd) -> Result<Out>;
+    }
+
+    /// The real thing: spawn the tool, never wait more than 20 s.
+    pub struct System;
+
+    impl Runner for System {
+        fn run(&self, os: Os, cmd: &Cmd) -> Result<Out> {
+            let mut c = Command::new(os.tool());
+            c.args(&cmd.args)
+                .stdin(if cmd.stdin.is_some() {
+                    Stdio::piped()
+                } else {
+                    Stdio::null()
+                })
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            let mut child = c.spawn().map_err(|e| missing_tool(os, e))?;
+            if let Some(input) = &cmd.stdin {
+                child
+                    .stdin
+                    .take()
+                    .context("no stdin")?
+                    .write_all(input.as_bytes())?;
+            }
+            let o = wait_timeout(os, child)?;
+            Ok(Out {
+                code: o.status.code(),
+                stdout: String::from_utf8_lossy(&o.stdout).into(),
+                stderr: String::from_utf8_lossy(&o.stderr).into(),
+            })
+        }
+    }
 
     pub fn account() -> String {
         std::env::var("OSTLER_KEYCHAIN_ACCOUNT")
@@ -116,43 +199,33 @@ pub mod keychain {
             .unwrap_or_else(|| "memory".into())
     }
 
-    #[cfg(target_os = "macos")]
-    const TOOL: &str = "security";
-    #[cfg(not(target_os = "macos"))]
-    const TOOL: &str = "secret-tool";
-
-    pub fn describe() -> String {
-        if cfg!(target_os = "macos") {
-            format!(
-                "the macOS Keychain (service {SERVICE:?}, account {:?})",
-                account()
-            )
-        } else {
-            format!(
-                "the system Secret Service (service {SERVICE:?}, account {:?})",
-                account()
-            )
+    fn fallback(os: Os) -> &'static str {
+        match os {
+            Os::Mac => "Or use `ostler config set key_store file`.",
+            Os::Linux => "No Secret Service is available here (typical on servers, containers and SSH sessions without a desktop keyring). Use the file store instead: `ostler config set key_store file`. Ostler never falls back to it by itself, so the key never ends up half in a keyring and half on disk.",
         }
     }
 
-    fn missing_tool(e: std::io::Error) -> anyhow::Error {
+    fn missing_tool(os: Os, e: std::io::Error) -> anyhow::Error {
         if e.kind() == std::io::ErrorKind::NotFound {
             anyhow::anyhow!(
-                "key_store is `keychain` but `{TOOL}` was not found on PATH. {} Or use `ostler config set key_store file`.",
-                if cfg!(target_os = "macos") {
+                "key_store is `keychain` but `{}` was not found on PATH. {} {}",
+                os.tool(),
+                if os == Os::Mac {
                     "It ships with macOS (/usr/bin/security)."
                 } else {
                     "Install libsecret-tools (Debian/Ubuntu: `apt install libsecret-tools`) and run a Secret Service such as gnome-keyring."
-                }
+                },
+                fallback(os)
             )
         } else {
-            anyhow::Error::new(e).context(format!("running {TOOL}"))
+            anyhow::Error::new(e).context(format!("running {}", os.tool()))
         }
     }
 
     /// Wait for the tool, but not forever: a locked keyring or a missing D-Bus session can make
     /// `security`/`secret-tool` block on a prompt nobody can answer, which would hang startup silently.
-    fn wait_timeout(child: std::process::Child) -> Result<std::process::Output> {
+    fn wait_timeout(os: Os, child: std::process::Child) -> Result<std::process::Output> {
         let pid = child.id();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
@@ -163,137 +236,250 @@ pub mod keychain {
             Err(_) => {
                 let _ = Command::new("kill").arg(pid.to_string()).status();
                 anyhow::bail!(
-                    "{} did not answer within 20 s (a locked keychain or no desktop session?). Unlock it, or use `ostler config set key_store file`",
-                    TOOL
+                    "{} did not answer within 20 s (a locked keychain or no desktop session?). Unlock it. {}",
+                    os.tool(),
+                    fallback(os)
                 )
             }
         }
     }
 
-    fn run(c: &mut Command) -> Result<std::process::Output> {
-        let child = c
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(missing_tool)?;
-        wait_timeout(child)
+    /// A credential store reached through `runner`, as seen on `os`.
+    pub struct Keychain<'a> {
+        pub os: Os,
+        pub account: String,
+        pub runner: &'a dyn Runner,
     }
 
-    /// Fail early, with advice, when the platform tool is not there.
-    pub fn check_available() -> Result<()> {
-        let mut c = Command::new(TOOL);
-        c.arg(if cfg!(target_os = "macos") {
-            "help"
-        } else {
-            "--version"
-        });
-        run(&mut c).map(|_| ())
-    }
+    static SYSTEM: System = System;
 
-    /// `Ok(None)` only when the tool says the item does not exist; any other failure (locked keychain, no
-    /// session bus, denied) is an error, so a new key is never generated over a key we merely could not read.
-    pub fn get() -> Result<Option<String>> {
-        let mut c = Command::new(TOOL);
-        if cfg!(target_os = "macos") {
-            c.args([
-                "find-generic-password",
-                "-s",
-                SERVICE,
-                "-a",
-                &account(),
-                "-w",
-            ]);
-        } else {
-            c.args(["lookup", "service", SERVICE, "account", &account()]);
-        }
-        let out = run(&mut c)?;
-        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if out.status.success() && !text.is_empty() {
-            return Ok(Some(text));
-        }
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        // macOS: exit 44 = errSecItemNotFound. secret-tool: exit 1 with nothing on stderr.
-        let not_found = if cfg!(target_os = "macos") {
-            out.status.code() == Some(44)
-        } else {
-            out.status.code() == Some(1) && err.is_empty()
-        };
-        if not_found || (out.status.success() && text.is_empty()) {
-            return Ok(None);
-        }
-        anyhow::bail!(
-            "reading the key from {} failed: {}",
-            describe(),
-            if err.is_empty() {
-                format!("{}", out.status)
-            } else {
-                err
+    impl Keychain<'static> {
+        /// This machine's own store.
+        pub fn system() -> Self {
+            Keychain {
+                os: Os::host(),
+                account: account(),
+                runner: &SYSTEM,
             }
-        )
+        }
     }
 
-    /// Store `b64` (replacing an existing entry when `replace`). Verified by reading it back.
-    pub fn set(b64: &str, replace: bool) -> Result<()> {
-        anyhow::ensure!(
-            b64.chars()
-                .all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c)),
-            "refusing to store a key with unexpected characters"
-        );
-        if cfg!(target_os = "macos") {
-            let mut child = Command::new(TOOL)
-                .arg("-i")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(missing_tool)?;
-            let line = format!(
-                "add-generic-password {}-s \"{SERVICE}\" -a \"{}\" -l \"Ostler memory key\" -w \"{b64}\"\n",
-                if replace { "-U " } else { "" },
-                account()
-            );
-            child
-                .stdin
-                .take()
-                .context("no stdin")?
-                .write_all(line.as_bytes())?;
-            let _ = wait_timeout(child)?;
-        } else {
-            let mut child = Command::new(TOOL)
-                .args([
-                    "store",
-                    "--label=Ostler memory key",
-                    "service",
+    impl Keychain<'_> {
+        pub fn describe(&self) -> String {
+            match self.os {
+                Os::Mac => format!(
+                    "the macOS Keychain (service {SERVICE:?}, account {:?})",
+                    self.account
+                ),
+                Os::Linux => format!(
+                    "the system Secret Service (service {SERVICE:?}, account {:?})",
+                    self.account
+                ),
+            }
+        }
+
+        /// Fail early, with advice, when the platform tool is not there.
+        pub fn check_available(&self) -> Result<()> {
+            let arg = if self.os == Os::Mac {
+                "help"
+            } else {
+                "--version"
+            };
+            self.runner
+                .run(
+                    self.os,
+                    &Cmd {
+                        args: vec![arg.into()],
+                        stdin: None,
+                    },
+                )
+                .map(|_| ())
+        }
+
+        /// `Ok(None)` only when the tool says the item does not exist; any other failure (locked keychain, no
+        /// session bus, no Secret Service, denied) is an error, so a new key is never generated over a key we
+        /// merely could not read.
+        pub fn get(&self) -> Result<Option<String>> {
+            let args: Vec<String> = if self.os == Os::Mac {
+                [
+                    "find-generic-password",
+                    "-s",
                     SERVICE,
-                    "account",
-                    &account(),
-                ])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(missing_tool)?;
-            child
-                .stdin
-                .take()
-                .context("no stdin")?
-                .write_all(b64.as_bytes())?;
-            let out = wait_timeout(child)?;
+                    "-a",
+                    &self.account,
+                    "-w",
+                ]
+                .map(String::from)
+                .to_vec()
+            } else {
+                ["lookup", "service", SERVICE, "account", &self.account]
+                    .map(String::from)
+                    .to_vec()
+            };
+            let out = self.runner.run(self.os, &Cmd { args, stdin: None })?;
+            let text = out.stdout.trim().to_string();
+            if out.success() && !text.is_empty() {
+                return Ok(Some(text));
+            }
+            let err = out.stderr.trim().to_string();
+            // macOS: exit 44 = errSecItemNotFound. secret-tool: exit 1 with nothing on stderr.
+            let not_found = if self.os == Os::Mac {
+                out.code == Some(44)
+            } else {
+                out.code == Some(1) && err.is_empty()
+            };
+            if not_found || (out.success() && text.is_empty()) {
+                return Ok(None);
+            }
+            anyhow::bail!(
+                "reading the key from {} failed: {}. {}",
+                self.describe(),
+                if err.is_empty() {
+                    format!("exit status {:?}", out.code)
+                } else {
+                    err
+                },
+                fallback(self.os)
+            )
+        }
+
+        /// Store `b64` (replacing an existing entry when `replace`). Verified by reading it back.
+        pub fn set(&self, b64: &str, replace: bool) -> Result<()> {
             anyhow::ensure!(
-                out.status.success(),
-                "secret-tool could not store the key: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
+                b64.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c)),
+                "refusing to store a key with unexpected characters"
             );
+            if self.os == Os::Mac {
+                let line = format!(
+                    "add-generic-password {}-s \"{SERVICE}\" -a \"{}\" -l \"Ostler memory key\" -w \"{b64}\"\n",
+                    if replace { "-U " } else { "" },
+                    self.account
+                );
+                let _ = self.runner.run(
+                    self.os,
+                    &Cmd {
+                        args: vec!["-i".into()],
+                        stdin: Some(line),
+                    },
+                )?;
+            } else {
+                let out = self.runner.run(
+                    self.os,
+                    &Cmd {
+                        args: [
+                            "store",
+                            "--label=Ostler memory key",
+                            "service",
+                            SERVICE,
+                            "account",
+                            &self.account,
+                        ]
+                        .map(String::from)
+                        .to_vec(),
+                        stdin: Some(b64.into()),
+                    },
+                )?;
+                anyhow::ensure!(
+                    out.success(),
+                    "secret-tool could not store the key: {}. {}",
+                    out.stderr.trim(),
+                    fallback(self.os)
+                );
+            }
+            match self.get()? {
+                Some(v) if v == b64 => Ok(()),
+                Some(_) if !replace => Ok(()), // someone else created it first; the caller re-reads
+                _ => anyhow::bail!(
+                    "the key was not stored in {} (tool reported no error but reading it back failed). {}",
+                    self.describe(),
+                    fallback(self.os)
+                ),
+            }
         }
-        match get()? {
-            Some(v) if v == b64 => Ok(()),
-            Some(_) if !replace => Ok(()), // someone else created it first; the caller re-reads
-            _ => anyhow::bail!(
-                "the key was not stored in {} (tool reported no error but reading it back failed)",
-                describe()
-            ),
+
+        /// Create the item with `b64` unless one exists; either way return what is stored afterwards, and
+        /// whether this call created it.
+        ///
+        /// `secret-tool store` always replaces, so "check, then store" would let two first starts each
+        /// believe they created the key, and the loser's data would be sealed with a key that is gone.
+        /// Creators therefore queue on an exclusive lock file (`lock`), and the check and the store happen
+        /// inside it. Other programs writing the same item are not covered.
+        pub fn create_if_absent(&self, b64: &str, lock: &Path) -> Result<(String, bool)> {
+            let _guard = LockGuard::acquire(lock)?;
+            if let Some(v) = self.get()? {
+                return Ok((v, false));
+            }
+            self.set(b64, false)?;
+            let stored = self
+                .get()?
+                .context("the key vanished right after it was stored")?;
+            Ok((stored.clone(), stored == b64))
         }
+    }
+
+    /// An exclusive lock file; removed on drop. A lock older than a minute belongs to a crashed starter and is
+    /// taken over (the keychain call it protects is bounded by a 20 s timeout).
+    struct LockGuard(std::path::PathBuf);
+
+    impl LockGuard {
+        fn acquire(path: &Path) -> Result<Self> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let start = std::time::Instant::now();
+            loop {
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path)
+                {
+                    Ok(mut f) => {
+                        let _ = write!(f, "{}", std::process::id());
+                        return Ok(LockGuard(path.to_path_buf()));
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                        let age = std::fs::metadata(path)
+                            .and_then(|m| m.modified())
+                            .ok()
+                            .and_then(|t| t.elapsed().ok());
+                        if age.is_some_and(|a| a > std::time::Duration::from_secs(60)) {
+                            let _ = std::fs::remove_file(path);
+                            continue;
+                        }
+                        anyhow::ensure!(
+                            start.elapsed() < std::time::Duration::from_secs(45),
+                            "another ostler is creating the memory key ({} exists). If none is running, delete that file",
+                            path.display()
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    Err(e) => {
+                        return Err(e).with_context(|| format!("creating {}", path.display()))
+                    }
+                }
+            }
+        }
+    }
+
+    impl Drop for LockGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    // Thin wrappers over this machine's own store, for callers that do not need to inject a runner.
+    pub fn describe() -> String {
+        Keychain::system().describe()
+    }
+    pub fn check_available() -> Result<()> {
+        Keychain::system().check_available()
+    }
+    pub fn get() -> Result<Option<String>> {
+        Keychain::system().get()
+    }
+    pub fn set(b64: &str, replace: bool) -> Result<()> {
+        Keychain::system().set(b64, replace)
     }
 }
 
@@ -382,6 +568,12 @@ pub fn existing_memory_key() -> Result<Option<[u8; 32]>> {
             Some(s) => SealKey::decode(&s)
                 .map(Some)
                 .map_err(|e| anyhow::anyhow!("{}: {e}", keychain::describe())),
+            // Selected the keychain (env var, hand-edited config) but the key is still in memory.key:
+            // creating a second key here would split it in two.
+            None if memory_key_path().exists() => anyhow::bail!(
+                "key_store is `keychain` but the keychain holds no key, while {} does. Use `ostler config set key_store keychain` to copy the key across, or `ostler config set key_store file` to keep using the file",
+                memory_key_path().display()
+            ),
             None => Ok(None),
         },
         KeyStore::File => {
@@ -401,53 +593,119 @@ pub fn existing_memory_key() -> Result<Option<[u8; 32]>> {
     }
 }
 
+/// The key, which must already exist. Starting never creates one by itself: see [`create_memory_key`].
 pub fn memory_key() -> Result<[u8; 32]> {
-    use ostler_memory::SealKey;
-    if let Some(k) = existing_memory_key()? {
-        return Ok(k);
+    existing_memory_key()?.with_context(|| {
+        format!(
+            "there is no memory key yet (looked in {}). It is created on the first start once Qdrant has been checked for existing sealed memory; restore a backup with `ostler memory key import`",
+            key_location()
+        )
+    })
+}
+
+/// What a first start found out about the server before it may create a key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreState {
+    /// Could not be reached or read (the reason). Whether sealed memory exists there is unknown.
+    Unreachable(String),
+    /// Reachable and holds no sealed points for this tenant: a new key cannot orphan anything.
+    Empty,
+    /// Reachable and holds this many sealed points that the (absent) key would have to open.
+    Sealed(usize),
+}
+
+/// Decide whether a first start may create a key. A new key over existing sealed memory would shadow it
+/// for good, so the server must first be seen to hold none. `allow_new_key` (`--allow-new-key`) overrides
+/// only the "could not look" case, for a first-time setup where Qdrant is not up yet; it never overrides
+/// "there is sealed memory here".
+pub fn authorize_new_key(state: &StoreState, allow_new_key: bool, tenant: &str) -> Result<()> {
+    match state {
+        StoreState::Empty => Ok(()),
+        StoreState::Unreachable(_) if allow_new_key => {
+            eprintln!("ostler: warning: creating a new memory key without being able to check Qdrant (--allow-new-key). If sealed memory already exists there, this key cannot open it; `ostler doctor` will say so once Qdrant is reachable.");
+            Ok(())
+        }
+        StoreState::Unreachable(why) => anyhow::bail!(
+            "refusing to create a new memory key: no key exists here yet and Qdrant could not be checked ({why}).\n  A new key would silently orphan any sealed memory already saved there under an earlier key.\n  - Start Qdrant (or fix qdrant_url) and run this again: the key is created once Qdrant is seen to hold no sealed memory for tenant {tenant:?}.\n  - Restoring an earlier key? `ostler memory key import < your-backup.key` (or set OSTLER_MEMORY_KEY).\n  - Really a first-time setup with Qdrant not up yet? Pass --allow-new-key (OSTLER_ALLOW_NEW_KEY=1)."
+        ),
+        StoreState::Sealed(n) => anyhow::bail!(
+            "refusing to create a new memory key: Qdrant already holds {n} sealed point(s) for tenant {tenant:?} and no key exists here to open them.\n  Restore the original key: `ostler memory key import < your-backup.key` (or set OSTLER_MEMORY_KEY).\n  Or, if that key is gone for good, start over: `ostler memory wipe --yes --tenant {tenant}` (deletes this tenant's memory; irreversible). --allow-new-key does not override this."
+        ),
     }
-    let key = SealKey::generate().map_err(|e| anyhow::anyhow!("{e}"))?;
-    if key_store()? == KeyStore::Keychain {
-        // No atomic create-if-absent exists across both tools; re-read so a concurrent starter's key wins.
-        keychain::set(&SealKey::encode(&key), false)?;
-        let stored =
-            existing_memory_key()?.context("the key vanished right after it was stored")?;
-        if stored == key {
-            KEY_CREATED.store(true, std::sync::atomic::Ordering::SeqCst);
-            eprintln!(
+}
+
+/// Create the sealing key in the configured store. Callers must have passed [`authorize_new_key`] first.
+/// Safe against two first starts at once, and never writes to a second location.
+pub fn create_memory_key() -> Result<[u8; 32]> {
+    let store = key_store()?;
+    let lock = memory_key_path().with_file_name("memory.key.lock");
+    let (key, created) = create_key_in(
+        store,
+        &keychain::Keychain::system(),
+        &memory_key_path(),
+        &lock,
+    )?;
+    if created {
+        KEY_CREATED.store(true, std::sync::atomic::Ordering::SeqCst);
+        match store {
+            KeyStore::Keychain => eprintln!(
                 "ostler: created the key that seals your saved memory in {}.\n  Back it up with `ostler memory key export --yes-print > memory.key.backup`. If it is lost, sealed memory can never be read again;\n  the only recovery is `ostler memory wipe --yes` and starting over. Do not share it.",
                 keychain::describe()
+            ),
+            KeyStore::File => eprintln!(
+                "ostler: created the key that seals your saved memory at {}.\n  Back it up (`ostler memory key export --yes-print`, or a password manager or encrypted drive). If it is lost, sealed memory can never be read again;\n  the only recovery is `ostler memory wipe --yes` and starting over. Do not share it.",
+                memory_key_path().display()
+            ),
+        }
+    }
+    Ok(key)
+}
+
+/// [`create_memory_key`] with the store, runner and paths injected (this is what the tests drive).
+/// Returns the key now in force and whether this call created it (false: a concurrent starter did).
+pub fn create_key_in(
+    store: KeyStore,
+    kc: &keychain::Keychain<'_>,
+    file: &std::path::Path,
+    lock: &std::path::Path,
+) -> Result<([u8; 32], bool)> {
+    use ostler_memory::SealKey;
+    let key = SealKey::generate().map_err(|e| anyhow::anyhow!("{e}"))?;
+    if store == KeyStore::Keychain {
+        // A key file next to the config means the key lives there; a second, different key in the
+        // keychain would split the key in two with no way to tell which one sealed the data.
+        if file.exists() {
+            anyhow::bail!(
+                "key_store is `keychain` but {} exists, so a key was kept in a file. Creating another key in {} would split it across two places. Move it across with `ostler config set key_store keychain` (copies it), or keep the file with `ostler config set key_store file`",
+                file.display(),
+                kc.describe()
             );
         }
-        return Ok(stored);
+        let (stored, created) = kc.create_if_absent(&SealKey::encode(&key), lock)?;
+        let k = SealKey::decode(&stored).map_err(|e| anyhow::anyhow!("{}: {e}", kc.describe()))?;
+        return Ok((k, created));
     }
-    let p = memory_key_path();
-    if let Some(dir) = p.parent() {
+    if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir)?;
     }
     // Write a private temp file completely, then hard-link it into place. The link fails if the key
     // appeared meanwhile (another ostler starting at the same time), so two starters can never read a
     // half-written key or overwrite each other's: the loser reads the winner's.
-    let tmp = p.with_file_name(format!(".memory.key.{}.tmp", std::process::id()));
+    let tmp = file.with_file_name(format!(".memory.key.{}.tmp", std::process::id()));
     let _ = std::fs::remove_file(&tmp);
     write_private(&tmp, &SealKey::encode(&key))?;
-    let linked = std::fs::hard_link(&tmp, &p);
+    let linked = std::fs::hard_link(&tmp, file);
     let _ = std::fs::remove_file(&tmp);
     match linked {
-        Ok(()) => {}
+        Ok(()) => Ok((key, true)),
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let s =
-                std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?;
-            return SealKey::decode(&s).map_err(|e| anyhow::anyhow!("{}: {e}", p.display()));
+            let s = std::fs::read_to_string(file)
+                .with_context(|| format!("reading {}", file.display()))?;
+            let k = SealKey::decode(&s).map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))?;
+            Ok((k, false))
         }
-        Err(e) => return Err(e).with_context(|| format!("creating {}", p.display())),
+        Err(e) => Err(e).with_context(|| format!("creating {}", file.display())),
     }
-    KEY_CREATED.store(true, std::sync::atomic::Ordering::SeqCst);
-    eprintln!(
-        "ostler: created the key that seals your saved memory at {}.\n  Back it up (`ostler memory key export --yes-print`, or a password manager or encrypted drive). If it is lost, sealed memory can never be read again;\n  the only recovery is `ostler memory wipe --yes` and starting over. Do not share it.",
-        p.display()
-    );
-    Ok(key)
 }
 
 /// Save `key` in the configured store (for `ostler memory key import`). Replacing a different existing key
@@ -757,5 +1015,271 @@ mod tests {
         assert_eq!(mask("qdrant_api_key", "short"), "********");
         let m = mask("qdrant_api_key", "abcdefghijklmnop");
         assert!(!m.contains("defghijklmn"), "{m}");
+    }
+
+    // ---- sealing-key creation: first-start policy and the Linux Secret Service path, against fakes ----
+
+    use keychain::{Cmd, Keychain, Os, Out, Runner};
+    use std::sync::Mutex;
+
+    /// A scripted `secret-tool` / `security`: one stored item, optional failures, and a log of every call.
+    #[derive(Default)]
+    struct Fake {
+        item: Mutex<Option<String>>,
+        log: Mutex<Vec<String>>,
+        /// Every call fails with this stderr (exit 1), as when no Secret Service is running.
+        broken: Option<String>,
+        /// `store` is accepted but silently drops the secret.
+        drops_store: bool,
+        /// The tool is not installed.
+        missing: bool,
+        /// Sleep inside `lookup`, to widen the race window between check and store.
+        slow_lookup: bool,
+    }
+
+    impl Runner for Fake {
+        fn run(&self, os: Os, cmd: &Cmd) -> anyhow::Result<Out> {
+            self.log.lock().unwrap().push(cmd.args.join(" "));
+            if self.missing {
+                anyhow::bail!("key_store is `keychain` but `secret-tool` was not found on PATH.");
+            }
+            if let Some(e) = &self.broken {
+                return Ok(Out {
+                    code: Some(1),
+                    stderr: e.clone(),
+                    ..Out::default()
+                });
+            }
+            let first = cmd.args.first().map(String::as_str).unwrap_or("");
+            match (os, first) {
+                (_, "--version") | (_, "help") => Ok(Out {
+                    code: Some(0),
+                    ..Out::default()
+                }),
+                (Os::Linux, "lookup") => {
+                    if self.slow_lookup {
+                        std::thread::sleep(std::time::Duration::from_millis(30));
+                    }
+                    Ok(match &*self.item.lock().unwrap() {
+                        Some(v) => Out {
+                            code: Some(0),
+                            stdout: v.clone(),
+                            ..Out::default()
+                        },
+                        // secret-tool: exit 1 and nothing on stderr when the item does not exist.
+                        None => Out {
+                            code: Some(1),
+                            ..Out::default()
+                        },
+                    })
+                }
+                // secret-tool store replaces unconditionally: that is why creation needs the lock.
+                (Os::Linux, "store") => {
+                    if !self.drops_store {
+                        *self.item.lock().unwrap() = cmd.stdin.clone();
+                    }
+                    Ok(Out {
+                        code: Some(0),
+                        ..Out::default()
+                    })
+                }
+                _ => anyhow::bail!("unscripted call {:?}", cmd.args),
+            }
+        }
+    }
+
+    fn linux(f: &Fake) -> Keychain<'_> {
+        Keychain {
+            os: Os::Linux,
+            account: "test".into(),
+            runner: f,
+        }
+    }
+
+    #[test]
+    fn a_first_start_that_cannot_see_qdrant_must_not_create_a_key() {
+        let down = StoreState::Unreachable("connection refused".into());
+        let e = authorize_new_key(&down, false, "default")
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("refusing to create a new memory key"), "{e}");
+        assert!(
+            e.contains("--allow-new-key") && e.contains("key import"),
+            "{e}"
+        );
+        // The explicit flag lets a first-time setup through...
+        assert!(authorize_new_key(&down, true, "default").is_ok());
+        // ...but never over sealed memory that is there.
+        let sealed = StoreState::Sealed(3);
+        for allow in [false, true] {
+            let e = authorize_new_key(&sealed, allow, "work")
+                .unwrap_err()
+                .to_string();
+            assert!(
+                e.contains("3 sealed point(s)") && e.contains("wipe --yes --tenant work"),
+                "{e}"
+            );
+        }
+        assert!(authorize_new_key(&StoreState::Empty, false, "default").is_ok());
+    }
+
+    #[test]
+    fn linux_creates_the_key_once_and_reads_it_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = Fake::default();
+        let (k, created) = create_key_in(
+            KeyStore::Keychain,
+            &linux(&f),
+            &dir.path().join("memory.key"),
+            &dir.path().join("memory.key.lock"),
+        )
+        .unwrap();
+        assert!(created);
+        assert_eq!(
+            f.item.lock().unwrap().as_deref(),
+            Some(ostler_memory::SealKey::encode(&k).as_str())
+        );
+        // Never a second copy on disk, and the lock is released.
+        assert!(!dir.path().join("memory.key").exists());
+        assert!(!dir.path().join("memory.key.lock").exists());
+        // A second start finds the same key and creates nothing.
+        let (k2, created2) = create_key_in(
+            KeyStore::Keychain,
+            &linux(&f),
+            &dir.path().join("memory.key"),
+            &dir.path().join("memory.key.lock"),
+        )
+        .unwrap();
+        assert!(!created2 && k2 == k);
+        assert_eq!(
+            f.log
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|c| c.starts_with("store"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn linux_concurrent_first_starts_agree_on_one_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = Fake {
+            slow_lookup: true,
+            ..Fake::default()
+        };
+        let (file, lock) = (
+            dir.path().join("memory.key"),
+            dir.path().join("memory.key.lock"),
+        );
+        let results: Vec<([u8; 32], bool)> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..6)
+                .map(|_| {
+                    s.spawn(|| create_key_in(KeyStore::Keychain, &linux(&f), &file, &lock).unwrap())
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        // One creator, everyone holds the key that is actually stored: without the lock `store` (which
+        // replaces) would let each of them keep its own random key.
+        assert_eq!(results.iter().filter(|r| r.1).count(), 1);
+        assert!(results.iter().all(|r| r.0 == results[0].0));
+        let stored = f.item.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            ostler_memory::SealKey::decode(&stored).unwrap(),
+            results[0].0
+        );
+        assert_eq!(
+            f.log
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|c| c.starts_with("store"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn linux_without_a_secret_service_fails_with_the_fallback_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, lock) = (
+            dir.path().join("memory.key"),
+            dir.path().join("memory.key.lock"),
+        );
+        let f = Fake {
+            broken: Some("secret-tool: Cannot autolaunch D-Bus without X11 $DISPLAY".into()),
+            ..Fake::default()
+        };
+        let e = create_key_in(KeyStore::Keychain, &linux(&f), &file, &lock)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("Cannot autolaunch D-Bus"), "{e}");
+        assert!(
+            e.contains("key_store file") && e.contains("never falls back"),
+            "{e}"
+        );
+        assert!(f.item.lock().unwrap().is_none());
+        assert!(!file.exists(), "fell back to a key file");
+        assert!(!lock.exists(), "lock left behind");
+        // A tool that is not installed at all.
+        let f = Fake {
+            missing: true,
+            ..Fake::default()
+        };
+        assert!(create_key_in(KeyStore::Keychain, &linux(&f), &file, &lock).is_err());
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn linux_store_that_silently_drops_the_secret_is_an_error_not_a_phantom_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = Fake {
+            drops_store: true,
+            ..Fake::default()
+        };
+        let e = create_key_in(
+            KeyStore::Keychain,
+            &linux(&f),
+            &dir.path().join("memory.key"),
+            &dir.path().join("memory.key.lock"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(e.contains("was not stored"), "{e}");
+    }
+
+    #[test]
+    fn keychain_mode_with_a_key_file_present_refuses_instead_of_splitting_the_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("memory.key");
+        std::fs::write(&file, "x").unwrap();
+        let f = Fake::default();
+        let e = create_key_in(KeyStore::Keychain, &linux(&f), &file, &dir.path().join("l"))
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("split it across two places"), "{e}");
+        assert!(
+            f.log.lock().unwrap().is_empty(),
+            "touched the keychain anyway"
+        );
+    }
+
+    #[test]
+    fn the_file_store_creates_one_private_key_and_a_second_start_reuses_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("sub").join("memory.key");
+        let f = Fake::default();
+        let (k, created) =
+            create_key_in(KeyStore::File, &linux(&f), &file, &dir.path().join("l")).unwrap();
+        assert!(created);
+        let (k2, created2) =
+            create_key_in(KeyStore::File, &linux(&f), &file, &dir.path().join("l")).unwrap();
+        assert!(!created2 && k == k2);
+        assert!(
+            f.log.lock().unwrap().is_empty(),
+            "file mode must not touch the keychain"
+        );
     }
 }

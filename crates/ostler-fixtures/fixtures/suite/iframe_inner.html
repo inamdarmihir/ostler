@@ -1,0 +1,7 @@
+<!doctype html><meta charset=utf-8><title>Sales form</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<form id="f"><label for="co">Company</label><input id="co" name="company" required>
+ <label for="sz">Team size</label><select id="sz" name="size"><option value="">Select</option><option value="1-10">1-10</option><option value="11-50">11-50</option><option value="51+">51+</option></select>
+ <label for="wm">Work email</label><input id="wm" name="work_email" type="email" required>
+ <button type="submit">Talk to sales</button></form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();await send(fdo(e.target));document.body.innerHTML='<h2>We will be in touch</h2>'});</script>

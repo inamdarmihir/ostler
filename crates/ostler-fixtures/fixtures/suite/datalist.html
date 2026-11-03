@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><title>Where do you live?</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Where do you live?</h1>
+<form id="f">
+ <label for="c">Country</label><input id="c" name="country" list="cl" autocomplete="off">
+ <datalist id="cl"><option value="Australia"><option value="Austria"><option value="Germany"><option value="India"><option value="Japan"></datalist>
+ <label for="tz">Timezone</label>
+ <select id="tz" name="tz"><optgroup label="Americas"><option value="america/new_york">New York (UTC-5)</option><option value="america/los_angeles">Los Angeles (UTC-8)</option></optgroup><optgroup label="Europe"><option value="europe/berlin">Berlin (UTC+1)</option><option value="europe/london">London (UTC+0)</option></optgroup><optgroup label="Asia"><option value="asia/kolkata">Kolkata (UTC+5:30)</option><option value="asia/tokyo">Tokyo (UTC+9)</option></optgroup></select>
+ <button type="submit">Save</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();await send(fdo(e.target));document.body.innerHTML='<h1>Saved</h1>'});</script>

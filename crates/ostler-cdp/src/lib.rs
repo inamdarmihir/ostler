@@ -8,8 +8,8 @@
 mod launch;
 
 pub use launch::{
-    find_chrome, lean_args, memory_method, process_tree_rss_kb, process_tree_stats, Chrome,
-    LaunchOptions,
+    find_chrome, lean_args, memory_method, process_tree_rss_kb, process_tree_stats,
+    resolve_cdp_url, Chrome, LaunchOptions,
 };
 
 use std::collections::HashMap;

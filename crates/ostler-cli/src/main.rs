@@ -1,4 +1,5 @@
 mod config;
+mod install;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,7 +30,13 @@ enum Cmd {
     /// Run the MCP server on stdio (what Claude Code, Codex, Cursor launch).
     Serve(ServeArgs),
     /// Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, isolation, transport.
-    Doctor(MemoryArgs),
+    /// Every failing check prints the command that fixes it.
+    Doctor(DoctorArgs),
+    /// Register (or remove) Ostler in an MCP client's config file: backs the file up, keeps your other servers.
+    ///
+    /// Example: `ostler install --client claude-code`. `--list` shows every client and its config path,
+    /// `--dry-run` previews, `--uninstall` removes. Flags after `--` go to `ostler serve`.
+    Install(InstallArgs),
     /// Serve the Agent2Agent (A2A) protocol so other agents can hand this one form tasks over HTTP.
     A2a(A2aArgs),
     /// Guided setup: save Qdrant URL/key and the privacy choices (sealing, local embeddings, retention), then verify.
@@ -80,6 +87,61 @@ enum Cmd {
 }
 
 #[derive(Args)]
+struct DoctorArgs {
+    #[command(flatten)]
+    mem: MemoryArgs,
+    /// Apply the safe fixes: create the config directory, tighten a too-open key file to owner-only.
+    /// Never creates keys, installs software or touches the network.
+    #[arg(long)]
+    fix: bool,
+    /// Also test attaching to a Chrome you started with --remote-debugging-port (opens one blank tab, then closes it).
+    #[arg(long)]
+    cdp_url: Option<String>,
+}
+
+#[derive(Args)]
+struct InstallArgs {
+    /// Which client's config file to edit.
+    #[arg(long, value_enum)]
+    client: Option<install::InstallClient>,
+    /// Show every supported client, its config path and whether Ostler is registered; change nothing.
+    #[arg(long)]
+    list: bool,
+    /// Print what would change; write nothing.
+    #[arg(long)]
+    dry_run: bool,
+    /// Remove the Ostler entry instead (other entries are kept; the file is backed up first).
+    #[arg(long)]
+    uninstall: bool,
+    /// Extra `ostler serve` flags, after `--` (e.g. `-- --lean --tools forms`).
+    #[arg(last = true)]
+    serve_args: Vec<String>,
+}
+
+fn install_cmd(a: InstallArgs) -> Result<()> {
+    let paths = install::Paths::from_env()?;
+    let exe = std::env::current_exe()?.display().to_string();
+    let mut args = vec!["serve".to_string()];
+    args.extend(a.serve_args.iter().cloned());
+    let spec = install::Spec { exe, args };
+    if a.list {
+        install::list(&paths, &spec);
+        return Ok(());
+    }
+    let Some(client) = a.client else {
+        bail!("choose a client: `ostler install --client <claude-code|claude-desktop|cursor|vscode|windsurf|codex>` (see `ostler install --list`)");
+    };
+    let mode = if a.uninstall {
+        install::Mode::Uninstall
+    } else {
+        install::Mode::Install
+    };
+    let out = install::apply(client, &paths, &spec, mode, a.dry_run)?;
+    install::report(client, &out, mode, a.dry_run);
+    Ok(())
+}
+
+#[derive(Args)]
 struct A2aArgs {
     #[command(flatten)]
     serve: ServeArgs,
@@ -114,7 +176,10 @@ struct A2aArgs {
 
 async fn run_a2a(a: A2aArgs) -> Result<()> {
     let s = a.serve;
-    let memory = build_memory(&s.mem)?;
+    if s.cdp_url.is_some() {
+        bail!("--cdp-url is not supported in A2A mode: each remote conversation needs its own browser, and a remote agent must never be handed your own Chrome");
+    }
+    let memory = build_memory(&serve_memory_args(&s.mem)).await?;
     key_preflight(&s.mem, Preflight::Strict).await?;
     let profile: Profile = s.tools.parse().map_err(|e: String| anyhow::anyhow!(e))?;
     if s.profile_dir.is_some() {
@@ -366,10 +431,10 @@ async fn init(a: InitArgs) -> Result<()> {
                 std::env::set_var(env, v);
             }
         }
-        if let Cmd::Doctor(m) = Cli::parse_from(["ostler", "doctor"]).cmd {
+        if let Cmd::Doctor(DoctorArgs { mem: m, .. }) = Cli::parse_from(["ostler", "doctor"]).cmd {
             println!();
             memory_report(&m);
-            let checked = match build_memory(&m) {
+            let checked = match build_memory(&m).await {
                 Ok(Some(mem)) => mem
                     .init()
                     .await
@@ -470,7 +535,8 @@ fn memory_report(m: &MemoryArgs) {
     else {
         match mode {
             MemoryMode::Ephemeral => println!("Memory: in-process only (--memory ephemeral); lost when the server exits."),
-            _ => println!("Memory: off. Optional: `ostler init` saves a Qdrant URL so the agent can reuse your details and past fills.\n  Everything else works without it."),
+            _ if m.memory == MemoryMode::Auto => println!("Memory: in-process, this session only (the zero-config default; nothing is written to disk).\n  Optional: `ostler init` saves a Qdrant URL so the agent can reuse your details and past fills across sessions."),
+            _ => println!("Memory: off (--memory off). Fix: remove that flag/setting (`ostler config unset memory`) for in-process memory, or `ostler init` for saved memory."),
         }
         return;
     };
@@ -488,7 +554,7 @@ fn memory_report(m: &MemoryArgs) {
                 println!("              Back it up. If it is lost, sealed memory is unrecoverable (`ostler memory wipe --yes` starts over).");
             }
             config::KeyStatus::Keychain { present } => println!("  key:        in {} ({}). Back it up: `ostler memory key export --yes-print`. If it is lost, sealed memory is unrecoverable.", config::key_location(), match present { Some(true) => "found", Some(false) => "not created yet; it will be on first use", None => "could not be read right now" }),
-            config::KeyStatus::Missing { path } => println!("  key:        not created yet; it will be created at {} on first use. Back it up then: if it is lost, sealed memory is unrecoverable.", path.display()),
+            config::KeyStatus::Missing { path } => println!("  key:        not created yet; it will be created at {} on the first start, once Qdrant has been checked for existing sealed memory (a start with Qdrant down refuses, or pass --allow-new-key). Back it up then: if it is lost, sealed memory is unrecoverable.", path.display()),
         }
     } else {
         println!("  sealing:    OFF. warning: anyone who can read your Qdrant can read your saved facts and the sites you use.\n              Turn on with `ostler config set seal on`, then `ostler memory seal` to protect what is already saved.");
@@ -868,6 +934,10 @@ struct MemoryArgs {
     /// Allow plain http:// to a non-loopback Qdrant. Refused by default: the API key and facts would be sent unencrypted.
     #[arg(long, global = true, env = "OSTLER_ALLOW_INSECURE_QDRANT")]
     allow_insecure_qdrant: bool,
+    /// Create the sealing key on a first start even though Qdrant cannot be reached to check it holds no
+    /// sealed memory yet. Without this a first start refuses: a new key over existing sealed data would orphan it.
+    #[arg(long, global = true, env = "OSTLER_ALLOW_NEW_KEY")]
+    allow_new_key: bool,
     /// Isolates one user's memory from another's inside shared collections.
     #[arg(long, global = true, env = "OSTLER_TENANT", default_value = "default")]
     tenant: String,
@@ -877,8 +947,8 @@ struct MemoryArgs {
 struct ServeArgs {
     #[command(flatten)]
     mem: MemoryArgs,
-    /// Tools to expose: core | forms | all.
-    #[arg(long, default_value = "all", env = "OSTLER_TOOLS")]
+    /// Tools to list: auto (core, plus forms and memory once a page has form fields) | core | forms | all.
+    #[arg(long, default_value = "auto", env = "OSTLER_TOOLS")]
     tools: String,
     #[arg(long)]
     headed: bool,
@@ -890,6 +960,11 @@ struct ServeArgs {
     /// Persistent Chrome profile (keeps logins). Default is a throwaway profile.
     #[arg(long)]
     profile_dir: Option<PathBuf>,
+    /// Drive a Chrome you already run instead of launching one: http://127.0.0.1:9222. Loopback only.
+    /// Start that Chrome yourself with `--remote-debugging-port=9222 --user-data-dir=<a dedicated dir>`;
+    /// Ostler never opens a debugging port for you, opens its own tab, and leaves your browser running on exit.
+    #[arg(long, env = "OSTLER_CDP_URL")]
+    cdp_url: Option<String>,
     /// Only allow these domains (and subdomains), optionally pinned to a port (example.com:8443). Repeatable.
     #[arg(long = "allow-domain")]
     allow_domains: Vec<String>,
@@ -927,9 +1002,94 @@ fn resolved_mode(a: &MemoryArgs) -> MemoryMode {
     }
 }
 
-/// `build_memory_inner`, with the next step appended to errors that have a known fix.
-fn build_memory(a: &MemoryArgs) -> Result<Option<Memory>> {
+/// What `serve` uses: with nothing configured, memory is in-process (ephemeral) so the agent can still
+/// remember within a session, with no Qdrant, key or network. `--memory off` still means off, and a saved
+/// Qdrant URL still means Qdrant. The other commands keep `resolved_mode` (they inspect *persistent* memory).
+fn serve_memory_args(a: &MemoryArgs) -> MemoryArgs {
+    let mut m = a.clone();
+    if m.memory == MemoryMode::Auto && m.qdrant_url.is_none() {
+        m.memory = MemoryMode::Ephemeral;
+    }
+    m
+}
+
+/// The short "what is on, what is off" block printed once when `serve` is ready.
+fn startup_block(version: &str, mem: &MemoryArgs, attached: Option<&str>, headed: bool) -> String {
+    let browser = match attached {
+        Some(u) => format!("attached to your Chrome at {u} (your browser stays open on exit; Ostler uses its own tab)"),
+        None if headed => "own Chrome with a visible window, throwaway profile".to_string(),
+        None => "own headless Chrome, throwaway profile (--profile-dir keeps logins, --cdp-url attaches to yours)".to_string(),
+    };
+    let (memory, off) = match resolved_mode(mem) {
+        MemoryMode::Qdrant => (
+            format!(
+                "Qdrant at {} (sealing {})",
+                mem.qdrant_url.as_deref().unwrap_or("?"),
+                if mem.seal == SealMode::Off {
+                    "OFF"
+                } else {
+                    "on"
+                }
+            ),
+            "",
+        ),
+        MemoryMode::Ephemeral => (
+            "in-process, this session only (nothing written to disk)".to_string(),
+            "off: Qdrant, sealed storage, learning from forms. Opt in with `ostler init`.",
+        ),
+        _ => (
+            "off".to_string(),
+            "Memory is off by request (--memory off). `ostler init` turns on saved memory.",
+        ),
+    };
+    let mut s = format!(
+        "ostler {version} ready (MCP over stdio)\n  browser: {browser}\n  memory:  {memory}"
+    );
+    if !off.is_empty() {
+        s.push_str(&format!("\n  {off}"));
+    }
+    s
+}
+
+/// `build_memory_inner`, with the next step appended to errors that have a known fix. Creates the sealing
+/// key first when this is a first start and Qdrant is seen to hold no sealed memory (see [`ensure_key`]).
+async fn build_memory(a: &MemoryArgs) -> Result<Option<Memory>> {
+    ensure_key(a).await?;
     build_memory_inner(a).map_err(|e| anyhow::anyhow!(explain(&format!("{e:#}"))))
+}
+
+/// What Qdrant holds for this tenant, as far as deciding whether a new key is safe goes.
+async fn store_state(a: &MemoryArgs) -> config::StoreState {
+    use config::StoreState;
+    let raw: Arc<dyn Store> = match qdrant_store(a) {
+        Ok(s) => Arc::new(s),
+        Err(e) => return StoreState::Unreachable(format!("{e:#}")),
+    };
+    if let Err(e) = raw.ensure().await {
+        return StoreState::Unreachable(explain(&e.to_string()));
+    }
+    // A key that opens nothing: any sealed point shows up as unopenable.
+    match ostler_memory::probe_key(raw, [0u8; 32], &a.tenant).await {
+        Ok(ostler_memory::KeyProbe::Empty) => StoreState::Empty,
+        Ok(ostler_memory::KeyProbe::Mismatch { unopenable }) => StoreState::Sealed(unopenable),
+        Ok(_) => StoreState::Sealed(1),
+        Err(e) => StoreState::Unreachable(explain(&e.to_string())),
+    }
+}
+
+/// The sealing key must exist before memory is built. If it does not, it is created only after the server
+/// was seen to hold no sealed memory for the tenant (or `--allow-new-key` says to go ahead blind), so a
+/// first start with Qdrant down cannot mint a key that silently orphans data saved under an earlier one.
+async fn ensure_key(a: &MemoryArgs) -> Result<()> {
+    if resolved_mode(a) != MemoryMode::Qdrant || a.seal == SealMode::Off {
+        return Ok(());
+    }
+    if config::existing_memory_key()?.is_some() {
+        return Ok(());
+    }
+    config::authorize_new_key(&store_state(a).await, a.allow_new_key, &a.tenant)?;
+    config::create_memory_key()?;
+    Ok(())
 }
 
 /// The Qdrant store exactly as configured, before any sealing wrapper.
@@ -997,6 +1157,8 @@ fn build_memory_inner(a: &MemoryArgs) -> Result<Option<Memory>> {
 enum Preflight {
     Strict,
     Quiet,
+    /// `ostler memory seal`: points that only need upgrading are what it is about to fix.
+    Migrate,
 }
 
 fn key_mismatch_message(unopenable: usize, tenant: &str) -> String {
@@ -1021,6 +1183,20 @@ fn key_mismatch_message(unopenable: usize, tenant: &str) -> String {
     )
 }
 
+fn upgrade_message(v1: usize, stale_keys: usize, tenant: &str) -> String {
+    let mut why = vec![];
+    if v1 > 0 {
+        why.push(format!("{v1} point(s) in the retired sealed format `v1`, which no longer authenticates its lookup fields and is not read any more"));
+    }
+    if stale_keys > 0 {
+        why.push(format!("{stale_keys} point(s) saved under an older key normalisation (emoji or decomposed-accent keys), which today's lookups cannot find"));
+    }
+    format!(
+        "refusing to continue: Qdrant holds {} for tenant {tenant:?}. The memory key is right; the data just needs bringing up to date.\n  Fix (safe to repeat, copies before it deletes): ostler memory seal --tenant {tenant}",
+        why.join(" and ")
+    )
+}
+
 /// Before memory is used: refuse when the key cannot open sealed data that is already there (silently
 /// shadowing it would let the next write or wipe destroy it), and, in `Strict`, warn about legacy plaintext.
 /// An unreachable Qdrant is not this function's concern: the normal start-up path reports it.
@@ -1033,10 +1209,16 @@ async fn key_preflight(a: &MemoryArgs, mode: Preflight) -> Result<()> {
         return Ok(());
     }
     let key = config::memory_key()?;
-    if let Ok(ostler_memory::KeyProbe::Mismatch { unopenable }) =
-        ostler_memory::probe_key(raw.clone(), key, &a.tenant).await
-    {
-        bail!("{}", key_mismatch_message(unopenable, &a.tenant));
+    match ostler_memory::probe_key(raw.clone(), key, &a.tenant).await {
+        Ok(ostler_memory::KeyProbe::Mismatch { unopenable }) => {
+            bail!("{}", key_mismatch_message(unopenable, &a.tenant))
+        }
+        Ok(ostler_memory::KeyProbe::NeedsUpgrade { v1, stale_keys })
+            if mode != Preflight::Migrate =>
+        {
+            bail!("{}", upgrade_message(v1, stale_keys, &a.tenant))
+        }
+        _ => {}
     }
     if mode == Preflight::Strict {
         let sealed = SealedStore::new(raw, key);
@@ -1056,7 +1238,14 @@ async fn main() -> Result<()> {
     config::load_into_env();
     match Cli::parse().cmd {
         Cmd::Serve(a) => {
-            let memory = build_memory(&a.mem)?;
+            if a.cdp_url.is_some() && a.profile_dir.is_some() {
+                bail!("--cdp-url and --profile-dir conflict: an attached Chrome keeps its own profile");
+            }
+            if let Some(u) = &a.cdp_url {
+                // Fail at start-up, not on the first tool call: wrong URL, remote host, or Chrome not running.
+                ostler_cdp::resolve_cdp_url(u).await?;
+            }
+            let memory = build_memory(&serve_memory_args(&a.mem)).await?;
             key_preflight(&a.mem, Preflight::Strict).await?;
             if let (Some(m), true) = (memory.clone(), a.retain_days > 0) {
                 let secs = a.retain_days.saturating_mul(86_400);
@@ -1067,12 +1256,15 @@ async fn main() -> Result<()> {
                 });
             }
             let profile: Profile = a.tools.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+            let allow_domains_for_note = a.allow_domains.clone();
+            let headed_for_note = a.headed;
             let app = App::new(AppConfig {
                 launch: LaunchOptions {
                     chrome_path: a.chrome_path,
                     headless: !a.headed,
                     user_data_dir: a.profile_dir,
                     lean: a.lean,
+                    cdp_url: a.cdp_url.clone(),
                     ..Default::default()
                 },
                 policy: Policy {
@@ -1095,15 +1287,23 @@ async fn main() -> Result<()> {
                     std::process::exit(2);
                 }
             }
+            if a.cdp_url.is_some() && !allow_domains_for_note.is_empty() {
+                eprintln!("ostler: note: attached to your Chrome, so the DNS pinning that backs --allow-domain is not applied (request interception still enforces the allowlist).");
+            }
             eprintln!(
-                "ostler {} ready (MCP over stdio; memory {})",
-                env!("CARGO_PKG_VERSION"),
-                if app.has_memory() { "on" } else { "off" }
+                "{}",
+                startup_block(
+                    env!("CARGO_PKG_VERSION"),
+                    &serve_memory_args(&a.mem),
+                    a.cdp_url.as_deref(),
+                    headed_for_note
+                )
             );
             ostler_mcp::serve_stdio(app).await?;
         }
         Cmd::A2a(a) => run_a2a(a).await?,
-        Cmd::Doctor(m) => doctor(m).await?,
+        Cmd::Doctor(d) => doctor(d).await?,
+        Cmd::Install(a) => install_cmd(a)?,
         Cmd::Init(a) => init(a).await?,
         Cmd::Config { cmd } => config_cmd(cmd)?,
         Cmd::Setup {
@@ -1185,10 +1385,25 @@ async fn main() -> Result<()> {
             raw.ensure()
                 .await
                 .map_err(|e| anyhow::anyhow!(explain(&e.to_string())))?;
-            key_preflight(&mem, Preflight::Quiet).await?;
+            ensure_key(&mem).await?;
+            key_preflight(&mem, Preflight::Migrate).await?;
+            let key = config::memory_key()?;
+            // First bring points that are already sealed up to date (`v1` blobs, keys saved under an older
+            // normalisation), so the legacy step below sees them and cannot overwrite them with stale data.
+            let mig = ostler_memory::migrate_sealed(raw.clone(), key, &mem.tenant)
+                .await
+                .map_err(|e| anyhow::anyhow!(explain(&e.to_string())))?;
+            if mig.v1_upgraded + mig.renormalized + mig.skipped > 0 {
+                println!(
+                    "Upgraded {} point(s) from sealed format v1 to v2; re-filed {} fact/playbook(s) whose lookup key used an older normalisation.{}",
+                    mig.v1_upgraded,
+                    mig.renormalized,
+                    if mig.skipped > 0 { format!(" {} point(s) could not be re-saved and were left as they are.", mig.skipped) } else { String::new() }
+                );
+            }
             // Saved facts are copied first and checked by reading them back; only then are the old
             // unsealed points deleted. Interrupting this at any point leaves your facts intact: run it again.
-            let rep = ostler_memory::seal_legacy(raw, config::memory_key()?, &mem.tenant)
+            let rep = ostler_memory::seal_legacy(raw, key, &mem.tenant)
                 .await
                 .map_err(|e| anyhow::anyhow!(explain(&e.to_string())))?;
             if rep.legacy_points_removed == 0 {
@@ -1210,7 +1425,7 @@ async fn main() -> Result<()> {
             mem,
         } => key_cmd(cmd, &mem).await?,
         Cmd::Memory { cmd, mem } => {
-            let Some(m) = build_memory(&mem)? else {
+            let Some(m) = build_memory(&mem).await? else {
                 bail!("memory is off. Run `ostler init` to save a Qdrant URL, or try it without Qdrant: `ostler memory --memory ephemeral list` (lost on exit)");
             };
             m.init()
@@ -1357,6 +1572,7 @@ async fn key_cmd(cmd: KeyCmd, mem: &MemoryArgs) -> Result<()> {
                     match ostler_memory::probe_key(raw, key, &mem.tenant).await {
                         Ok(ostler_memory::KeyProbe::Ok) => println!("This key opens the sealed memory saved for tenant {:?}.", mem.tenant),
                         Ok(ostler_memory::KeyProbe::Empty) => println!("No sealed memory exists yet for tenant {:?}.", mem.tenant),
+                        Ok(ostler_memory::KeyProbe::NeedsUpgrade { v1, stale_keys }) => println!("This key opens the sealed memory saved for tenant {:?}, but {v1} point(s) are in the old v1 format and {stale_keys} use an older key normalisation. Run `ostler memory seal` to bring them up to date.", mem.tenant),
                         Ok(ostler_memory::KeyProbe::Mismatch { unopenable }) => println!("warning: {unopenable} sealed point(s) for tenant {:?} still cannot be opened with this key (wrong backup, or another tenant's data).", mem.tenant),
                         Err(e) => println!("(could not check against Qdrant: {e})"),
                     }
@@ -1367,7 +1583,19 @@ async fn key_cmd(cmd: KeyCmd, mem: &MemoryArgs) -> Result<()> {
     Ok(())
 }
 
-async fn doctor(m: MemoryArgs) -> Result<()> {
+/// Install hint for a missing Chrome, per OS. Printed, never run.
+fn chrome_install_hint() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "brew install --cask google-chrome   (or download from https://www.google.com/chrome/)"
+    } else if cfg!(target_os = "linux") {
+        "sudo apt install chromium   (Debian/Ubuntu; or your distro's chromium / google-chrome package)"
+    } else {
+        "install Google Chrome from https://www.google.com/chrome/"
+    }
+}
+
+async fn doctor(d: DoctorArgs) -> Result<()> {
+    let m = d.mem;
     let mut ok = true;
     match ostler_cdp::find_chrome(None) {
         Ok(p) => {
@@ -1388,16 +1616,16 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
                     println!("FAILED to launch: {e}");
                     let msg = e.to_string().to_lowercase();
                     if msg.contains("sandbox") || msg.contains("as root") {
-                        println!("  fix: Chrome refuses its sandbox here (running as root or inside a container). Set OSTLER_NO_SANDBOX=1 only if the machine is isolated.");
+                        println!("  fix: Chrome refuses its sandbox here (running as root or inside a container). Set OSTLER_NO_SANDBOX=1 only if the machine is isolated:  OSTLER_NO_SANDBOX=1 ostler doctor");
                     } else if msg.contains("profile") || msg.contains("already") {
-                        println!("  fix: another Chrome or Ostler is using the same profile. Close it, or give each server its own --profile-dir.");
+                        println!("  fix: another Chrome or Ostler is using the same profile. Close it, or give each server its own profile:  ostler serve --profile-dir ~/.ostler/profile-2");
                     } else if msg.contains("shared libraries")
                         || msg.contains("libnss")
                         || msg.contains("cannot open shared object")
                     {
-                        println!("  fix: Chrome is missing system libraries. On Debian/Ubuntu install `chromium` from apt (it pulls them in), or the libraries named above.");
+                        println!("  fix: Chrome is missing system libraries. On Debian/Ubuntu:  sudo apt install chromium   (it pulls them in), or the libraries named above.");
                     } else {
-                        println!("  fix: run the Chrome binary above directly to see its own error; if it opens, retry with `--headed`. Point Ostler at a different build with OSTLER_CHROME=/path/to/chrome.");
+                        println!("  fix: run the Chrome binary above directly to see its own error; if it opens, retry with `ostler serve --headed`. To use a different build:  export OSTLER_CHROME=/path/to/chrome");
                     }
                 }
             }
@@ -1405,14 +1633,37 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
         Err(e) => {
             ok = false;
             println!("Chrome: {e}");
+            println!("  fix: {}\n       or point Ostler at an existing build:  export OSTLER_CHROME=/path/to/chrome", chrome_install_hint());
         }
     }
+    if let Some(url) = &d.cdp_url {
+        print!("Attach: {url} … ");
+        let opts = LaunchOptions {
+            cdp_url: Some(url.clone()),
+            ..Default::default()
+        };
+        match Browser::launch(opts, Policy::default()).await {
+            Ok(b) => {
+                println!("attached and opened a blank tab OK (your Chrome is left running)");
+                b.close().await;
+            }
+            Err(e) => {
+                ok = false;
+                println!("FAILED: {e}");
+                println!("  fix: start Chrome yourself with a dedicated profile (Chrome refuses a debug port on its default profile):\n       {}\n       Then use the same URL here and in `ostler serve --cdp-url`.", attach_chrome_command());
+            }
+        }
+    }
+    config_checks(d.fix);
+    clients_check();
     memory_report(&m);
-    match build_memory(&m) {
+    match build_memory(&serve_memory_args(&m)).await {
         Ok(None) => {}
         Ok(Some(mem)) => match mem.init().await {
             Ok(()) => {
-                println!("  qdrant:     reachable, collections ready. OK");
+                if resolved_mode(&m) == MemoryMode::Qdrant {
+                    println!("  qdrant:     reachable, collections ready. OK");
+                }
                 if let Err(e) = key_preflight(&m, Preflight::Strict).await {
                     ok = false;
                     println!("  key:        FAILED: {e}");
@@ -1421,18 +1672,100 @@ async fn doctor(m: MemoryArgs) -> Result<()> {
             Err(e) => {
                 ok = false;
                 println!("  qdrant:     FAILED: {}", explain(&e.to_string()));
+                println!("  fix:        to run without Qdrant:  ostler config unset qdrant_url");
             }
         },
         Err(e) => {
             ok = false;
             println!("  qdrant:     FAILED: {e}");
+            println!("  fix:        to run without Qdrant:  ostler config unset qdrant_url");
         }
     }
     if ok {
-        println!("\nAll good. Next: `ostler setup claude --apply` (or codex | cursor | vscode | json) to connect your agent,\nthen try the safe demo: `ostler fixtures`.\nAfter rebuilding ostler, reconnect your MCP client (Claude Code: /mcp) to pick up the new binary.");
+        println!("\nAll good. Next: `ostler install --client claude-code` (or claude-desktop | cursor | vscode | windsurf | codex; `ostler install --list` shows them) to connect your agent,\nthen try the safe demo: `ostler fixtures`.\nAfter rebuilding ostler, reconnect your MCP client (Claude Code: /mcp) to pick up the new binary.");
     } else {
-        println!("\nFix the items above and run `ostler doctor` again. Chrome is required; memory is optional (unset QDRANT_URL to run without it).");
+        println!("\nRun the fix commands above, then `ostler doctor` again. Chrome is required; memory is optional (the default is in-process and needs nothing).");
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// The command a user runs to start their own Chrome with a debugging port bound to loopback.
+fn attach_chrome_command() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=$HOME/.ostler/chrome-profile"
+    } else if cfg!(windows) {
+        "chrome.exe --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=%USERPROFILE%\\.ostler\\chrome-profile"
+    } else {
+        "google-chrome --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=$HOME/.ostler/chrome-profile"
+    }
+}
+
+/// Local-only checks on the config directory and the sealing key's file mode. With `fix`, applies the
+/// safe repairs (create the directory, chmod 600 the key). Never creates keys or touches the network.
+fn config_checks(fix: bool) {
+    let cfg = config::path();
+    if let Some(dir) = cfg.parent().filter(|d| !d.as_os_str().is_empty()) {
+        if dir.is_dir() {
+            println!("Config: {} (directory exists)", cfg.display());
+        } else if fix {
+            match std::fs::create_dir_all(dir) {
+                Ok(()) => println!("Config: created {} (--fix)", dir.display()),
+                Err(e) => println!("Config: could not create {}: {e}\n  fix: choose a writable location:  export OSTLER_CONFIG=$HOME/.ostler/config.toml", dir.display()),
+            }
+        } else {
+            println!("Config: {} does not exist yet (not an error; `ostler init` creates it).\n  fix: mkdir -p {}   (or `ostler doctor --fix`)", dir.display(), dir.display());
+        }
+    }
+    if cfg.exists() {
+        if let Err(e) = config::read() {
+            println!("Config: {} is unreadable: {e:#}\n  fix: edit or move it:  mv {} {}.broken   (then `ostler init`)", cfg.display(), cfg.display(), cfg.display());
+        }
+    }
+    #[cfg(unix)]
+    if let config::KeyStatus::File {
+        path,
+        private: false,
+    } = config::memory_key_status()
+    {
+        if fix {
+            use std::os::unix::fs::PermissionsExt;
+            match std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
+                Ok(()) => println!("Key: {} set to owner-only (--fix)", path.display()),
+                Err(e) => println!(
+                    "Key: could not tighten {}: {e}\n  fix: chmod 600 {}",
+                    path.display(),
+                    path.display()
+                ),
+            }
+        } else {
+            println!("Key: {} is readable by other users.\n  fix: chmod 600 {}   (or `ostler doctor --fix`)", path.display(), path.display());
+        }
+    }
+}
+
+/// Which MCP clients already have Ostler registered; otherwise the one command to run. Reads local files only.
+fn clients_check() {
+    let (Ok(paths), Ok(exe)) = (install::Paths::from_env(), std::env::current_exe()) else {
+        return;
+    };
+    let spec = install::Spec {
+        exe: exe.display().to_string(),
+        args: vec!["serve".into()],
+    };
+    let mut found = Vec::new();
+    for c in install::InstallClient::ALL {
+        if let Ok(o) = install::apply(c, &paths, &spec, install::Mode::Install, true) {
+            if o.action == install::Action::Unchanged {
+                found.push(c.name());
+            } else if o.action == install::Action::Updated {
+                println!("Client: {} has an ostler entry that points elsewhere.\n  fix: ostler install --client {}   (updates it; backs the file up first)", c.name(), c.name());
+            }
+        }
+    }
+    if found.is_empty() {
+        println!("Client: Ostler is not registered with any MCP client yet.\n  fix: ostler install --client claude-code   (or claude-desktop | cursor | vscode | windsurf | codex; `ostler install --list`)");
+    } else {
+        println!("Client: registered with {}", found.join(", "));
+    }
 }

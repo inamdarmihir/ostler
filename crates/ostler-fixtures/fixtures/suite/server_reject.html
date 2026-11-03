@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Redeem a voucher</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Redeem a voucher</h1>
+<form id="f" novalidate>
+ <label for="c">Voucher code</label><input id="c" name="code" required>
+ <label for="e">Email</label><input id="e" name="email" type="email" required>
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Redeem</button>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ const r=await fetch('/api/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:document.getElementById('c').value})});
+ const j=await r.json();const er=document.getElementById('err');
+ if(!r.ok){er.textContent=j.error;er.hidden=false;return}document.body.innerHTML='<h1>Redeemed</h1>'});</script>

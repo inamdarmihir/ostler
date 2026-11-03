@@ -258,7 +258,7 @@ Extra serve flags go after `--`: `ostler setup claude --apply -- --lean --tools 
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
 | other | `stats` |
 
-`--tools core|forms|all` controls how many the agent sees. The full set (21 tools) is about 5.9 KB of schema, roughly 1.5k tokens on every turn; a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+`--tools auto|core|forms|all` controls how many the agent sees. The default, `auto`, lists the 14 core tools (~4.1 KB) and adds forms and memory (21 in total) once a page shows form fields: the server sends `tools/list_changed`, the page result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set (21 tools) is about 5.9 KB of schema, roughly 1.5k tokens on every turn; a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 **Tabs share one browser context**, so cookies and logins carry across them, and the `context` tool is a small key/value notepad every tab (and every later call) can read, for things like "applicant = Ada, order id = 4471". It survives a browser restart.
 

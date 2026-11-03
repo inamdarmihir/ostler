@@ -81,10 +81,10 @@
 <p>Prebuilt binaries, <code>npx</code> and crates.io are described on the <a href="install.html">Install</a> page. Nothing is published to crates.io or npm yet, so building from source is the path that works today.</p>
 <h2 id="2-check-it-works">2. Check it works<a class="anchor" href="#2-check-it-works" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler doctor</code></pre></div>
-<p><code>ostler doctor</code> launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the fix. See <a href="troubleshooting.html">Troubleshooting</a> if it does not pass.</p>
+<p><code>ostler doctor</code> launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the command that fixes it; <code>ostler doctor --fix</code> applies the safe ones (creating the config directory). With no config at all, memory is in-process for the session and nothing needs Qdrant or a key. See <a href="troubleshooting.html">Troubleshooting</a> if it does not pass.</p>
 <h2 id="3-connect-your-agent">3. Connect your agent<a class="anchor" href="#3-connect-your-agent" aria-label="Link to this section">#</a></h2>
-<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup claude --apply</code></pre></div>
-<p>That runs <code>claude mcp add</code> with the binary's absolute path. For the others, replace <code>claude --apply</code> with <code>codex</code>, <code>cursor</code> or <code>vscode</code>: each prints the config for you to place. Details for every client are in <a href="agents.html">Use with your agent</a>.</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler install --client claude-code      <span class="tok-c"># or claude-desktop | cursor | vscode | windsurf | codex</span></code></pre></div>
+<p>That writes the entry into the client's config file with the binary's absolute path: it backs the file up first, keeps your other servers, refuses a malformed file and prints what changed (<code>--dry-run</code> previews, <code>--uninstall</code> removes). <code>ostler install --list</code> shows every client. To only print a snippet instead, use <code>ostler setup &lt;client&gt;</code>. Prefer your own Chrome window? See "Use your own Chrome" on the <a href="install.html">Install</a> page. Details for every client are in <a href="agents.html">Use with your agent</a>.</p>
 <p>After installing or rebuilding <code>ostler</code>, reconnect the MCP client (Claude Code: <code>/mcp</code>; others: restart it) so it starts the new binary.</p>
 <h2 id="4-try-the-demo">4. Try the demo<a class="anchor" href="#4-try-the-demo" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler fixtures        <span class="tok-c"># serves synthetic test forms at http://127.0.0.1:8787</span></code></pre></div>
@@ -118,10 +118,10 @@ NOT ACCEPTED: the page reported problems.
 <h2 id="optional-memory">Optional: memory<a class="anchor" href="#optional-memory" aria-label="Link to this section">#</a></h2>
 <p>Browsing and form filling need no account and no key. Memory is separate and optional:</p>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler init                                   <span class="tok-c"># saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection</span>
-ostler setup claude --apply -- --learn --lean <span class="tok-c"># re-register with memory flags</span></code></pre></div>
+ostler install --client claude-code -- --learn --lean <span class="tok-c"># re-register with memory flags</span></code></pre></div>
 <p>See <a href="memory.html">Memory and privacy</a> for exactly what is stored and what is hidden.</p>
 <h2 id="next-steps">Next steps<a class="anchor" href="#next-steps" aria-label="Link to this section">#</a></h2>
-<ul><li><a href="agents.html">Use with your agent</a>: Claude Code, Codex, Cursor, VS Code, anything else.</li><li><a href="tools.html">Tools reference</a>: all 21 tools and their parameters.</li><li><a href="security.html">Security model</a>: the allowlist, uploads, dialogs, CAPTCHAs.</li></ul>
+<ul><li><a href="agents.html">Use with your agent</a>: Claude Code, Codex, Cursor, VS Code, anything else.</li><li><a href="tools.html">Tools reference</a>: all 23 tools and their parameters.</li><li><a href="security.html">Security model</a>: the allowlist, uploads, dialogs, CAPTCHAs.</li></ul>
 <p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/quickstart.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
 </article>
 <nav class="pager" aria-label="Previous and next pages">

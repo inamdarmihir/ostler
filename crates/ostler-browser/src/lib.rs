@@ -539,6 +539,21 @@ impl Browser {
     }
 
     pub async fn close(self) {
+        if self.chrome.is_attached() {
+            // Someone else's browser: close only the tabs we created, then let go.
+            let own: Vec<String> = self.setup.own.lock().unwrap().iter().cloned().collect();
+            for id in own {
+                let _ = self
+                    .conn
+                    .call(
+                        "Target.closeTarget",
+                        serde_json::json!({ "targetId": id }),
+                        None,
+                        ostler_cdp::DEFAULT_TIMEOUT,
+                    )
+                    .await;
+            }
+        }
         self.chrome.close().await;
     }
 }

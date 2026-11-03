@@ -1,0 +1,12 @@
+<!doctype html><meta charset=utf-8><title>Compose message</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>#body{border:1px solid #888;min-height:6rem;padding:.4rem}</style>
+<h1>Compose message</h1>
+<form id="f">
+ <label for="to">To</label><input id="to" name="to" type="email">
+ <label for="sub">Subject</label><input id="sub" name="subject">
+ <label id="bl">Message body</label>
+ <div id="body" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="bl"></div>
+ <button type="submit">Send</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const o=fdo(e.target);o.body=document.getElementById('body').innerText.trim();await send(o);document.body.innerHTML='<h1>Sent</h1>'});</script>

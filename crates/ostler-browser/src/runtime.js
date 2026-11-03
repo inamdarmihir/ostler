@@ -950,12 +950,25 @@
     return hs.slice(0, 3);
   }
 
+  // The <form> a control belongs to. A control inside a web component's shadow root has no `.form` and no
+  // form ancestor in its own tree, but its host (or the host's host) may sit inside a <form>.
+  function formOf(el) {
+    let f = el.form || (el.closest && el.closest('form'));
+    let root = el.getRootNode && el.getRootNode();
+    while (!f && root && root.host) {
+      const h = root.host;
+      f = h.form || (h.closest && h.closest('form'));
+      root = h.getRootNode && h.getRootNode();
+    }
+    return f || null;
+  }
+
   function forms() {
     groups.clear();
     const controls = deepQueryAll(document.documentElement, CONTROL_SEL).filter(eligible);
     const containers = new Map(); // key (form element or root node) -> {el, controls[]}
     for (const el of controls) {
-      const form = el.form || (el.closest && el.closest('form'));
+      const form = formOf(el);
       const key = form || rootOf(el);
       if (!containers.has(key)) containers.set(key, { form: form || null, root: rootOf(el), controls: [] });
       containers.get(key).controls.push(el);
@@ -965,8 +978,17 @@
       const seenGroup = new Set();
       const fields = [];
       let hiddenCount = 0;
+      const concealed = [];
       for (const el of c.controls) {
-        if (!visibleControl(el)) { hiddenCount++; continue; }
+        if (!visibleControl(el)) {
+          hiddenCount++;
+          if (concealed.length < 40) {
+            const l = el.labels && el.labels[0];
+            const name = clean((l && l.textContent) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '');
+            if (name && !concealed.includes(name)) concealed.push(name);
+          }
+          continue;
+        }
         const ty = el.tagName === 'INPUT' ? (el.type || '').toLowerCase() : '';
         if ((ty === 'radio' || ty === 'checkbox') && el.name) {
           const key = ty + '|' + el.name;
@@ -1000,7 +1022,7 @@
         action: formEl ? (formEl.getAttribute('action') || null) : null,
         method: formEl ? (formEl.getAttribute('method') || 'get').toLowerCase() : null,
         headings: headingsIn(container && container.querySelectorAll ? container : document.body),
-        fields, hidden_fields: hiddenCount,
+        fields, hidden_fields: hiddenCount, concealed,
         submit: submitControls(scope, submitRoot, !!formEl),
         step: stepInfo(container && container.querySelectorAll ? container : document.body),
         errors: pageErrors(container && container.querySelectorAll ? container : document.body).concat(toasts()).filter((t, i, a) => a.indexOf(t) === i).slice(0, 4),
@@ -1178,6 +1200,15 @@
     let idx = labels.findIndex((l) => norm(l) === w);
     // Exact (normalized) match only: a partial pick would diverge from the request, and the verifier
     // refuses substring equivalence. Misses return the available labels so the caller can choose.
+    // Address suggestions list the whole address ("1600 Amphitheatre Parkway, Mountain View, CA 94043"):
+    // the request names its first part. Accept that only when exactly one suggestion starts with it
+    // followed by a comma. The caller still reads the box back, so a pick that shows more than was asked
+    // for is reported as a mismatch, not as success.
+    if (idx < 0) {
+      const head = clean(wanted).toLowerCase() + ',';
+      const starts = labels.map((l, i) => (clean(l).toLowerCase().startsWith(head) ? i : -1)).filter((i) => i >= 0);
+      if (starts.length === 1) idx = starts[0];
+    }
     if (idx < 0) return { picked: null, available: labels.slice(0, 15) };
     clickEl(options[idx]);
     return { picked: labels[idx], available: [] };

@@ -8,6 +8,7 @@ mod cost;
 mod forms;
 mod memory;
 mod scale;
+mod suite;
 
 use clap::{Parser, Subcommand};
 
@@ -41,10 +42,22 @@ enum Cmd {
         #[arg(long)]
         on_disk: bool,
     },
+    /// Realistic-forms suite: 30 fixtures, judged by what the server received. Exits non-zero on any wrong-fill.
+    Suite {
+        /// Run only tasks whose id contains this text.
+        #[arg(long)]
+        only: Option<String>,
+    },
     /// Browser footprint: default vs lean Chrome (processes, memory, startup, task time).
     Footprint {
         #[arg(long, default_value_t = 3)]
         reps: usize,
+    },
+    /// Serve the fixture pages on a fixed port (for the competitor comparison driver).
+    /// Submissions are readable at GET /__submissions and cleared with POST /__reset.
+    ServeFixtures {
+        #[arg(long, default_value_t = 8765)]
+        port: u16,
     },
     /// Parallel browser sessions: throughput, memory per session, CPU per task, cost to serve.
     Concurrency {
@@ -70,6 +83,17 @@ async fn main() -> anyhow::Result<()> {
             queries,
             on_disk,
         } => memory::run(&sizes, queries, on_disk).await?,
+        Cmd::Suite { only } => suite::run(only).await?,
+        Cmd::ServeFixtures { port } => {
+            let srv = ostler_fixtures::FixtureServer::start_on(
+                &format!("127.0.0.1:{port}"),
+                std::time::Duration::from_millis(250),
+            );
+            println!("fixtures listening on http://127.0.0.1:{}", srv.port);
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            }
+        }
         Cmd::Footprint { reps } => scale::footprint(reps).await?,
         Cmd::Concurrency {
             sessions,

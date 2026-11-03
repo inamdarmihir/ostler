@@ -16,7 +16,9 @@
 //! The clear fields are readable by the server but not editable without notice: from `v2` on their values
 //! are part of the associated data, so flipping `tenant` (to hand one tenant's facts to another) or
 //! inflating `wins` (to make `prune` keep junk) makes the point fail to open. `v1` blobs, written by earlier
-//! builds, still open but do not have that protection; they are upgraded the next time they are saved.
+//! builds, do not have that protection, so this build **refuses to read them** (they are skipped, and
+//! [`probe_key`] reports [`KeyProbe::NeedsUpgrade`]). [`migrate_sealed`] (`ostler memory seal`) opens them
+//! once, with the right key, and saves them again as `v2`.
 //!
 //! Payload rules (checked on write, because a violation would put text in clear on the server or lose data):
 //! `_sealed` is reserved; `tenant` must be a string; `wins`, `losses` and `verified_ts` must be unsigned
@@ -54,7 +56,7 @@ const HASHED: &[&str] = &[
 const SEALED: &str = "_sealed";
 /// Written by this build: associated data covers the point id and the clear fields.
 const VERSION: &str = "v2";
-/// Earlier format: associated data is the point id only. Still readable.
+/// Earlier format: associated data is the point id only. Not readable by default; see [`migrate_sealed`].
 const VERSION_V1: &str = "v1";
 /// Most points an adaptive read will fetch while skipping ones this key cannot open.
 const READ_CAP: usize = 100_000;
@@ -182,13 +184,23 @@ impl SealKey {
         ))
     }
 
-    /// Decrypt. `aad_v1` is used for a `v1` blob, `aad_v2` for a `v2` one; any other version, a malformed
-    /// blob, or trailing parts yield `None`.
-    fn open(&self, aad_v1: &str, aad_v2: &str, sealed: &str) -> Option<Vec<u8>> {
+    /// Same as [`SealKey::seal`] but in the retired `v1` format. Only for migration tests.
+    fn seal_v1(&self, aad: &str, plaintext: &[u8]) -> Result<String> {
+        let sealed = self.seal(aad, plaintext)?;
+        // `seal` binds `aad` whatever the label says, so relabelling is enough to make a faithful v1 blob.
+        Ok(format!(
+            "{VERSION_V1}{}",
+            sealed.strip_prefix(VERSION).unwrap_or(&sealed)
+        ))
+    }
+
+    /// Decrypt. `aad_v1` is used for a `v1` blob (only when `allow_v1`), `aad_v2` for a `v2` one; any other
+    /// version, a malformed blob, or trailing parts yield `None`.
+    fn open(&self, aad_v1: &str, aad_v2: &str, sealed: &str, allow_v1: bool) -> Option<Vec<u8>> {
         let mut parts = sealed.split('.');
         let aad = match parts.next()? {
             VERSION => aad_v2,
-            VERSION_V1 => aad_v1,
+            VERSION_V1 if allow_v1 => aad_v1,
             _ => return None,
         };
         let nonce: [u8; 12] = B64.decode(parts.next()?).ok()?.try_into().ok()?;
@@ -211,6 +223,8 @@ impl SealKey {
 pub struct SealedStore {
     inner: Arc<dyn Store>,
     key: SealKey,
+    /// Open retired `v1` blobs too. Only the migration sets this.
+    accept_v1: bool,
 }
 
 impl SealedStore {
@@ -218,7 +232,14 @@ impl SealedStore {
         Self {
             inner,
             key: SealKey::from_bytes(master),
+            accept_v1: false,
         }
+    }
+
+    /// A view that also opens `v1` blobs. For [`migrate_sealed`] and [`probe_key`]; ordinary reads must not.
+    fn accepting_v1(mut self) -> Self {
+        self.accept_v1 = true;
+        self
     }
 
     /// Associated data of a `v1` blob: which point it belongs to.
@@ -258,10 +279,15 @@ impl SealedStore {
             &Self::aad_v1(kind, id),
             &Self::aad_v2(kind, id, stored),
             sealed,
+            self.accept_v1,
         )
     }
 
     fn seal_payload(&self, kind: Kind, id: &str, payload: Value) -> Result<Value> {
+        self.seal_payload_as(kind, id, payload, false)
+    }
+
+    fn seal_payload_as(&self, kind: Kind, id: &str, payload: Value, v1: bool) -> Result<Value> {
         let Value::Object(obj) = payload else {
             return Err(MemoryError::Invalid("payload must be an object".into()));
         };
@@ -302,8 +328,12 @@ impl SealedStore {
                 "this value would not read back identically (nesting deeper than 128, or a number JSON cannot round-trip exactly); it was not saved".into(),
             ));
         }
-        let aad = Self::aad_v2(kind, id, &out);
-        out.insert(SEALED.into(), json!(self.key.seal(&aad, &bytes)?));
+        let blob = if v1 {
+            self.key.seal_v1(&Self::aad_v1(kind, id), &bytes)?
+        } else {
+            self.key.seal(&Self::aad_v2(kind, id, &out), &bytes)?
+        };
+        out.insert(SEALED.into(), json!(blob));
         Ok(Value::Object(out))
     }
 
@@ -471,37 +501,175 @@ impl Store for SealedStore {
 pub enum KeyProbe {
     /// No sealed points for this tenant: any key is safe to start with.
     Empty,
-    /// Every sealed point opens with this key.
+    /// Every sealed point opens with this key and is in the current format.
     Ok,
+    /// Every point opens with this key, but some are in the retired `v1` format (not read any more) or
+    /// were saved under an older key normalisation (their fact key no longer maps to their id, so a lookup
+    /// misses them). `ostler memory seal` ([`migrate_sealed`]) fixes both.
+    NeedsUpgrade { v1: usize, stale_keys: usize },
     /// Sealed points exist that this key cannot open (wrong, replaced or regenerated key, or tampering).
     /// Writing with this key would shadow them, and a later wipe or prune would destroy them.
     Mismatch { unopenable: usize },
 }
 
+/// Does an opened point sit under an id / lookup value that today's normalisation would not produce?
+/// (Facts: `key_norm` and the id come from `norm(key)`; playbooks: `labels_norm` from the field labels.)
+fn is_stale(sealed: &SealedStore, kind: Kind, tenant: &str, id: &str, secret: &Value) -> bool {
+    match kind {
+        Kind::Profile => {
+            let Some(key) = secret["key"].as_str() else {
+                return false;
+            };
+            let want = crate::norm(key);
+            secret["key_norm"].as_str() != Some(want.as_str())
+                || id
+                    != sealed
+                        .key
+                        .point_id(kind, &crate::point_id(&[tenant, "profile", &want]))
+        }
+        Kind::Playbook => {
+            let Some(fields) = secret["playbook"]["fields"].as_array() else {
+                return false;
+            };
+            let want: Vec<Value> = fields
+                .iter()
+                .map(|f| json!(crate::norm(f["label"].as_str().unwrap_or(""))))
+                .collect();
+            secret["labels_norm"].as_array() != Some(&want)
+        }
+        Kind::Episode => false,
+    }
+}
+
 /// Check, without changing anything, whether `master` opens the tenant's existing sealed points.
 /// Unsealed (legacy) points are ignored; see [`SealedStore::count_unsealed`].
 pub async fn probe_key(raw: Arc<dyn Store>, master: [u8; 32], tenant: &str) -> Result<KeyProbe> {
-    let sealed = SealedStore::new(raw.clone(), master);
-    let (mut total, mut unopenable) = (0usize, 0usize);
+    let sealed = SealedStore::new(raw.clone(), master).accepting_v1();
+    let (mut total, mut unopenable, mut v1, mut stale) = (0usize, 0usize, 0usize, 0usize);
     for kind in Kind::ALL {
         for h in crate::scroll_all(raw.as_ref(), kind, &Filter::tenant(tenant)).await? {
             let Value::Object(stored) = &h.payload else {
                 continue;
             };
-            if !stored.contains_key(SEALED) {
+            let Some(Value::String(blob)) = stored.get(SEALED) else {
                 continue;
-            }
+            };
             total += 1;
-            if sealed.open_stored(kind, &h.id, stored).is_none() {
+            let Some(bytes) = sealed.open_stored(kind, &h.id, stored) else {
                 unopenable += 1;
+                continue;
+            };
+            if blob.starts_with(&format!("{VERSION_V1}.")) {
+                v1 += 1;
+            }
+            if let Ok(secret) = serde_json::from_slice::<Value>(&bytes) {
+                if is_stale(&sealed, kind, tenant, &h.id, &secret) {
+                    stale += 1;
+                }
             }
         }
     }
-    Ok(match (total, unopenable) {
-        (0, _) => KeyProbe::Empty,
-        (_, 0) => KeyProbe::Ok,
-        (_, n) => KeyProbe::Mismatch { unopenable: n },
+    Ok(if total == 0 {
+        KeyProbe::Empty
+    } else if unopenable > 0 {
+        KeyProbe::Mismatch { unopenable }
+    } else if v1 > 0 || stale > 0 {
+        KeyProbe::NeedsUpgrade {
+            v1,
+            stale_keys: stale,
+        }
+    } else {
+        KeyProbe::Ok
     })
+}
+
+/// What [`migrate_sealed`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MigrateReport {
+    /// `v1` points saved again as `v2`.
+    pub v1_upgraded: usize,
+    /// Points whose fact key / label lookup value no longer matched today's normalisation, saved again under
+    /// the current one (the stray old copy is removed).
+    pub renormalized: usize,
+    /// Points that could not be saved again (unreadable payload) and were left untouched.
+    pub skipped: usize,
+}
+
+/// Bring a tenant's sealed points up to date: re-save `v1` blobs as `v2`, and re-save facts and playbooks
+/// whose lookup keys were derived with an older `norm()` (keys with emoji or decomposed accents used to
+/// normalise differently, which left their points unreachable by today's lookups).
+///
+/// Only points this key opens are touched; others are never deleted. A point is written again first and
+/// the old copy removed only when it sits under a different id and the new one reads back. A fact never
+/// overwrites a newer one already stored under its current id. Safe to run again after an interruption.
+pub async fn migrate_sealed(
+    raw: Arc<dyn Store>,
+    master: [u8; 32],
+    tenant: &str,
+) -> Result<MigrateReport> {
+    let reader = SealedStore::new(raw.clone(), master).accepting_v1();
+    let writer: Arc<dyn Store> = Arc::new(SealedStore::new(raw.clone(), master));
+    let mem = crate::Memory::new(writer, tenant);
+    let mut rep = MigrateReport::default();
+    for kind in Kind::ALL {
+        for h in crate::scroll_all(raw.as_ref(), kind, &Filter::tenant(tenant)).await? {
+            let is_v1 = matches!(h.payload.get(SEALED), Some(Value::String(b)) if b.starts_with(&format!("{VERSION_V1}.")));
+            if h.payload.get(SEALED).is_none() {
+                continue; // unsealed legacy points are `seal_legacy`'s business
+            }
+            let old_id = h.id.clone();
+            let Some(opened) = reader.unseal(kind, h) else {
+                continue;
+            };
+            let stale = is_stale(&reader, kind, tenant, &old_id, &opened.payload);
+            if !is_v1 && !stale {
+                continue;
+            }
+            let Some(new_mem_id) = mem.resave(kind, &opened.payload).await? else {
+                rep.skipped += 1;
+                continue;
+            };
+            let new_id = reader.key.point_id(kind, &new_mem_id);
+            if new_id != old_id {
+                // The point now lives under a different id: confirm it is there before dropping the old one.
+                let there = crate::scroll_all(raw.as_ref(), kind, &Filter::tenant(tenant))
+                    .await?
+                    .iter()
+                    .any(|x| x.id == new_id);
+                if !there {
+                    return Err(MemoryError::Invalid(format!(
+                        "a point in {} did not read back after re-saving; the old copy was left in place",
+                        kind.collection()
+                    )));
+                }
+                raw.delete(kind, &old_id).await?;
+            }
+            if is_v1 {
+                rep.v1_upgraded += 1;
+            }
+            if stale {
+                rep.renormalized += 1;
+            }
+        }
+    }
+    Ok(rep)
+}
+
+/// Write one point in the retired `v1` format, as an older build did. Only for tests of the migration
+/// (here and in the CLI); not part of the API.
+#[doc(hidden)]
+pub async fn write_v1_point_for_tests(
+    raw: Arc<dyn Store>,
+    master: [u8; 32],
+    kind: Kind,
+    id: &str,
+    text: &str,
+    payload: Value,
+) -> Result<()> {
+    let s = SealedStore::new(raw.clone(), master);
+    let id = s.key.point_id(kind, id);
+    let sealed = s.seal_payload_as(kind, &id, payload, true)?;
+    raw.upsert(kind, &id, text, sealed).await
 }
 
 /// What [`seal_legacy`] did.
@@ -754,9 +922,9 @@ mod tests {
         // Move a sealed blob to another point id: the id is bound as associated data, so it must not open.
         let key = SealKey::from_bytes([1; 32]);
         let s = key.seal("ostler_profile/id-1", b"{}").unwrap();
-        assert!(key.open("x", "ostler_profile/id-1", &s).is_some());
+        assert!(key.open("x", "ostler_profile/id-1", &s, false).is_some());
         assert!(key
-            .open("ostler_profile/id-1", "ostler_profile/id-2", &s)
+            .open("ostler_profile/id-1", "ostler_profile/id-2", &s, true)
             .is_none());
     }
 
@@ -892,6 +1060,195 @@ mod review_tests {
         assert_eq!(
             m.fact("email").await.unwrap().unwrap().value,
             json!("NEW@now.co")
+        );
+    }
+
+    fn fact_payload(key: &str, key_norm: &str, value: &str, at: u64) -> Value {
+        json!({"tenant": "t1", "key": key, "key_norm": key_norm, "value": value,
+               "description": null, "autocomplete": null, "source": "user", "updated_at": at})
+    }
+
+    fn fresh() -> (Arc<InMemoryStore>, Memory) {
+        let raw = Arc::new(InMemoryStore::new(Arc::new(HashEmbedder::default())));
+        let sealed: Arc<dyn Store> = Arc::new(SealedStore::new(raw.clone(), [5; 32]));
+        (raw, Memory::new(sealed, "t1"))
+    }
+
+    #[tokio::test]
+    async fn v1_blobs_are_not_read_are_reported_and_migrate_to_v2() {
+        let (raw, m) = fresh();
+        let dynraw: Arc<dyn Store> = raw.clone();
+        let id = crate::point_id(&["t1", "profile", "city"]);
+        write_v1_point_for_tests(
+            dynraw.clone(),
+            [5; 32],
+            Kind::Profile,
+            &id,
+            "city",
+            fact_payload("city", "city", "Pune", 7),
+        )
+        .await
+        .unwrap();
+        // The stored blob really is v1, and the key is right.
+        let stored = raw
+            .scroll(Kind::Profile, &Filter::tenant("t1"), 5)
+            .await
+            .unwrap();
+        assert!(stored[0].payload["_sealed"]
+            .as_str()
+            .unwrap()
+            .starts_with("v1."));
+        // Not readable through the normal view, by lookup or by listing.
+        assert!(m.fact("city").await.unwrap().is_none());
+        assert!(m.facts(10).await.unwrap().is_empty());
+        assert_eq!(
+            probe_key(dynraw.clone(), [5; 32], "t1").await.unwrap(),
+            KeyProbe::NeedsUpgrade {
+                v1: 1,
+                stale_keys: 0
+            }
+        );
+        // A wrong key still reads as a mismatch, not as an upgrade.
+        assert_eq!(
+            probe_key(dynraw.clone(), [6; 32], "t1").await.unwrap(),
+            KeyProbe::Mismatch { unopenable: 1 }
+        );
+        // A wrong key must not be able to "migrate" anything.
+        let rep = migrate_sealed(dynraw.clone(), [6; 32], "t1").await.unwrap();
+        assert_eq!(rep, MigrateReport::default());
+        let rep = migrate_sealed(dynraw.clone(), [5; 32], "t1").await.unwrap();
+        assert_eq!((rep.v1_upgraded, rep.renormalized, rep.skipped), (1, 0, 0));
+        let f = m.fact("city").await.unwrap().unwrap();
+        assert_eq!((f.value, f.updated_at), (json!("Pune"), 7));
+        let stored = raw
+            .scroll(Kind::Profile, &Filter::tenant("t1"), 5)
+            .await
+            .unwrap();
+        assert_eq!(stored.len(), 1);
+        assert!(stored[0].payload["_sealed"]
+            .as_str()
+            .unwrap()
+            .starts_with("v2."));
+        assert_eq!(
+            probe_key(dynraw.clone(), [5; 32], "t1").await.unwrap(),
+            KeyProbe::Ok
+        );
+        // Idempotent.
+        assert_eq!(
+            migrate_sealed(dynraw, [5; 32], "t1").await.unwrap(),
+            MigrateReport::default()
+        );
+    }
+
+    #[tokio::test]
+    async fn keys_stored_under_an_older_norm_are_found_detected_and_reconciled() {
+        let (raw, m) = fresh();
+        let dynraw: Arc<dyn Store> = raw.clone();
+        let sealed = SealedStore::new(dynraw.clone(), [5; 32]);
+        // Older builds normalised these to nothing / dropped the combining mark, so the point sits under an
+        // id and a `key_norm` today's lookups never ask for.
+        for (key, old_norm, value) in [("😀", "", "smile"), ("cafe\u{301}", "cafe", "latte")] {
+            let id = crate::point_id(&["t1", "profile", old_norm]);
+            sealed
+                .upsert(
+                    Kind::Profile,
+                    &id,
+                    key,
+                    fact_payload(key, old_norm, value, 3),
+                )
+                .await
+                .unwrap();
+            // Same id is shared by the two (both old norms differ, so they are different points).
+        }
+        assert!(m.fact("😀").await.unwrap().is_none());
+        assert!(m.fact("cafe\u{301}").await.unwrap().is_none());
+        assert_eq!(
+            probe_key(dynraw.clone(), [5; 32], "t1").await.unwrap(),
+            KeyProbe::NeedsUpgrade {
+                v1: 0,
+                stale_keys: 2
+            }
+        );
+        let rep = migrate_sealed(dynraw.clone(), [5; 32], "t1").await.unwrap();
+        assert_eq!((rep.v1_upgraded, rep.renormalized), (0, 2));
+        assert_eq!(m.fact("😀").await.unwrap().unwrap().value, json!("smile"));
+        assert_eq!(
+            m.fact("cafe\u{301}").await.unwrap().unwrap().value,
+            json!("latte")
+        );
+        // The orphans are gone: exactly two points remain.
+        assert_eq!(
+            raw.scroll(Kind::Profile, &Filter::tenant("t1"), 10)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            probe_key(dynraw, [5; 32], "t1").await.unwrap(),
+            KeyProbe::Ok
+        );
+    }
+
+    #[tokio::test]
+    async fn a_stale_key_never_overwrites_a_newer_fact_and_playbook_labels_are_reconciled() {
+        let (raw, m) = fresh();
+        let dynraw: Arc<dyn Store> = raw.clone();
+        let sealed = SealedStore::new(dynraw.clone(), [5; 32]);
+        let old = crate::point_id(&["t1", "profile", ""]);
+        sealed
+            .upsert(Kind::Profile, &old, "x", fact_payload("😀", "", "old", 1))
+            .await
+            .unwrap();
+        m.put_fact("😀", json!("newer"), None, None, "user", Some(50))
+            .await
+            .unwrap();
+        // Playbook whose `labels_norm` was derived differently.
+        let pb = crate::Playbook {
+            host: "shop.example".into(),
+            fingerprint: "fp1".into(),
+            headings: vec![],
+            fields: vec![crate::PlaybookField::new("E-mail", "email", None)],
+            uses: 1,
+            last_success: 1,
+            wins: 0,
+            losses: 0,
+            verified_ts: 1,
+            learned_from: None,
+        };
+        let pid = crate::point_id(&["t1", "playbook", "fp1"]);
+        sealed
+            .upsert(
+                Kind::Playbook,
+                &pid,
+                "shop",
+                json!({"tenant": "t1", "host": "shop.example", "fingerprint": "fp1",
+                       "labels_norm": ["stale"], "wins": 0, "losses": 0, "verified_ts": 1, "playbook": pb}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            probe_key(dynraw.clone(), [5; 32], "t1").await.unwrap(),
+            KeyProbe::NeedsUpgrade {
+                v1: 0,
+                stale_keys: 2
+            }
+        );
+        let rep = migrate_sealed(dynraw.clone(), [5; 32], "t1").await.unwrap();
+        assert_eq!(rep.renormalized, 2);
+        assert_eq!(m.fact("😀").await.unwrap().unwrap().value, json!("newer"));
+        let got = sealed
+            .scroll(
+                Kind::Playbook,
+                &Filter::tenant("t1").and("labels_norm", json!("e mail")),
+                5,
+            )
+            .await
+            .unwrap();
+        assert_eq!(got.len(), 1);
+        assert_eq!(
+            probe_key(dynraw, [5; 32], "t1").await.unwrap(),
+            KeyProbe::Ok
         );
     }
 }

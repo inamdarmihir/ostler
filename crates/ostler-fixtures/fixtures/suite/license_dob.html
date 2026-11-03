@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>Driver licence renewal</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Renew your driver licence</h1>
+<form id="f" novalidate>
+ <label for="ln">Licence number</label><input id="ln" name="licence" pattern="[A-Z][0-9]{7}" placeholder="A1234567" required>
+ <fieldset><legend>Date of birth</legend>
+  <label for="m">Month</label><input id="m" name="dob_m" inputmode="numeric" maxlength="2" size="2" placeholder="MM" aria-label="Birth month">
+  <label for="d">Day</label><input id="d" name="dob_d" inputmode="numeric" maxlength="2" size="2" placeholder="DD" aria-label="Birth day">
+  <label for="y">Year</label><input id="y" name="dob_y" inputmode="numeric" maxlength="4" size="4" placeholder="YYYY" aria-label="Birth year"></fieldset>
+ <label for="z">ZIP code</label><input id="z" name="zip" maxlength="5" inputmode="numeric">
+ <label for="ssn">Last 4 digits of SSN</label><input id="ssn" name="ssn4" maxlength="4" inputmode="numeric" autocomplete="off">
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Continue</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);
+$('f').addEventListener('submit',async e=>{e.preventDefault();const o=fdo(e.target),er=$('err');er.hidden=true;
+ if(!/^[A-Z][0-9]{7}$/.test(o.licence)){er.textContent='Licence number must be a letter and 7 digits.';er.hidden=false;return}
+ const dt=new Date(+o.dob_y,+o.dob_m-1,+o.dob_d);if(!(+o.dob_y>1900)||dt.getMonth()!==+o.dob_m-1){er.textContent='Enter a valid date of birth.';er.hidden=false;return}
+ await send(o);document.body.innerHTML='<h1>Renewal started</h1>'});</script>

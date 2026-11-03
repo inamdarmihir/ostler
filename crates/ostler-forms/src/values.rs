@@ -69,6 +69,24 @@ pub fn match_option(options: &[FieldOption], wanted: &Value) -> Result<usize, Va
     if eq.len() == 1 {
         return Ok(eq[0].0);
     }
+    // Zero-padded numbers: "5" is the option "05" (day and month dropdowns), not also "15" and "25".
+    if w.trim().chars().all(|c| c.is_ascii_digit()) && !w.trim().is_empty() {
+        let num = |t: &str| {
+            let t = t.trim();
+            (!t.is_empty() && t.chars().all(|c| c.is_ascii_digit()))
+                .then(|| t.trim_start_matches('0').to_string())
+        };
+        let want = w.trim().trim_start_matches('0').to_string();
+        let same: Vec<_> = usable
+            .iter()
+            .filter(|(_, o)| {
+                num(&o.label).as_deref() == Some(&want) || num(&o.value).as_deref() == Some(&want)
+            })
+            .collect();
+        if same.len() == 1 {
+            return Ok(same[0].0);
+        }
+    }
     let sub: Vec<_> = usable
         .iter()
         .filter(|(_, o)| {
@@ -349,5 +367,31 @@ mod year_tests {
         ] {
             assert!(normalize_date(bad).is_err(), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod padded_number_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn days() -> Vec<FieldOption> {
+        (1..=31)
+            .map(|d| FieldOption {
+                value: format!("{d:02}"),
+                label: format!("{d:02}"),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bare_number_picks_the_zero_padded_option_not_every_option_containing_it() {
+        let o = days();
+        assert_eq!(match_option(&o, &json!("5")).unwrap(), 4);
+        assert_eq!(match_option(&o, &json!(5)).unwrap(), 4);
+        assert_eq!(match_option(&o, &json!("05")).unwrap(), 4);
+        assert_eq!(match_option(&o, &json!("31")).unwrap(), 30);
+        assert!(match_option(&o, &json!("32")).is_err());
     }
 }

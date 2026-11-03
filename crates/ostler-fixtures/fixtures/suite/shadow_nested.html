@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Account details</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Account details</h1>
+<outer-card></outer-card>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+customElements.define('inner-field',class extends HTMLElement{connectedCallback(){const r=this.attachShadow({mode:'open'});const n=this.getAttribute('name'),l=this.getAttribute('label');
+ r.innerHTML='<label for="i" style="display:block;margin:.7rem 0 .2rem">'+l+'</label><input id="i" name="'+n+'" style="padding:.4rem;width:100%;box-sizing:border-box">';this.input=r.querySelector('input')}});
+customElements.define('outer-card',class extends HTMLElement{connectedCallback(){const r=this.attachShadow({mode:'open'});
+ r.innerHTML='<form><inner-field name="company" label="Company name"></inner-field><inner-field name="vat" label="VAT number"></inner-field><button type="submit" style="margin-top:1rem;padding:.5rem 1rem">Save</button></form>';
+ r.querySelector('form').addEventListener('submit',async ev=>{ev.preventDefault();const o={};r.querySelectorAll('inner-field').forEach(f=>o[f.getAttribute('name')]=f.input.value);await send(o);r.innerHTML='<h2>Saved</h2>'})}});</script>

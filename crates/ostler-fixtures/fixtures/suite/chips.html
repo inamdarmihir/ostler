@@ -1,0 +1,18 @@
+<!doctype html><meta charset=utf-8><title>Pick your skills</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>.chip{display:inline-block;background:#dde;border-radius:1rem;padding:.1rem .6rem;margin:.1rem}.chip b{cursor:pointer;margin-left:.3rem}#sg{list-style:none;margin:0;padding:0;border:1px solid #999;background:#fff}#sg li{padding:.3rem;cursor:pointer}</style>
+<h1>Pick your skills</h1>
+<form id="f">
+ <label for="t" id="tl">Skills</label>
+ <div id="chips"></div>
+ <input id="t" role="combobox" aria-autocomplete="list" aria-controls="sg" aria-expanded="false" autocomplete="off" placeholder="Type to search">
+ <ul id="sg" role="listbox" aria-labelledby="tl" hidden></ul>
+ <button type="submit">Save skills</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);const ALL=['Rust','Python','Go','TypeScript','Kubernetes','PostgreSQL'];const sel=[];
+const draw=()=>{$('chips').innerHTML=sel.map(s=>'<span class="chip">'+s+'<b data-s="'+s+'">x</b></span>').join('')};
+const open=()=>{const v=$('t').value.toLowerCase();const m=ALL.filter(a=>!sel.includes(a)&&a.toLowerCase().includes(v));$('sg').innerHTML=m.map(a=>'<li role="option">'+a+'</li>').join('');$('sg').hidden=!m.length;$('t').setAttribute('aria-expanded',!$('sg').hidden)};
+$('t').addEventListener('input',open);$('t').addEventListener('focus',open);
+$('sg').addEventListener('mousedown',e=>{if(e.target.matches('li')){sel.push(e.target.textContent);$('t').value='';draw();$('sg').hidden=true}});
+$('chips').addEventListener('click',e=>{if(e.target.dataset.s){sel.splice(sel.indexOf(e.target.dataset.s),1);draw()}});
+$('f').addEventListener('submit',async e=>{e.preventDefault();await send({skills:[...sel].sort()});document.body.innerHTML='<h1>Saved</h1>'});</script>
