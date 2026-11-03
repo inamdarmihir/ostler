@@ -7,7 +7,7 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 
 ## What these benchmarks do and do not show
 
-- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. A real-site evaluation is the next milestone ([roadmap](../README.md#roadmap)).
+- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. Section 7 checks seven live practice pages (correctness of what the tool claims, no model, small corpus); a real-model evaluation on a wider set of real sites is the next milestone ([roadmap](../README.md#roadmap)).
 - The "per-field" baseline is **our own engine driven the way snapshot-per-action tools are driven** (one call per field, each returning a full page snapshot). It isolates the effect of the interaction pattern. It is **not** a measurement of Playwright MCP, agent-browser or any other product (section 5 runs Playwright MCP and Chrome DevTools MCP for real). Tools that offer batched form fills would sit between the two columns.
 - LLM prices, LLM turn latency and cloud prices are **illustrative parameters** (flags on the harness). Token counts are `bytes / 4`, an estimate.
 
@@ -165,7 +165,34 @@ Read that honestly: the suite was written by the people who fixed what it found,
 OSTLER_SUITE_TRANSCRIPT=1 ./target/release/ostler-bench suite --only chip   # print the tool output for non-passing tasks
 ```
 
-## 7. Reproduce
+## 7. Real-site evaluation (fill only, no LLM)
+
+`ostler-bench real` opens seven live public form-practice pages (demoqa's practice form, formy, practice-automation, selenium.dev's `web-form.html`, testpages.eviltester, expandtesting's register page, ultimateqa's contact page), calls `form_inspect` then `form_fill`, and then reads **45 fields back out of the page with our own JavaScript**, never from the tool's report. It does **not** submit: these are other people's servers.
+
+Every field ends in one of three states: **ok** (the page holds the expected value), **flagged** (it does not, and the fill report said so: `UNMATCHED`, `FAILED`, a warning naming the key), or **false claim** (it does not, and the report did not say so). False claims are the number that has to be zero. The run exits non-zero on any.
+
+| run | fields ok | flagged | false claims | slowest `navigate` |
+|---|---:|---:|---:|---:|
+| first run | 42 / 44 | 0 | **2** | 38.7 s |
+| after the two fixes below | 44 / 45 | 1 | **0** | 14.0 s |
+
+The one flagged field is a deliberate probe: a key (`Favourite colour of the moon`) that matches nothing on the page. The report says `UNMATCHED key … no field on the page matches this key`. The same page's disabled and read-only inputs are asked to change; both keep their value and both are reported (`is disabled on this page`, `is read-only`).
+
+What the first run found, and what changed:
+
+1. **A silent tie between forms.** `ultimateqa.com/filling-out-forms/` has two forms that both have a `Name` and a `Message`. Ostler filled the *later* one (the one with a CAPTCHA question) and said `Filled 2/2`. Nothing on the page was wrong, but the agent was never told there was a choice. A tie now goes to the first form in the document, and the report says `WARNING: 1 other form(s) on this page matched these keys equally well (e15); this filled form e11. Pass form=<ref> to choose another.` (`fill.rs`, regression test `two_forms_that_match_equally_fill_the_first_and_name_the_other`).
+2. **`navigate` waited for the `load` event, up to 30 s.** `load` waits for every image, ad and tracker. `practice.expandtesting.com` took 31.7 s to open and `practice-automation.com` 38.7 s, while the form was usable in under a second (the latter's server itself needs 6.5 s to answer). Now, once the new document is interactive, `load` gets 5 more seconds and Ostler carries on, telling the agent so (`page was still loading images or scripts 5s after it became usable; continuing`). Those two pages now open in 7.5 s and 14.0 s. The same cap applies to clicks that navigate. A fixture with a stalled image guards it (`a_stalled_subresource_does_not_hold_navigation_for_the_whole_timeout`).
+
+Per-call time on these pages: `form_inspect` 4 to 25 ms, `form_fill` 68 to 385 ms. Opening the page is the cost, as on every browser tool.
+
+**What this does not show.** The corpus is small, and the pages are *practice* pages built to be automated; they are friendlier than a bank, a government portal or a checkout behind a bot wall. The fill values and the DOM checks were written by us after looking at each form, so this is a check that the engine's claims match the page, not a held-out test of success on the open web. There is no model in the loop and no comparison with another tool. Sites change or disappear: a page that cannot be loaded is reported `unreachable` and left out of the rates. Do not quote 98% as a success rate on real websites.
+
+```sh
+./target/release/ostler-bench real                 # needs network; --only <text> for one site; --json out/real.json
+OSTLER_REAL_TRANSCRIPT=1 ./target/release/ostler-bench real --only selenium   # print the tool output
+```
+
+## 8. Reproduce
 
 ```sh
 cargo build --release -p ostler-bench -p ostler

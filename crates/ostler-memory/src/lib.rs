@@ -24,12 +24,14 @@
 //! 4. **Forget.** [`Memory::prune`] removes stale, unproven skills and old episodes.
 
 mod embed;
+mod local;
 mod qdrant;
 mod sealed;
 mod store;
 mod token;
 
 pub use embed::{Embedder, HashEmbedder, OllamaEmbedder};
+pub use local::LocalStore;
 pub use qdrant::{QdrantConfig, QdrantStore, VectorSource};
 pub use sealed::{
     migrate_sealed, probe_key, seal_legacy, write_v1_point_for_tests, KeyProbe, MigrateReport,

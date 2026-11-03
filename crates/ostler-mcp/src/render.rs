@@ -255,7 +255,11 @@ fn fill_body(r: &FillReport, verbose: bool) -> String {
             .fields
             .iter()
             .filter(|f| {
-                f.status == FillStatus::Verified && f.source == "provided" && f.warning.is_none()
+                f.status == FillStatus::Verified
+                    && f.source == "provided"
+                    && f.warning.is_none()
+                    // The value took, but the page objects to it: that is listed below as REJECTED, not here.
+                    && f.error.is_none()
             })
             .map(|f| q(&f.label))
             .collect();
@@ -317,6 +321,15 @@ fn fill_body(r: &FillReport, verbose: bool) -> String {
             let _ = write!(out, " — candidates: {}", c.join("; "));
         }
         out.push('\n');
+    }
+    if !r.rival_forms.is_empty() {
+        let _ = writeln!(
+            out,
+            "WARNING: {} other form(s) on this page matched these keys equally well ({}); this filled form {}. Pass form=<ref> to choose another.",
+            r.rival_forms.len(),
+            r.rival_forms.join(", "),
+            r.form
+        );
     }
     if !r.missing_required.is_empty() {
         out.push_str("Still empty and required:\n");
@@ -529,6 +542,7 @@ mod tests {
             fields,
             unmatched,
             missing_required: vec![],
+            rival_forms: vec![],
             field_errors: vec![],
             page_errors: vec![],
             submit: vec![],
@@ -544,6 +558,37 @@ mod tests {
             reason: "no field on the page matches this key".into(),
             candidates: vec![],
         }
+    }
+
+    #[test]
+    fn a_form_chosen_over_an_equally_good_rival_says_so() {
+        let mut r = report(vec![result("Name", FillStatus::Verified, None)], vec![]);
+        assert!(!fill(&r, false).contains("other form"));
+        r.rival_forms = vec!["e15".into()];
+        let text = fill(&r, false);
+        assert!(
+            text.contains("WARNING: 1 other form(s)")
+                && text.contains("e15")
+                && text.contains("form e0"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_field_the_page_rejects_is_not_also_listed_as_verified() {
+        let mut rejected = result("Email", FillStatus::Verified, None);
+        rejected.error = Some("Enter a valid email address".into());
+        let r = report(
+            vec![result("Name", FillStatus::Verified, None), rejected],
+            vec![],
+        );
+        let text = fill(&r, false);
+        assert!(text.contains("verified: \"Name\"\n"), "{text}");
+        assert!(!text.contains("verified: \"Name\", \"Email\""), "{text}");
+        assert!(
+            text.contains("REJECTED") && text.contains("PAGE SAYS"),
+            "{text}"
+        );
     }
 
     #[test]

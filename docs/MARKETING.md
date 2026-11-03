@@ -28,7 +28,7 @@ Rule for everything below: say only what the benchmarks and tests show. The head
 
 The mark is a horseshoe (an ostler tends horses) with a verified check inside. Orange `#fb923c`, teal `#5eead4`, ink `#14110f`.
 
-Still to make by hand: GitHub **social preview** (Settings → General → Social preview: upload `site/assets/og.png`; there is no API for it), and a 20-second screen recording of `look` on `crates/ostler-fixtures/fixtures/overlay.html` followed by a one-call fill.
+The README demo is `assets/demo.gif` (5 steps, 960 px, under 100 KB): real tool output from `overlay.html` and `validation.html` (`look` under a cookie wall, a `form_fill` the page rejects, the corrected fill, `form_submit`), with each caption copied from the tool's own reply. Re-record it if those replies change. Still to do by hand: GitHub **social preview** (Settings → General → Social preview: upload `site/assets/og.png`; there is no API for it). A longer screen recording is optional.
 
 ## Channels, in order
 
@@ -48,8 +48,8 @@ Still to make by hand: GitHub **social preview** (Settings → General → Socia
 
 - [ ] Prebuilt binaries (macOS arm64/x64, Linux) so install is not `cargo install`
 - [ ] `brew` tap or `cargo binstall` metadata
-- [ ] README GIF and social preview uploaded
-- [ ] Real-site evaluation published, including failures (the strongest single thing for credibility; do this before Show HN if possible)
+- [x] README GIF (`assets/demo.gif`). [ ] Social preview uploaded (manual, in repo settings)
+- [x] Real-site check published, including what it found (`ostler-bench real`, [BENCHMARKS §7](BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm)): 7 practice pages, 44/45 fields, the 2 false claims it caught fixed. **Still to do for a stronger claim:** a wider set of real (not practice) sites, with failures
 - [ ] LLM-in-the-loop benchmark against Playwright MCP and chrome-devtools-mcp
 - [ ] Close the open safety items listed in the design review status table (uploads, DevTools port, default allowlist, `confirm()`)
 - [ ] GitHub Discussions on, `good first issue` labels, a roadmap issue

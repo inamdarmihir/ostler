@@ -47,7 +47,7 @@ fn fill_values(v: &Value, resume: &str) -> Value {
 }
 
 /// Lines in a fill/submit result that mean "this did not go cleanly".
-fn problem_lines(text: &str) -> Vec<String> {
+pub fn problem_lines(text: &str) -> Vec<String> {
     text.lines()
         .map(str::trim)
         .filter(|l| {

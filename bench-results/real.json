@@ -1,0 +1,383 @@
+{
+  "false_claims": 0,
+  "fields": 45,
+  "flagged": 1,
+  "ok": 44,
+  "reachable": 7,
+  "rows": [
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "Ada",
+          "key": "Name",
+          "page_has": "Ada",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Lovelace",
+          "key": "Last Name",
+          "page_has": "Lovelace",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "ada@example.com",
+          "key": "Email",
+          "page_has": "ada@example.com",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Female",
+          "key": "Gender",
+          "page_has": "Female",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "5551234567",
+          "key": "Mobile(10 Digits)",
+          "page_has": "5551234567",
+          "verdict": "Ok"
+        },
+        {
+          "expected": true,
+          "key": "Sports",
+          "page_has": true,
+          "verdict": "Ok"
+        },
+        {
+          "expected": true,
+          "key": "Music",
+          "page_has": true,
+          "verdict": "Ok"
+        },
+        {
+          "expected": "12 Analytical St",
+          "key": "Current Address",
+          "page_has": "12 Analytical St",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "NCR",
+          "key": "Select State",
+          "page_has": "NCR",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 325,
+      "inspect_ms": 5,
+      "ms": 6599,
+      "nav_ms": 5420,
+      "note": "React page, ads, custom radios/checkboxes, react-select, unlabeled date and subjects fields",
+      "site": "demoqa_practice_form",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "Ada",
+          "key": "First name",
+          "page_has": "Ada",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Lovelace",
+          "key": "Last name",
+          "page_has": "Lovelace",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Mathematician",
+          "key": "Job title",
+          "page_has": "Mathematician",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "5-9",
+          "key": "Years of experience",
+          "page_has": "5-9",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "03/15/2026",
+          "key": "Date",
+          "page_has": "03/15/2026",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 180,
+      "inspect_ms": 4,
+      "ms": 11183,
+      "nav_ms": 10144,
+      "note": "plain HTML, a select and a date input",
+      "site": "formy_form",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "Ada Lovelace",
+          "key": "Name",
+          "page_has": "Ada Lovelace",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "correct-horse-battery",
+          "key": "Password",
+          "page_has": "correct-horse-battery",
+          "verdict": "Ok"
+        },
+        {
+          "expected": [
+            "Coffee",
+            "Milk"
+          ],
+          "key": "fav_drink",
+          "page_has": [
+            "Coffee",
+            "Milk"
+          ],
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Blue",
+          "key": "fav_color",
+          "page_has": "Blue",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "yes",
+          "key": "Do you like automation?",
+          "page_has": "yes",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "ada@example.com",
+          "key": "Email",
+          "page_has": "ada@example.com",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Hello from the evaluation",
+          "key": "Message",
+          "page_has": "Hello from the evaluation",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 255,
+      "inspect_ms": 7,
+      "ms": 15151,
+      "nav_ms": 14032,
+      "note": "text, password, checkbox group, radio group, select, textarea",
+      "site": "practice_automation_fields",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "Ada",
+          "key": "Text input",
+          "page_has": "Ada",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "pw12345",
+          "key": "Password",
+          "page_has": "pw12345",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Hello",
+          "key": "Textarea",
+          "page_has": "Hello",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "2",
+          "key": "Dropdown (select)",
+          "page_has": "2",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "New York",
+          "key": "Dropdown (datalist)",
+          "page_has": "New York",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "03/15/2026",
+          "key": "Date picker",
+          "page_has": "03/15/2026",
+          "verdict": "Ok"
+        },
+        {
+          "expected": true,
+          "key": "my-radio",
+          "page_has": true,
+          "verdict": "Ok"
+        },
+        {
+          "expected": "7",
+          "key": "Example range",
+          "page_has": "7",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "#ff0000",
+          "key": "Color picker",
+          "page_has": "#ff0000",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "",
+          "key": "Disabled input",
+          "page_has": "",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Readonly input",
+          "key": "Readonly input",
+          "page_has": "Readonly input",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "grey",
+          "key": "Favourite colour of the moon",
+          "page_has": null,
+          "verdict": "Flagged"
+        }
+      ],
+      "fill_ms": 360,
+      "inspect_ms": 4,
+      "ms": 2908,
+      "nav_ms": 1697,
+      "note": "every native input type, plus a disabled and a read-only field that must not change",
+      "site": "selenium_web_form",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "ada",
+          "key": "Username",
+          "page_has": "ada",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "pw12345",
+          "key": "Password",
+          "page_has": "pw12345",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Hello",
+          "key": "TextArea Comment",
+          "page_has": "Hello",
+          "verdict": "Ok"
+        },
+        {
+          "expected": [
+            "cb1",
+            "cb2"
+          ],
+          "key": "checkboxes[]",
+          "page_has": [
+            "cb1",
+            "cb2"
+          ],
+          "verdict": "Ok"
+        },
+        {
+          "expected": "rd3",
+          "key": "radioval",
+          "page_has": "rd3",
+          "verdict": "Ok"
+        },
+        {
+          "expected": [
+            "ms1",
+            "ms2"
+          ],
+          "key": "Multiple Select Values",
+          "page_has": [
+            "ms1",
+            "ms2"
+          ],
+          "verdict": "Ok"
+        },
+        {
+          "expected": "dd5",
+          "key": "Dropdown",
+          "page_has": "dd5",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 306,
+      "inspect_ms": 24,
+      "ms": 7999,
+      "nav_ms": 6819,
+      "note": "checkbox group with a default-checked box, multi-select, radios, select",
+      "site": "testpages_html_form",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "adalovelace",
+          "key": "Username",
+          "page_has": "adalovelace",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Passw0rd!x",
+          "key": "Password",
+          "page_has": "Passw0rd!x",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Passw0rd!x",
+          "key": "Confirm Password",
+          "page_has": "Passw0rd!x",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 104,
+      "inspect_ms": 4,
+      "ms": 8477,
+      "nav_ms": 7504,
+      "note": "username plus password and a confirm-password field",
+      "site": "expandtesting_register",
+      "unreachable": null
+    },
+    {
+      "calls": 3,
+      "fields": [
+        {
+          "expected": "Ada Lovelace",
+          "key": "Name",
+          "page_has": "Ada Lovelace",
+          "verdict": "Ok"
+        },
+        {
+          "expected": "Hello from the evaluation",
+          "key": "Message",
+          "page_has": "Hello from the evaluation",
+          "verdict": "Ok"
+        }
+      ],
+      "fill_ms": 68,
+      "inspect_ms": 4,
+      "ms": 3705,
+      "nav_ms": 2786,
+      "note": "two forms on one page, one with a CAPTCHA question",
+      "site": "ultimateqa_contact",
+      "unreachable": null
+    }
+  ],
+  "sites": 7,
+  "unreachable": 0
+}

@@ -32,7 +32,7 @@ ostler config path                          # ~/.config/ostler/config.toml
 | `qdrant_url` | `QDRANT_URL` | Qdrant REST endpoint |
 | `qdrant_api_key` | `QDRANT_API_KEY` | Qdrant API key (secret; file is `0600`) |
 | `tenant` | `OSTLER_TENANT` | isolates users sharing a cluster (default `default`) |
-| `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `ephemeral`, `off` |
+| `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `local` (encrypted file, no server), `ephemeral`, `off` |
 | `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference), `ollama` (local) or `dev-hash` |
 | `embedding_model` | `OSTLER_EMBEDDING_MODEL` | Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`, 384 dims) |
 | `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
@@ -77,7 +77,7 @@ ostler <COMMAND>
 | `--require-confirm-submit` | off | `form_submit` needs `confirm=true` |
 | `--learn` | off | save non-sensitive typed values after an accepted submit |
 | `--verbose` | off | timings, fingerprints and ids in tool output (costs context) |
-| `--memory` | `auto` | `auto`, `qdrant`, `ephemeral`, `off` |
+| `--memory` | `auto` | `auto`, `qdrant`, `local`, `ephemeral`, `off` |
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
 | `--embeddings` | `cloud` | `cloud`, `ollama` (embed locally, only vectors leave) or `dev-hash` |
 | `--embedding-model`, `--embedding-dim` | MiniLM, 384 | embedding model and its dimension |

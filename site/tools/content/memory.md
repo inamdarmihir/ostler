@@ -140,13 +140,16 @@ ostler memory token                     # per-tenant JWT (see above)
 ostler memory wipe --yes                # delete everything for this tenant
 ```
 
-Try it without Qdrant: `ostler memory --memory ephemeral list` keeps memory in-process and loses it on exit.
+No Qdrant? `ostler init --local` (or `ostler config set memory local`) keeps memory in one file, `memory.local`, next to your config. It survives restarts, needs no server, and the whole file is encrypted with the same memory key as sealed Qdrant memory (AES-256-GCM, written atomically, safe to use from `serve` and `ostler memory` at once). Embeddings stay on your machine: local word hashing by default (finds shared words, not meaning), or `--embeddings ollama` for semantic search. Back up the key; lost, the file cannot be read. `--seal off` stores plain JSON instead.
+
+Just trying things out: `ostler memory --memory ephemeral list` keeps memory in-process and loses it on exit.
 
 ## Which keys do I need?
 
 | you want | you need |
 |---|---|
 | browsing and form filling only | nothing |
+| memory, no server, kept across sessions | `ostler init --local` (encrypted file on this machine), no keys |
 | memory, trying it out | `--memory ephemeral` (in-process, lost on exit), no keys |
 | memory on **Qdrant Cloud** | cluster URL and API key, with **Inference enabled** on the cluster |
 | memory on self-hosted Qdrant | URL (plus key if you set one) and `--embeddings dev-hash`, or `--embeddings ollama` for semantic search |

@@ -2224,3 +2224,91 @@ async fn w4_last_form_does_not_survive_navigation() {
     assert!(err.contains("none was filled"), "{err}");
     b.close().await;
 }
+
+#[tokio::test]
+async fn two_forms_that_match_equally_fill_the_first_and_name_the_other() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/twin_forms.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Name": "Ada"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let got = b
+        .page()
+        .eval("[document.getElementById('n1').value, document.getElementById('n2').value]")
+        .await
+        .unwrap();
+    assert_eq!(got, json!(["Ada", ""]), "a tie must go to the first form");
+    assert_eq!(rep.rival_forms.len(), 1, "{rep:#?}");
+
+    // Choosing the other form explicitly works and reports no rival.
+    let second = rep.rival_forms[0].clone();
+    let rep2 = b
+        .page()
+        .fill_form(
+            FillRequest {
+                values: vals(json!({"Name": "Grace"})),
+                form: Some(second),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep2.ok() && rep2.rival_forms.is_empty(), "{rep2:#?}");
+    let got = b
+        .page()
+        .eval("document.getElementById('n2').value")
+        .await
+        .unwrap();
+    assert_eq!(got, json!("Grace"));
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_stalled_subresource_does_not_hold_navigation_for_the_whole_timeout() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // The page's form is usable at once; its one image takes 25 s. `load` would wait for it.
+    let t0 = std::time::Instant::now();
+    let nav = b
+        .page()
+        .navigate(&srv.url("/slow_load.html"))
+        .await
+        .unwrap();
+    let took = t0.elapsed();
+    assert!(
+        took < Duration::from_secs(15),
+        "navigate waited {took:?} for a stalled image"
+    );
+    assert!(
+        nav.warnings.iter().any(|w| w.contains("still loading")),
+        "the agent must be told the page was cut short: {:?}",
+        nav.warnings
+    );
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Email": "ada@example.com"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_normal_page_navigates_without_a_cut_short_warning() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    let nav = b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    assert!(nav.warnings.is_empty(), "{:?}", nav.warnings);
+    b.close().await;
+}

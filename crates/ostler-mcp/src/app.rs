@@ -100,6 +100,28 @@ pub enum Content {
     Image { png: Vec<u8> },
 }
 
+/// Prefix a failure with a stable code and a retry rule, so an agent can tell "re-snapshot and try again"
+/// from "do not repeat this". Messages that match nothing are returned unchanged.
+fn tag_error(e: String) -> String {
+    let (code, retry) = if e.starts_with("unknown ref") || e.contains("is stale") {
+        ("STALE_REF", "safe after a fresh snapshot")
+    } else if e.contains("the page changed while the action was running") {
+        (
+            "ACTION_UNCERTAIN",
+            "unsafe: it may have completed; check the page first",
+        )
+    } else if e.starts_with("blocked by policy") {
+        ("BLOCKED", "never")
+    } else if e.ends_with("is disabled") || e.ends_with("is read-only") {
+        ("NOT_ACTIONABLE", "never until the page state changes")
+    } else if e.starts_with("navigation failed") {
+        ("NAVIGATION_FAILED", "safe")
+    } else {
+        return e;
+    };
+    format!("ERROR {code} (retry: {retry}): {e}")
+}
+
 pub struct ToolOutput {
     pub content: Vec<Content>,
     pub is_error: bool,
@@ -389,6 +411,13 @@ impl App {
         self.browser.lock().await.as_ref().and_then(|b| b.pid())
     }
 
+    /// Evaluate JavaScript in the active tab and return its value, for evaluations that must read the page
+    /// independently of what the tools report. `None` until the browser has started, or if the script fails.
+    pub async fn page_eval(&self, expression: &str) -> Option<Value> {
+        let page = self.browser.lock().await.as_ref()?.page();
+        page.eval(expression).await.ok()
+    }
+
     /// Approximate size of the tool schemas the agent must carry in context.
     pub fn schema_bytes(&self) -> usize {
         serde_json::to_string(&tools::list(self.cfg.profile))
@@ -525,7 +554,7 @@ impl App {
             )),
             Some(true) => match self.dispatch(name, args).await {
                 Ok(o) => o,
-                Err(e) => ToolOutput::err(e),
+                Err(e) => ToolOutput::err(tag_error(e)),
             },
         };
         let mut out = out;
@@ -1650,7 +1679,7 @@ impl App {
     }
 }
 
-const NO_MEMORY: &str = "memory is not configured. Start the server with --memory ephemeral, or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
+const NO_MEMORY: &str = "memory is not configured. Start the server with --memory local (an encrypted file on this machine) or --memory ephemeral (this session only), or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
 
 #[cfg(test)]
 mod scrub_tests {
@@ -1784,5 +1813,36 @@ mod degraded_memory_tests {
         let out = healthy.call("memory_list", &json!({})).await;
         let t = first_text(&out);
         assert!(!t.contains("memory is unavailable"), "{t}");
+    }
+}
+
+#[cfg(test)]
+mod tag_error_tests {
+    use super::tag_error;
+
+    #[test]
+    fn stale_and_unknown_refs_are_retryable_after_snapshot() {
+        for m in [
+            "unknown ref e9: page changed",
+            "ref e3 is stale (element left the page)",
+        ] {
+            assert!(tag_error(m.into()).starts_with("ERROR STALE_REF (retry: safe after"));
+        }
+    }
+
+    #[test]
+    fn uncertain_actions_are_not_safe_to_retry() {
+        let t = tag_error("navigation failed: x".into());
+        assert!(t.contains("NAVIGATION_FAILED"));
+        let t = tag_error(
+            "the page changed while the action was running (x); it may or may not have completed"
+                .into(),
+        );
+        assert!(t.contains("ACTION_UNCERTAIN") && t.contains("unsafe"));
+    }
+
+    #[test]
+    fn unrecognised_errors_pass_through() {
+        assert_eq!(tag_error("something else".into()), "something else");
     }
 }

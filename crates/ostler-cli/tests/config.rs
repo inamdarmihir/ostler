@@ -197,3 +197,63 @@ fn memory_help_describes_every_subcommand() {
         );
     }
 }
+
+/// No Qdrant: `init --local` saves memory in an encrypted file that survives across processes, and a
+/// lost key is refused instead of being read as empty memory.
+#[test]
+fn local_memory_persists_encrypted_and_refuses_a_wrong_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("cfg").join("config.toml");
+    let (ok, out, err) = run(wm(&cfg).args(["init", "--local"]));
+    assert!(ok, "{out}{err}");
+    assert!(out.contains("Local memory: file opens"), "{out}");
+    assert!(
+        std::fs::read_to_string(&cfg)
+            .unwrap()
+            .contains("memory = \"local\""),
+        "init --local must be remembered"
+    );
+
+    // A separate process each time: this is what persistence means.
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "remember", "email", "ada@example.com"]));
+    assert!(ok, "{err}");
+    let (ok, out, err) = run(wm(&cfg).args(["memory", "list"]));
+    assert!(ok, "{err}");
+    assert!(out.contains("ada@example.com"), "{out}");
+
+    let file = std::fs::read_to_string(dir.path().join("cfg").join("memory.local")).unwrap();
+    assert!(
+        !file.contains("ada@example.com") && !file.contains("email"),
+        "{file}"
+    );
+
+    let key = dir.path().join("cfg").join("memory.key");
+    let good = std::fs::read_to_string(&key).unwrap();
+    std::fs::write(&key, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").unwrap();
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "list"]));
+    assert!(!ok && err.contains("memory key"), "{err}");
+    std::fs::write(&key, good).unwrap();
+    let (ok, out, _) = run(wm(&cfg).args(["memory", "list"]));
+    assert!(ok && out.contains("ada@example.com"), "{out}");
+}
+
+#[test]
+fn init_with_a_qdrant_url_replaces_local_and_the_two_flags_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    assert!(run(wm(&cfg).args(["init", "--local", "--no-check"])).0);
+    let (ok, _, _) =
+        run(wm(&cfg).args(["init", "--local", "--qdrant-url", "http://localhost:6333"]));
+    assert!(!ok, "--local and --qdrant-url must conflict");
+    let (ok, _, err) = run(wm(&cfg).args([
+        "init",
+        "--no-check",
+        "--yes",
+        "--qdrant-url",
+        "http://localhost:6333",
+    ]));
+    assert!(ok, "{err}");
+    assert!(!std::fs::read_to_string(&cfg)
+        .unwrap()
+        .contains("memory = \"local\""));
+}

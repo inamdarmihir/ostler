@@ -21,6 +21,10 @@ impl Kind {
         }
     }
     pub const ALL: [Kind; 3] = [Kind::Profile, Kind::Playbook, Kind::Episode];
+
+    pub(crate) fn from_collection(name: &str) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|k| k.collection() == name)
+    }
 }
 
 /// Conjunction of payload conditions. Every query carries the tenant.
@@ -211,6 +215,45 @@ impl InMemoryStore {
             embedder,
             points: Mutex::default(),
         }
+    }
+
+    pub(crate) fn embedder(&self) -> &Arc<dyn Embedder> {
+        &self.embedder
+    }
+
+    /// Insert or replace one point whose vector is already computed.
+    pub(crate) fn put_vector(&self, kind: Kind, id: &str, vector: Vec<f32>, payload: Value) {
+        let mut pts = self.points.lock().unwrap();
+        pts.retain(|p| !(p.kind == kind && p.id == id));
+        pts.push(Point {
+            id: id.into(),
+            vector,
+            payload,
+            kind,
+        });
+    }
+
+    /// Every point as `(kind, id, vector, payload)`, for persistence.
+    pub(crate) fn export(&self) -> Vec<(Kind, String, Vec<f32>, Value)> {
+        self.points
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| (p.kind, p.id.clone(), p.vector.clone(), p.payload.clone()))
+            .collect()
+    }
+
+    /// Replace the whole content, for reloading what another process saved.
+    pub(crate) fn replace_all(&self, pts: Vec<(Kind, String, Vec<f32>, Value)>) {
+        *self.points.lock().unwrap() = pts
+            .into_iter()
+            .map(|(kind, id, vector, payload)| Point {
+                id,
+                vector,
+                payload,
+                kind,
+            })
+            .collect();
     }
 }
 

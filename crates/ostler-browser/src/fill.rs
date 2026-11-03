@@ -114,6 +114,10 @@ pub struct FillReport {
     pub page_errors: Vec<String>,
     pub submit: Vec<SubmitControl>,
     pub step: Option<StepInfo>,
+    /// Other forms on the page that matched the agent's keys exactly as well as `form` did, when the agent
+    /// did not choose one. The fill went to the first of them in document order; the agent should say which.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rival_forms: Vec<String>,
     /// Times the page was still busy (network/timers) when we gave up waiting. Non-zero means
     /// verdicts may reflect a page that had not finished updating.
     #[serde(skip_serializing_if = "is_zero")]
@@ -201,6 +205,13 @@ fn host_of(url: &str) -> String {
         .unwrap_or_default()
 }
 
+/// How many of the agent's keys resolve to a field of this form.
+fn matched_count(f: &Form, values: &BTreeMap<String, Value>) -> usize {
+    resolve_values(&with_options(&f.fields), values)
+        .matched
+        .len()
+}
+
 fn pick_form<'a>(
     forms: &'a [Form],
     want: Option<&str>,
@@ -212,13 +223,28 @@ fn pick_form<'a>(
     if values.is_empty() {
         return forms.first();
     }
+    // The best match wins; a tie goes to the earlier form in the document, never to the later one.
+    let mut best: Option<(&Form, usize)> = None;
+    for f in forms {
+        let n = matched_count(f, values);
+        if best.is_none_or(|(_, b)| n > b) {
+            best = Some((f, n));
+        }
+    }
+    best.map(|(f, _)| f)
+}
+
+/// The refs of the other forms that match `values` as well as `chosen` does (and at least once).
+fn rival_forms(forms: &[Form], chosen: &Form, values: &BTreeMap<String, Value>) -> Vec<String> {
+    let n = matched_count(chosen, values);
+    if n == 0 {
+        return vec![];
+    }
     forms
         .iter()
-        .max_by_key(|f| {
-            let vis = with_options(&f.fields);
-            resolve_values(&vis, values).matched.len()
-        })
-        .or(forms.first())
+        .filter(|f| f.r#ref != chosen.r#ref && matched_count(f, values) == n)
+        .map(|f| f.r#ref.clone())
+        .collect()
 }
 
 /// The form to work on. If the page re-rendered and our form's ref is gone (React/Vue re-mounts),
@@ -423,6 +449,8 @@ impl Page {
         let max_rounds = req.values.len() + 60;
         // Errors the page was already showing before we touched anything, by ref.
         let mut prior_errors: BTreeMap<String, String> = BTreeMap::new();
+        let mut rivals: Vec<String> = vec![];
+        let mut first_round = true;
 
         for _ in 0..max_rounds {
             let ir = self.forms().await?;
@@ -439,6 +467,9 @@ impl Page {
             let doc = self.current_doc().await;
             self.state.lock().unwrap().last_form = Some(format!("{doc}\u{1f}{}", form.r#ref));
             form_ref = Some(form.r#ref.clone());
+            if std::mem::take(&mut first_round) && req.form.is_none() {
+                rivals = rival_forms(&ir.forms, form, &pending);
+            }
             if results.is_empty() {
                 for f in &form.fields {
                     if let Some(e) = &f.error {
@@ -616,6 +647,7 @@ impl Page {
             fields: results,
             unmatched,
             missing_required: missing,
+            rival_forms: rivals,
             field_errors: errors,
             page_errors,
             submit,

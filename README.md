@@ -29,6 +29,11 @@
 
 Works with Claude Code, Codex, Cursor, VS Code and anything else that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
 
+<p align="center">
+  <img src="assets/demo.gif" alt="Ostler's own tool output on a local test page: look boxes the one clickable button under a cookie wall and notes two more are hidden; one form_fill call is read back and the page's three validation errors are reported; a corrected fill is verified and the submit is classified from the page" width="720">
+</p>
+<p align="center"><sub>Real tool output, recorded against the bundled local test pages (<code>ostler fixtures</code>). Nothing real is submitted.</sub></p>
+
 ### At a glance
 
 | | |
@@ -194,6 +199,7 @@ ostler config path                          # ~/.config/ostler/config.toml
 |---|---|
 | browsing and form filling only | nothing |
 | memory, trying it out | `--memory ephemeral` (in-process, lost on exit), no keys |
+| memory, no server, kept across sessions | `ostler init --local` (or `--memory local`): one encrypted file next to the config, no keys, no network |
 | memory on **Qdrant Cloud** | cluster URL + API key, with **Inference enabled** on the cluster (embeddings run inside Qdrant; no separate embedding provider or key) |
 | memory on a self-hosted/open-source Qdrant | URL (+ key if you set one) and `--embeddings ollama` (a local Ollama server embeds; semantic; only vectors reach Qdrant) or `--embeddings dev-hash` (not semantic: exact-key and `autocomplete` matches work, fuzzy meaning does not) |
 
@@ -209,7 +215,7 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `qdrant_url` | `QDRANT_URL` | Qdrant REST endpoint |
 | `qdrant_api_key` | `QDRANT_API_KEY` | Qdrant API key (secret; file is `0600`) |
 | `tenant` | `OSTLER_TENANT` | isolates users sharing a cluster (default `default`) |
-| `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `ephemeral`, `off` |
+| `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `local` (encrypted file, no server), `ephemeral`, `off` |
 | `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference), `ollama` (local) or `dev-hash` |
 | `embedding_model` | `OSTLER_EMBEDDING_MODEL` | model name: Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`) or the Ollama name (e.g. `all-minilm`) |
 | `embedding_dim` | `OSTLER_EMBEDDING_DIM` | vector size of the model (default 384) |
@@ -323,7 +329,7 @@ Fixtures only, one Apple M2 (8 cores), Chrome 156, localhost. Full tables, metho
 | 20-field form, LLM cost / end-to-end time | **modelled** (illustrative price, 3 s per turn, 1.5k base context) | $0.021 vs $0.105 / 13 s vs 70 s |
 | browser compute | modelled from measured CPU | ~$0.006 per 1,000 tasks |
 
-**Read these carefully.** No LLM is in the loop: a script drives both columns, so this shows call counts and bytes, not whether a model succeeds. The one-call-per-field column is Ostler itself driven the way snapshot-per-action tools work. With a realistic 20k-token agent context the 20-field cost ratio falls from ~5x to ~2.7x, and across all fixtures the aggregate is ~1.7x. The next milestone is a real-model evaluation against real tools on real sites.
+**Read these carefully.** No LLM is in the loop: a script drives both columns, so this shows call counts and bytes, not whether a model succeeds. The one-call-per-field column is Ostler itself driven the way snapshot-per-action tools work. With a realistic 20k-token agent context the 20-field cost ratio falls from ~5x to ~2.7x, and across all fixtures the aggregate is ~1.7x. A separate [real-site check](docs/BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm) fills 7 live practice pages and reads every field back from the page itself: 44 of 45 correct, 1 honestly reported, 0 false claims after fixing the 2 it found. That is a small friendly corpus, not a success rate. The next milestone is a real-model evaluation against real tools.
 
 Reproduce: `cargo build --release -p ostler-bench && ./target/release/ostler-bench forms --reps 3`.
 
@@ -363,7 +369,7 @@ ostler <COMMAND>
 | `--require-confirm-submit` | off | `form_submit` needs `confirm=true` |
 | `--learn` | off | save non-sensitive typed values after an accepted submit |
 | `--verbose` | off | timings, fingerprints and ids in tool output (costs context) |
-| `--memory` | `auto` | `auto`, `qdrant`, `ephemeral`, `off` |
+| `--memory` | `auto` | `auto`, `qdrant`, `local`, `ephemeral`, `off` |
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
 | `--embedding-model`, `--embedding-dim` | MiniLM, 384 | embedding model and its dimension |
 | `--embedding-url` | `http://127.0.0.1:11434` | where the Ollama server lives (`--embeddings ollama`) |
@@ -435,7 +441,7 @@ Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript
 
 - [x] CDP client, in-page runtime, form engine, Qdrant memory, MCP server, benchmark harness, `init`/`config`/`setup`
 - [ ] **Fix the review findings**, starting with wrong-fill prevention and browser-level enforcement of the safety flags ([order](docs/REVIEW-2026-10.md#recommended-order-of-work))
-- [ ] **Real-model evaluation** against real tools on real sites, published including failures
+- [ ] **Real-model evaluation** against real tools, on a wider set of real sites than the [7-page check](docs/BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm), published including failures
 - [ ] Prebuilt binaries and a one-line installer
 - [ ] Live validation of Qdrant Cloud Inference; Linux benchmark numbers
 - [ ] Cross-origin iframes, HTTP transport for MCP (tabs and popups-as-tabs exist)
