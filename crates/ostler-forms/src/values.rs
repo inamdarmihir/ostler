@@ -135,11 +135,25 @@ fn valid_ymd(y: i32, m: u32, d: u32) -> bool {
     d <= dim
 }
 
+/// A year as written in a date: four digits as is; two digits expand by a fixed rule (00-69 is 2000-2069,
+/// 70-99 is 1970-1999). Anything else (3 digits, a sign) is passed on to the range check as parsed.
+fn year_of(p: &str) -> Result<i32, std::num::ParseIntError> {
+    let y = p.parse::<i32>()?;
+    if p.len() == 2 && p.bytes().all(|b| b.is_ascii_digit()) {
+        return Ok(if y < 70 { 2000 + y } else { 1900 + y });
+    }
+    Ok(y)
+}
+
 /// Normalise a date to ISO `YYYY-MM-DD`. Refuses ambiguous day/month order.
 pub fn normalize_date(input: &str) -> Result<String, ValueError> {
     let s = input.trim();
     let iso = |y: i32, m: u32, d: u32| -> Result<String, ValueError> {
-        if valid_ymd(y, m, d) {
+        if !(1900..=2100).contains(&y) {
+            Err(ValueError::Invalid(format!(
+                "{input:?}: the year must be between 1900 and 2100"
+            )))
+        } else if valid_ymd(y, m, d) {
             Ok(format!("{y:04}-{m:02}-{d:02}"))
         } else {
             Err(ValueError::Invalid(format!(
@@ -183,14 +197,14 @@ pub fn normalize_date(input: &str) -> Result<String, ValueError> {
         if let (Some(m), Ok(d), Ok(y)) = (
             month_from_name(parts[0]),
             strip(parts[1]).parse::<u32>(),
-            parts[2].parse::<i32>(),
+            year_of(parts[2]),
         ) {
             return iso(y, m, d);
         }
         if let (Ok(d), Some(m), Ok(y)) = (
             strip(parts[0]).parse::<u32>(),
             month_from_name(parts[1]),
-            parts[2].parse::<i32>(),
+            year_of(parts[2]),
         ) {
             return iso(y, m, d);
         }
@@ -315,5 +329,25 @@ mod tests {
         assert_eq!(coerce_bool(&json!("Yes")), Some(true));
         assert_eq!(coerce_bool(&json!(false)), Some(false));
         assert_eq!(coerce_bool(&json!("maybe")), None);
+    }
+}
+
+#[cfg(test)]
+mod year_tests {
+    use super::normalize_date;
+
+    #[test]
+    fn two_digit_years_expand_and_odd_years_are_refused() {
+        assert_eq!(normalize_date("March 5, 24").unwrap(), "2024-03-05");
+        assert_eq!(normalize_date("5 March 69").unwrap(), "2069-03-05");
+        assert_eq!(normalize_date("5 March 70").unwrap(), "1970-03-05");
+        for bad in [
+            "March 5, -5",
+            "March 5, 0024",
+            "March 5, 3024",
+            "1850-01-01",
+        ] {
+            assert!(normalize_date(bad).is_err(), "{bad}");
+        }
     }
 }

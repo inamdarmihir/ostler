@@ -162,7 +162,7 @@ Click the form's submit or next control and report whether it was accepted, adva
 | `control` | string | submit button ref |
 | `confirm` | boolean | required when the server runs with `--require-confirm-submit` |
 
-Result: `Submitted`, `Advanced` (next step), `NOT SUBMITTED` with the page's own messages, or `Nothing changed` when the form stays put and says nothing. Just before clicking it re-reads the fields it verified and reports any the page cleared or rewrote (`CHANGED BEFORE SUBMIT`).
+Result: `Submitted`, `Advanced` (next step), `NOT ACCEPTED` with the page's own messages, or `Nothing changed` when the form stays put and says nothing. Just before clicking it re-reads the fields it verified and reports any the page cleared or rewrote (`CHANGED BEFORE SUBMIT`).
 
 ### `fill_field`
 

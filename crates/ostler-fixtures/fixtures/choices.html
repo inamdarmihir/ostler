@@ -1,0 +1,24 @@
+<!doctype html><meta charset=utf-8><title>Choices</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}</style>
+<h1>Choices</h1>
+<form action="/submit" method="post">
+  <div class="form-group">
+    <label>Highest level of education</label>
+    <div class="radio"><input type="radio" name="my-radio" class="radio-button" value="hs"> High school</div>
+    <div class="radio"><input type="radio" name="my-radio" class="radio-button" value="college"> College</div>
+    <div class="radio"><input type="radio" name="my-radio" class="radio-button" value="grad"> Grad school</div>
+  </div>
+  <div class="form-group">
+    <label>Contact me by</label>
+    <div class="check"><input type="checkbox" name="my-check" value="email"> Email</div>
+    <div class="check"><input type="checkbox" name="my-check" value="sms"> Text message</div>
+    <div class="check"><input type="checkbox" name="my-check" value="post"> Post</div>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" value="" id="defaultCheck1">
+    <label class="form-check-label" for="defaultCheck1">Default checkbox</label>
+  </div>
+  <button type="submit">Submit</button>
+</form>
+<script>document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();
+ const d={};for(const [k,v] of new FormData(e.target))d[k]=(d[k]?d[k]+',':'')+v;d.default=document.getElementById('defaultCheck1').checked?'on':'';
+ fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)}).then(()=>{document.body.innerHTML='<h1>Saved</h1>'})});</script>

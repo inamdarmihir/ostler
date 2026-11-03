@@ -1,0 +1,14 @@
+<!doctype html><meta charset=utf-8><title>Reorder</title>
+<form id="f">
+  <fieldset id="g"><legend>Size</legend>
+    <label><input type="radio" name="size" value="s"> Small</label>
+    <label><input type="radio" name="size" value="m"> Medium</label>
+    <label><input type="radio" name="size" value="l"> Large</label>
+  </fieldset>
+  <button type="submit">Save</button>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit',e=>{e.preventDefault();
+ const d={};for(const [k,v] of new FormData(e.target))d[k]=v;
+ fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)}).then(()=>{document.body.innerHTML='<h1>Saved</h1>'})});
+</script>

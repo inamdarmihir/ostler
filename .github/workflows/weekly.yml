@@ -1,0 +1,55 @@
+name: Weekly
+# Slow or drift-prone checks that do not belong on every PR: the headless-Chrome end-to-end tests against the
+# latest stable Chrome, the docs link checker, and a staleness check on the generated docs.
+# Action versions are pinned by tag; pinning by commit SHA is stricter (see ci.yml). No secrets are used.
+on:
+  schedule:
+    - cron: "17 5 * * 1"   # Mondays 05:17 UTC
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+jobs:
+  chrome-e2e:
+    name: headless Chrome end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OSTLER_REQUIRE_CHROME: "1"   # fail rather than skip if Chrome is missing
+      OSTLER_NO_SANDBOX: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { shared-key: weekly }
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with: { chrome-version: stable }
+      - run: echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
+      # Qdrant-backed suites are covered by ci.yml, so they are excluded here: run only the browser-driving crates.
+      - name: Chrome end-to-end tests
+        run: cargo test -p ostler-browser -p ostler-a2a -p ostler-cli
+  docs:
+    name: docs links and freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Link checker
+        run: python3 site/tools/check_links.py
+      - name: Generated docs must be up to date
+        run: |
+          python3 site/tools/build_docs.py
+          git diff --exit-code site/docs
+          # `git diff` ignores untracked files: a page the generator newly emits must be committed too.
+          if [ -n "$(git status --porcelain -- site/docs)" ]; then
+            git status --porcelain -- site/docs
+            echo "site/docs is stale: run 'python3 site/tools/build_docs.py' and commit the result" >&2
+            exit 1
+          fi

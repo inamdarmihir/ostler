@@ -127,6 +127,26 @@ fn internal_name(d: &str) -> bool {
         || d.ends_with(".home.arpa")
 }
 
+/// Literal link-local addresses (169.254.0.0/16 incl. 169.254.169.254, fe80::/10, AWS's fd00:ec2::254)
+/// and the well-known metadata hostnames.
+fn is_metadata_host(url: &Url) -> bool {
+    match url.host() {
+        Some(Host::Ipv4(a)) => a.is_link_local(),
+        Some(Host::Ipv6(a)) => {
+            if let Some(v4) = a.to_ipv4_mapped() {
+                return v4.is_link_local();
+            }
+            let s = a.segments();
+            (s[0] & 0xffc0) == 0xfe80 || a == Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x254)
+        }
+        Some(Host::Domain(d)) => {
+            let d = d.trim_end_matches('.').to_ascii_lowercase();
+            d == "metadata.google.internal" || d == "metadata" || d == "instance-data"
+        }
+        None => false,
+    }
+}
+
 /// Where `path` would be if it existed: made absolute, `.` / `..` folded away, and the deepest ancestor that
 /// does exist resolved through symlinks (so `/var/...` and `/private/var/...` compare equal on macOS), with
 /// the missing remainder re-attached. Only used to pick a message for a path that does not exist, never to
@@ -210,6 +230,8 @@ impl Policy {
             }
         }
         if self.allowed_domains.is_empty() {
+            // `--block-private-networks` already covers these (with its own message); the check below
+            // is the part that stays on without it.
             if self.block_private_networks {
                 let private = match url.host() {
                     Some(Host::Ipv4(a)) => private_v4(a),
@@ -223,6 +245,14 @@ impl Policy {
                         url.host_str().unwrap_or("")
                     ));
                 }
+            }
+            // Never useful to a browsing agent and the usual target for stealing cloud credentials, so
+            // refused even without --block-private-networks (loopback and LAN stay open for dev servers).
+            if is_metadata_host(&url) {
+                return Err(format!(
+                    "{} is a cloud metadata address (always blocked; add it to --allow-domain to override)",
+                    url.host_str().unwrap_or("")
+                ));
             }
             return Ok(());
         }
@@ -352,6 +382,28 @@ mod tests {
         assert!(p.check("javascript:alert(1)").is_err());
         assert!(p.check("data:text/html,hi").is_err());
         assert!(p.check("file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn cloud_metadata_is_blocked_by_default_but_dev_servers_are_not() {
+        let p = Policy::default();
+        for u in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[fd00:ec2::254]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[fe80::1]/",
+            "http://metadata.google.internal/computeMetadata/v1/",
+        ] {
+            assert!(p.check(u).is_err(), "{u}");
+        }
+        // Local dev servers are the main use for a coding agent: still open without the flag.
+        assert!(p.check("http://localhost:3000/").is_ok());
+        assert!(p.check("http://127.0.0.1:8080/").is_ok());
+        assert!(p.check("http://192.168.1.10/").is_ok());
+        // An explicit allowlist decides.
+        assert!(allow(&["169.254.169.254"])
+            .check("http://169.254.169.254/")
+            .is_ok());
     }
 
     #[test]

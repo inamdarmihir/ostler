@@ -33,14 +33,14 @@ ostler config path                          # ~/.config/ostler/config.toml
 | `qdrant_api_key` | `QDRANT_API_KEY` | Qdrant API key (secret; file is `0600`) |
 | `tenant` | `OSTLER_TENANT` | isolates users sharing a cluster (default `default`) |
 | `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `ephemeral`, `off` |
-| `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference), `ollama` or `dev-hash` |
+| `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference), `ollama` (local) or `dev-hash` |
 | `embedding_model` | `OSTLER_EMBEDDING_MODEL` | Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`, 384 dims) |
 | `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `tools` | `OSTLER_TOOLS` | `core`, `forms` or `all` |
 
-Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are :unreleased:.
+Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_KEY_STORE`, `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are :unreleased:.
 
 ## Commands
 
@@ -49,12 +49,12 @@ ostler <COMMAND>
 
   serve      Run the MCP server on stdio (what the agent launches)
   a2a        Serve Agent2Agent (A2A) over HTTP so other agents can delegate forms
-  init       Save settings (Qdrant URL/key, tenant, defaults) and test them
+  init       Guided setup: Qdrant URL/key, tenant, privacy choices (sealing, local embeddings, retention); then verify
   config     show | path | set <key> <value> | unset <key>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
-  doctor     Check that Chrome launches and Qdrant is reachable
+  doctor     Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, isolation, transport
   inspect    Open a URL and print the typed form model as JSON
-  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | wipe --yes
+  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | seal | key export/import | token | wipe --yes
   fixtures   Serve the demo form pages (default port 8787)
 ```
 

@@ -55,7 +55,7 @@ What worked is saved in Qdrant: which profile fact fills which field, per site a
 | Fill a 20-field form | **3 tool calls** (inspect, fill, submit) | ~1 per field plus a page snapshot each time |
 | Wrong or missing field | **reported** (`UNMATCHED`, `ambiguous`, read-back mismatch) | usually silent |
 | Dependent dropdowns, wizards | handled inside `form_fill` / `form_submit` | agent has to notice and retry |
-| Submit result | `Submitted` / `Advanced` / `NOT SUBMITTED` + the page's messages | agent infers from a new snapshot |
+| Submit result | `Submitted` / `Advanced` / `NOT ACCEPTED` + the page's messages | agent infers from a new snapshot |
 | Memory across sessions | **Qdrant**: facts, playbooks, episodes | none, or a browser profile |
 | Tool schema cost per turn | ~1.5k tokens (`--tools forms` is smaller) | varies |
 
@@ -86,7 +86,7 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 Then check it:
 
 ```sh
-ostler doctor        # Chrome launches? Qdrant reachable (if you set one)? prints the fix when not
+ostler doctor        # Chrome launches? Memory report (sealing, key, embeddings, isolation, transport); Qdrant reachable? Prints the fix when not
 ```
 
 **Update:** rerun the same install command (`install.sh` replaces the binary in place). **Uninstall:** delete the `ostler` binary (`~/.local/bin/ostler`, or `~/.cargo/bin/ostler`), and `~/.config/ostler` and `~/.cache/ostler` if you want the settings and the npx download gone. Memory lives in your Qdrant; `ostler memory wipe --yes` erases it first.
@@ -149,7 +149,7 @@ Still empty and required:
   e3 "Recipient"
 
 > form_submit
-NOT SUBMITTED: the page reported validation problems.
+NOT ACCEPTED: the page reported problems.
   e3 "Recipient": "Please fill in this field."
 ```
 
@@ -169,10 +169,12 @@ Settings come from, in order: **command-line flag, then environment variable, th
 ostler init
 ```
 
-Asks for a Qdrant URL and API key (skip both for no memory), a tenant name, and whether to enable `--learn` and `--lean`. It writes the config file with owner-only permissions and immediately tests the connection. Non-interactive:
+Asks for a Qdrant URL and API key (skip both for no memory), a tenant name, whether to enable `--learn` and `--lean`, and the privacy choices for memory: where embeddings are computed (Qdrant Cloud Inference, local Ollama or the non-semantic `dev-hash`) and how many days to keep learned skills and episodes (`retain_days`, default 180). Sealing (encrypting memory on this machine) is on by default. It writes the config file with owner-only permissions and immediately tests the connection. Non-interactive:
 
 ```sh
 ostler init --qdrant-url https://<cluster>.cloud.qdrant.io --qdrant-api-key "$KEY" --tenant alice
+# privacy flags: --seal auto|on|off, --embeddings cloud|ollama|dev-hash, --retain-days N, --yes (never prompt)
+ostler init --embeddings ollama --seal on --retain-days 90 --yes
 ```
 
 The `:6333` port is added to Qdrant Cloud URLs for you. If the connection test fails the settings are still saved, so you can fix one value instead of retyping everything:
@@ -193,7 +195,7 @@ ostler config path                          # ~/.config/ostler/config.toml
 | browsing and form filling only | nothing |
 | memory, trying it out | `--memory ephemeral` (in-process, lost on exit), no keys |
 | memory on **Qdrant Cloud** | cluster URL + API key, with **Inference enabled** on the cluster (embeddings run inside Qdrant; no separate embedding provider or key) |
-| memory on a self-hosted/open-source Qdrant | URL (+ key if you set one) and `--embeddings dev-hash`. Those vectors are not semantic: exact-key and `autocomplete` matches work, fuzzy meaning does not |
+| memory on a self-hosted/open-source Qdrant | URL (+ key if you set one) and `--embeddings ollama` (a local Ollama server embeds; semantic; only vectors reach Qdrant) or `--embeddings dev-hash` (not semantic: exact-key and `autocomplete` matches work, fuzzy meaning does not) |
 
 Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-shape tests, but has **not** been run against a live Cloud cluster by the maintainers. The open-source path is tested against a real Qdrant server.
 
@@ -208,16 +210,27 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `qdrant_api_key` | `QDRANT_API_KEY` | Qdrant API key (secret; file is `0600`) |
 | `tenant` | `OSTLER_TENANT` | isolates users sharing a cluster (default `default`) |
 | `memory` | `OSTLER_MEMORY` | `auto` (on if a URL is set), `qdrant`, `ephemeral`, `off` |
-| `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference) or `dev-hash` |
-| `embedding_model` | `OSTLER_EMBEDDING_MODEL` | Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`, 384 dims) |
+| `embeddings` | `OSTLER_EMBEDDINGS` | `cloud` (Qdrant Cloud Inference), `ollama` (local) or `dev-hash` |
+| `embedding_model` | `OSTLER_EMBEDDING_MODEL` | model name: Cloud Inference model (default `sentence-transformers/all-minilm-l6-v2`) or the Ollama name (e.g. `all-minilm`) |
+| `embedding_dim` | `OSTLER_EMBEDDING_DIM` | vector size of the model (default 384) |
+| `embedding_url` | `OSTLER_EMBEDDING_URL` | Ollama server (default `http://127.0.0.1:11434`) |
+| `seal` | `OSTLER_SEAL` | `auto` (default: seal when memory is in Qdrant), `on`, `off` |
+| `isolation` | `OSTLER_ISOLATION` | `shared` (default) or `collection` (one set of collections per tenant) |
+| `allow_insecure_qdrant` | `OSTLER_ALLOW_INSECURE_QDRANT` | allow plain `http://` to a non-loopback Qdrant (refused by default) |
+| `retain_days` | `OSTLER_RETAIN_DAYS` | on start, forget learned skills and episodes not verified for this many days (default 180; 0 = keep forever) |
 | `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
+| `key_store` | `OSTLER_KEY_STORE` | where the sealing key lives: `file` (default) or `keychain` |
+| `verbose` | `OSTLER_VERBOSE` | timings, fingerprints and ids in tool output |
+| `a2a_bind`, `a2a_token` | `OSTLER_A2A_BIND`, `OSTLER_A2A_TOKEN` | listen address and bearer token for `ostler a2a` |
 | `tools` | `OSTLER_TOOLS` | `core`, `forms` or `all` |
+
+The sealing key itself is never in the config file: it is `OSTLER_MEMORY_KEY` (base64, 32 bytes), or in the store chosen by `key_store` (`OSTLER_KEY_STORE`): `file` (default, an owner-only `memory.key` beside the config file) or `keychain` (macOS Keychain / Linux Secret Service). `ostler memory key export --yes-print` and `ostler memory key import` back it up and restore it.
 
 </details>
 
-Anything stored: [what is and is not saved](SECURITY.md). Inspect or erase it any time: `ostler memory list | remember | forget | wipe`.
+Anything stored: [what is and is not saved](SECURITY.md). Inspect or erase it any time: `ostler memory list | remember | forget | skills | prune | wipe`.
 
 ---
 
@@ -277,6 +290,20 @@ Playbooks work like skills that improve with use. Ostler doesn't need a model to
 
 `ostler memory skills` shows what has been learned: wins, losses, trusted mappings, and which form a skill was learned from. On a scripted site with redesigned forms, correct suggestions went from 1 to 8 of 10 fillable fields, with zero wrong fills in both conditions. That's a synthetic fixture, not real sites ([ADR-0008](docs/adr/0008-learning-loop.md)).
 
+### Privacy and security model of memory
+
+Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). This summary matches [SECURITY.md](SECURITY.md), which has the full threat model.
+
+- **What someone who can read your Qdrant (operator, leaked key, backup) cannot read:** fact values, descriptions, playbooks and episodes are encrypted on your machine (AES-256-GCM); site names, field labels, keys and point ids are keyed hashes; episodes are redacted of emails and numbers; plain `http://` to a remote Qdrant is refused (`--allow-insecure-qdrant` overrides it for a VPN or tunnel).
+- **What they can still see:** the **vector**. With `--embeddings cloud` (the default) the field text is still sent to Qdrant Cloud Inference to be embedded, and vectors of labels reveal roughly what they say. `--embeddings ollama` keeps text on your machine so only vectors leave. The **tenant name**, **win/loss counters**, timing and point counts are also visible.
+- **The key:** by default a file (`memory.key` beside the config file, owner-only), or the `OSTLER_MEMORY_KEY` variable, or optionally the OS credential store (`key_store = keychain`). **If you lose it, sealed memory is unrecoverable**; the only way forward is `ostler memory wipe --yes`. Back it up (`ostler memory key export --yes-print`).
+- **Cross-user exposure:** by default every tenant shares three collections separated by a filter, so a leaked admin key exposes every tenant. `--isolation collection` gives each tenant its own collections and `ostler memory token` mints a JWT that Qdrant itself limits to them (needs Qdrant with `service.jwt_rbac: true` and an admin who creates the collections).
+- **Secrets:** the memory API refuses password/token/card-like keys and values; playbooks store structure, never values. Detection is heuristic, so a secret stored under an innocuous key will not be caught.
+- **Before sealing:** memory saved earlier stays readable until you run `ostler memory seal` (facts are re-saved sealed; learned skills and episodes from before are dropped and relearned).
+- **Retention:** on start `serve` forgets learned skills and error episodes not verified for `--retain-days` (default 180, 0 keeps them). Facts you saved never expire. No telemetry.
+
+`ostler doctor` prints this state for your setup (sealing, key location, embeddings, isolation, transport). The sealing, local-embedding, token, retention and transport features are on `main`, not in a tagged release yet. Nothing here has been audited by a third party.
+
 Details: [ARCHITECTURE](docs/ARCHITECTURE.md), [ADRs](docs/adr/).
 
 ---
@@ -309,12 +336,12 @@ ostler <COMMAND>
 
   serve      Run the MCP server on stdio (what the agent launches)
   a2a        Serve Agent2Agent (A2A) over HTTP so other agents can delegate forms
-  init       Save settings (Qdrant URL/key, tenant, defaults) and test them
+  init       Guided setup: Qdrant URL/key, tenant, privacy choices (sealing, local embeddings, retention); then verify
   config     show | path | set <key> <value> | unset <key>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
-  doctor     Check that Chrome launches and Qdrant is reachable
+  doctor     Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, isolation, transport
   inspect    Open a URL and print the typed form model as JSON
-  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | wipe --yes
+  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | seal | key export/import | token | wipe --yes
   fixtures   Serve the demo form pages (default port 8787)
 ```
 
@@ -338,8 +365,14 @@ ostler <COMMAND>
 | `--verbose` | off | timings, fingerprints and ids in tool output (costs context) |
 | `--memory` | `auto` | `auto`, `qdrant`, `ephemeral`, `off` |
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
-| `--embeddings`, `--embedding-model`, `--embedding-dim` | `cloud`, MiniLM, 384 | embedding source |
+| `--embedding-model`, `--embedding-dim` | MiniLM, 384 | embedding model and its dimension |
+| `--embedding-url` | `http://127.0.0.1:11434` | where the Ollama server lives (`--embeddings ollama`) |
 | `--qdrant-on-disk` | off | vectors on disk |
+| `--seal` | `auto` | encrypt memory on this machine before it reaches Qdrant (`on`, `off`) |
+| `--embeddings` | `cloud` | `cloud` (field text goes to Qdrant Cloud Inference), `ollama` (embed locally, only vectors leave), `dev-hash` (local, not semantic) |
+| `--isolation` | `shared` | `collection`: one set of collections per tenant, pairs with `ostler memory token` |
+| `--allow-insecure-qdrant` | off | allow plain http to a non-loopback Qdrant |
+| `--retain-days` | 180 | forget learned skills and episodes not verified for this many days on start (0 = keep; saved facts never expire) |
 | `--tenant` | `default` | memory namespace |
 
 </details>
@@ -405,11 +438,11 @@ Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript
 - [ ] **Real-model evaluation** against real tools on real sites, published including failures
 - [ ] Prebuilt binaries and a one-line installer
 - [ ] Live validation of Qdrant Cloud Inference; Linux benchmark numbers
-- [ ] Tabs/popups, cross-origin iframes, HTTP transport
+- [ ] Cross-origin iframes, HTTP transport for MCP (tabs and popups-as-tabs exist)
 
 ## Repository
 
-`crates/` cdp · browser · forms · memory · mcp · cli · fixtures · bench. `crates/ostler-fixtures/fixtures/` test pages. Docs: [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md).
+`crates/` cdp · browser · forms · memory · mcp · a2a · cli · fixtures · bench. `crates/ostler-fixtures/fixtures/` test pages. Docs: [architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/), [benchmarks](docs/BENCHMARKS.md), [economics](docs/ECONOMICS.md), [research](docs/research/landscape.md), [design review](docs/REVIEW-2026-10.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md).
 
 ## License
 

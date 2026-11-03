@@ -41,7 +41,7 @@ With memory in Qdrant, payloads are **sealed on your machine by default** (`--se
 | **Tenant name** | visible |
 | **Win and loss counters, timing, point counts** | visible |
 
-The key is a file or environment variable, not in the OS keychain.
+The key is, in order of precedence, the `OSTLER_MEMORY_KEY` variable, or the store chosen by `key_store` (`OSTLER_KEY_STORE`): `file` (default, owner-only `memory.key`) or `keychain` (macOS Keychain / Linux Secret Service). :unreleased: `ostler memory key export --yes-print` and `ostler memory key import` back it up and restore it.
 
 ### Memory written before sealing
 
@@ -135,6 +135,7 @@ ostler memory forget email
 ostler memory skills                    # what was learned: wins, losses, trusted mappings
 ostler memory prune --days 90
 ostler memory seal                      # re-save pre-sealing memory sealed
+ostler memory key export --yes-print    # back up the sealing key
 ostler memory token                     # per-tenant JWT (see above)
 ostler memory wipe --yes                # delete everything for this tenant
 ```

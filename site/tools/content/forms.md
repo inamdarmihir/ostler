@@ -52,8 +52,11 @@ Just before clicking submit, `form_submit` re-reads the fields it verified and r
 |---|---|
 | `Submitted` | the page accepted it: a new URL, or new confirmation text appeared after the click (for example a form that posts in the background and says "Thanks!" in place) |
 | `Advanced` | the page moved to the next step of a wizard; repeat inspect, fill, submit |
-| `NOT SUBMITTED` | the page reported problems, and the page's own messages follow |
+| `NOT ACCEPTED` | the page reported problems, and the page's own messages follow |
+| `SERVER ERROR` | the site answered the submit with an HTTP error (4xx/5xx) and showed no validation messages. The data may or may not have been stored: do not report it as submitted and do not retry blindly; check with `snapshot` or ask the user |
 | `Nothing changed` | the form stayed put and said nothing visible. Check with `snapshot`; do not resubmit blindly, because it may have gone through |
+
+With several forms on a page, `form_submit` with no `form` or `control` submits the form `form_fill` last filled; if none was filled it refuses and lists the forms rather than guessing the first.
 
 A thank-you page that still has an optional input (a newsletter box, a search) counts as `Submitted`, not `Advanced`, unless something on it is required, it has a step counter, or it has a "next" button.
 

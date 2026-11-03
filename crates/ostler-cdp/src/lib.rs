@@ -62,6 +62,12 @@ type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value>>>>>;
 #[cfg(unix)]
 const PIPE_BUF_KEEP: usize = 16 << 20;
 
+/// Events buffered per subscriber before the slowest ones start losing the oldest. A receiver that falls
+/// behind gets `Lagged` and must treat the loss as real: a dropped `Fetch.requestPaused` hangs its request
+/// and a dropped `Target.attachedToTarget` leaves a target held. A page loading a lot of resources emits
+/// thousands of events in a burst, so the buffer is large; the handler loops themselves only spawn work.
+pub const EVENT_CAPACITY: usize = 16384;
+
 pub struct Connection {
     /// Serialized CDP messages to send; a transport task frames and writes them.
     out: mpsc::UnboundedSender<String>,
@@ -139,7 +145,7 @@ impl Connection {
         let (mut sink, mut stream) = ws.split();
         let (out, mut out_rx) = mpsc::unbounded_channel::<String>();
         let pending: Pending = Arc::default();
-        let (events, _) = broadcast::channel(1024);
+        let (events, _) = broadcast::channel(EVENT_CAPACITY);
 
         tokio::spawn(async move {
             while let Some(msg) = out_rx.recv().await {
@@ -179,7 +185,7 @@ impl Connection {
 
         let (out, mut out_rx) = mpsc::unbounded_channel::<String>();
         let pending: Pending = Arc::default();
-        let (events, _) = broadcast::channel(1024);
+        let (events, _) = broadcast::channel(EVENT_CAPACITY);
 
         // Ends when the connection is dropped or Chrome stops reading. Dropping `writer` closes
         // Chrome's stdin-equivalent, which makes Chrome shut itself down.
@@ -222,6 +228,22 @@ impl Connection {
         });
 
         Self::assemble(out, pending, events, closed)
+    }
+
+    /// A connection with no browser behind it and a chosen event capacity, for tests that need to overflow
+    /// the event buffer deterministically. The peer plays the browser.
+    #[doc(hidden)]
+    pub fn mock(capacity: usize) -> (Arc<Self>, MockPeer) {
+        let (out, requests) = mpsc::unbounded_channel::<String>();
+        let pending: Pending = Arc::default();
+        let (events, _) = broadcast::channel(capacity);
+        let peer = MockPeer {
+            requests: Some(requests),
+            pending: pending.clone(),
+            events: events.clone(),
+        };
+        let conn = Self::assemble(out, pending, events, Arc::new(AtomicBool::new(false)));
+        (conn, peer)
     }
 
     /// True once the browser connection has dropped (Chrome crashed or was killed).
@@ -276,6 +298,51 @@ impl Connection {
     }
 }
 
+/// The browser side of [`Connection::mock`].
+#[doc(hidden)]
+pub struct MockPeer {
+    requests: Option<mpsc::UnboundedReceiver<String>>,
+    pending: Pending,
+    events: broadcast::Sender<Event>,
+}
+
+impl MockPeer {
+    /// Deliver an event to every subscriber, as if the browser had sent it.
+    pub fn emit(&self, method: &str, params: Value, session_id: Option<&str>) {
+        let mut v = json!({ "method": method, "params": params });
+        if let Some(s) = session_id {
+            v["sessionId"] = json!(s);
+        }
+        dispatch(v, &self.pending, &self.events);
+    }
+
+    /// Answer every command with `handler(method, params, session_id)` (`Err` is a protocol error), on a task
+    /// of its own.
+    pub fn serve<F>(&mut self, handler: F)
+    where
+        F: Fn(&str, &Value, Option<&str>) -> std::result::Result<Value, String> + Send + 'static,
+    {
+        let (pending, events) = (self.pending.clone(), self.events.clone());
+        let mut requests = self.requests.take().expect("served once");
+        tokio::spawn(async move {
+            while let Some(raw) = requests.recv().await {
+                let Ok(v) = serde_json::from_str::<Value>(&raw) else {
+                    continue;
+                };
+                let reply = match handler(
+                    v["method"].as_str().unwrap_or(""),
+                    &v["params"],
+                    v["sessionId"].as_str(),
+                ) {
+                    Ok(result) => json!({ "id": v["id"], "result": result }),
+                    Err(m) => json!({ "id": v["id"], "error": { "code": -32000, "message": m } }),
+                };
+                dispatch(reply, &pending, &events);
+            }
+        });
+    }
+}
+
 /// A handle bound to one attached target (page).
 #[derive(Clone)]
 pub struct Session {
@@ -325,6 +392,19 @@ impl Session {
         })
     }
 
+    /// Wrap a session Chrome attached on its own (`Target.attachedToTarget` from auto-attach).
+    pub fn from_attached(conn: Arc<Connection>, session_id: String, target_id: String) -> Self {
+        Self {
+            conn,
+            session_id,
+            target_id,
+        }
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
     pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
         self.call_timeout(method, params, DEFAULT_TIMEOUT).await
     }
@@ -352,6 +432,9 @@ impl Session {
         &self.conn
     }
 }
+
+/// Synthetic method of the event [`SessionEvents::next`] yields when the receiver fell behind and lost events.
+pub const LAGGED: &str = "Ostler.eventsLagged";
 
 pub struct SessionEvents {
     rx: broadcast::Receiver<Event>,
@@ -384,7 +467,22 @@ impl SessionEvents {
         loop {
             match self.rx.recv().await {
                 Ok(ev) if ev.session_id.as_deref() == Some(&self.session_id) => return Some(ev),
-                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                // The browser announces a gone session at browser level: pass it on so the owner can stop.
+                Ok(ev)
+                    if ev.method == "Target.detachedFromTarget"
+                        && ev.params["sessionId"].as_str() == Some(&self.session_id) =>
+                {
+                    return Some(ev)
+                }
+                Ok(_) => continue,
+                // Events were lost: tell the owner (as a synthetic event) so it can re-sync and fail closed.
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    return Some(Event {
+                        method: LAGGED.to_string(),
+                        params: json!({ "missed": n }),
+                        session_id: Some(self.session_id.clone()),
+                    })
+                }
                 Err(broadcast::error::RecvError::Closed) => return None,
             }
         }
@@ -402,5 +500,39 @@ impl SessionEvents {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_session_that_falls_behind_is_told_so_and_then_keeps_receiving() {
+        let (conn, peer) = Connection::mock(4);
+        let mut events = SessionEvents {
+            rx: conn.subscribe(),
+            session_id: "s".into(),
+        };
+        for i in 0..20 {
+            peer.emit("Network.dataReceived", json!({ "i": i }), Some("s"));
+        }
+        let first = events.next().await.unwrap();
+        assert_eq!(first.method, LAGGED);
+        assert_eq!(first.params["missed"], 16);
+        // What was still buffered follows, then new events.
+        assert_eq!(events.next().await.unwrap().params["i"], 16);
+        peer.emit(
+            "Target.detachedFromTarget",
+            json!({ "sessionId": "s" }),
+            None,
+        );
+        for _ in 0..3 {
+            events.next().await.unwrap();
+        }
+        assert_eq!(
+            events.next().await.unwrap().method,
+            "Target.detachedFromTarget"
+        );
     }
 }

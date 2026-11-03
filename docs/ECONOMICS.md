@@ -62,10 +62,10 @@ What can erode it: competitors adding memory (it is not hard in principle), and 
 
 | aspect | what we test | where | status |
 |---|---|---|---|
-| **Correctness** | 21 browser e2e tests assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/ostler-browser/tests` | passing |
+| **Correctness** | Browser e2e tests (`forms_e2e.rs`, `security_e2e.rs`; 56 and 10 `#[tokio::test]` functions when checked) assert on what the *server received*: dependent dropdowns, wizard, controlled inputs, masks, comboboxes, shadow DOM, iframes, dates/times/files, 20-field form, validation errors | `crates/ostler-browser/tests` | passing |
 | **Form logic** | key->field matching (ambiguity reported, never guessed), option/date/time normalisation, sensitive-field detection, fingerprints | `ostler-forms` unit tests (14) | passing |
 | **Protocol** | real binary over MCP stdio: initialize, tools, memory learning loop, confirm gate, domain policy, profiles | `crates/ostler-cli/tests` | passing |
-| **Memory** | store semantics on a real Qdrant: roundtrip, isolation, upsert, dimension mismatch, 20 concurrent tenants; Cloud Inference request shape via mock | `ostler-memory` tests (11 + 3 real) | passing |
+| **Memory** | store semantics on a real Qdrant: roundtrip, isolation, upsert, dimension mismatch, 20 concurrent tenants; sealed payloads and tenant tokens on a real Qdrant (`sealed_real.rs`, `tenant_token_real.rs`); Cloud Inference request shape via mock | `ostler-memory` tests (11 + 3 real) | passing |
 | **Cost** | tool calls and tokens per task, LLM cost model (unit-tested) | `ostler-bench forms`, `cost.rs` tests | measured |
 | **Latency** | per-task tool time, cold start; regression found and fixed (3 s to 160 ms) | bench + e2e | measured |
 | **Scale** | parallel sessions, memory per session, CPU per task, Qdrant at 200k points | `ostler-bench concurrency/memory/footprint` | measured (one machine) |

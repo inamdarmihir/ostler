@@ -297,7 +297,11 @@ pub(crate) async fn run_engine(app: &App, srv: &FixtureServer, s: &Scenario) -> 
             return r;
         }
         let (err, txt) = tool(app, &mut r, "form_submit", json!({})).await;
-        if err || txt.starts_with("NOT SUBMITTED") || txt.starts_with("Nothing changed") {
+        if err
+            || txt.starts_with("NOT SUBMITTED")
+            || txt.starts_with("NOT ACCEPTED")
+            || txt.starts_with("Nothing changed")
+        {
             r.note = format!("submit problem: {}", txt.lines().next().unwrap_or(""));
             return r;
         }
@@ -373,7 +377,7 @@ pub(crate) async fn run_engine_isolated(app: &App, srv: &FixtureServer, s: &Scen
             return r;
         }
         let (err, txt) = tool(app, &mut r, "form_submit", json!({})).await;
-        if err || txt.starts_with("NOT SUBMITTED") {
+        if err || txt.starts_with("NOT SUBMITTED") || txt.starts_with("NOT ACCEPTED") {
             r.note = format!("submit problem: {txt}");
             return r;
         }

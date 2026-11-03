@@ -110,7 +110,9 @@ async fn navigation_and_click_honesty() {
     };
 
     // A normal-looking page served as 404 says so.
-    let (err, t) = c.tool("navigate", json!({"url": srv.url("/missing")})).await;
+    let (err, t) = c
+        .tool("navigate", json!({"url": srv.url("/missing")}))
+        .await;
     assert!(!err, "{t}");
     assert!(t.contains("Navigated (HTTP 404: page not found"), "{t}");
 
@@ -125,14 +127,18 @@ async fn navigation_and_click_honesty() {
     );
 
     // PDFs are labelled, whether Chrome renders or downloads them.
-    let (_, t) = c.tool("navigate", json!({"url": srv.url("/doc.pdf")})).await;
+    let (_, t) = c
+        .tool("navigate", json!({"url": srv.url("/doc.pdf")}))
+        .await;
     assert!(
         t.contains("PDF/non-HTML document (content-type application/pdf)"),
         "{t}"
     );
 
     // Redirect to a login page is flagged.
-    let (err, t) = c.tool("navigate", json!({"url": srv.url("/members")})).await;
+    let (err, t) = c
+        .tool("navigate", json!({"url": srv.url("/members")}))
+        .await;
     assert!(!err, "{t}");
     assert!(t.contains("Note: redirected to a sign-in page"), "{t}");
 
@@ -387,7 +393,7 @@ async fn validation_failure_is_learned_as_an_episode() {
         .await;
     assert!(fill.contains("PAGE SAYS"), "{fill}");
     let (_, sub) = c.tool("form_submit", json!({})).await;
-    assert!(sub.starts_with("NOT SUBMITTED"), "{sub}");
+    assert!(sub.starts_with("NOT ACCEPTED"), "{sub}");
     assert!(srv.submissions().is_empty());
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {

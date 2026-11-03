@@ -81,7 +81,7 @@
 <p>Prebuilt binaries, <code>npx</code> and crates.io are described on the <a href="install.html">Install</a> page. Nothing is published to crates.io or npm yet, so building from source is the path that works today.</p>
 <h2 id="2-check-it-works">2. Check it works<a class="anchor" href="#2-check-it-works" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler doctor</code></pre></div>
-<p><code>ostler doctor</code> launches Chrome, round-trips a page and, if you configured Qdrant, checks that it is reachable. When something is wrong it prints the fix. See <a href="troubleshooting.html">Troubleshooting</a> if it does not pass.</p>
+<p><code>ostler doctor</code> launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the fix. See <a href="troubleshooting.html">Troubleshooting</a> if it does not pass.</p>
 <h2 id="3-connect-your-agent">3. Connect your agent<a class="anchor" href="#3-connect-your-agent" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup claude --apply</code></pre></div>
 <p>That runs <code>claude mcp add</code> with the binary's absolute path. For the others, replace <code>claude --apply</code> with <code>codex</code>, <code>cursor</code> or <code>vscode</code>: each prints the config for you to place. Details for every client are in <a href="agents.html">Use with your agent</a>.</p>
@@ -110,14 +110,14 @@ Still empty and required:
   e3 "Recipient"
 
 &gt; form_submit
-NOT SUBMITTED: the page reported validation problems.
+NOT ACCEPTED: the page reported problems.
   e3 "Recipient": "Please fill in this field."</code></pre></div>
 <p>A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words. More on how this works in <a href="forms.html">Forms and verification</a>.</p>
 <h2 id="things-to-ask-your-agent">Things to ask your agent<a class="anchor" href="#things-to-ask-your-agent" aria-label="Link to this section">#</a></h2>
 <ul><li>"Fill in the contact form on this page with my details." (after <code>memory_remember</code> of your name and email, or with <code>--learn</code>)</li><li>"Sign up for the newsletter on example.com, but ask me before you submit." (<code>--require-confirm-submit</code>)</li><li>"This form has a date picker and a country dropdown: fill it and tell me anything you couldn't verify."</li><li>"What's blocking this page?" (<code>look</code> shows numbered click targets; a CAPTCHA is reported, not bypassed)</li></ul>
 <h2 id="optional-memory">Optional: memory<a class="anchor" href="#optional-memory" aria-label="Link to this section">#</a></h2>
 <p>Browsing and form filling need no account and no key. Memory is separate and optional:</p>
-<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler init                                   <span class="tok-c"># saves your Qdrant URL and key, tests the connection</span>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler init                                   <span class="tok-c"># saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection</span>
 ostler setup claude --apply -- --learn --lean <span class="tok-c"># re-register with memory flags</span></code></pre></div>
 <p>See <a href="memory.html">Memory and privacy</a> for exactly what is stored and what is hidden.</p>
 <h2 id="next-steps">Next steps<a class="anchor" href="#next-steps" aria-label="Link to this section">#</a></h2>

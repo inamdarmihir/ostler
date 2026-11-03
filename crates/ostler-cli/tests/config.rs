@@ -69,3 +69,131 @@ fn init_saves_privately_masks_the_key_and_env_wins() {
         .unwrap();
     assert!(!bad.status.success());
 }
+
+fn run(cmd: &mut Command) -> (bool, String, String) {
+    let o = cmd.output().unwrap();
+    (
+        o.status.success(),
+        String::from_utf8_lossy(&o.stdout).into_owned(),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn init_saves_privacy_choices_and_a_model_ollama_knows() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let (ok, _, err) = run(wm(&cfg).args([
+        "init",
+        "--no-check",
+        "--yes",
+        "--qdrant-url",
+        "https://q.example.com:6333",
+        "--embeddings",
+        "ollama",
+        "--seal",
+        "on",
+        "--retain-days",
+        "7",
+    ]));
+    assert!(ok, "{err}");
+    let saved = std::fs::read_to_string(&cfg).unwrap();
+    assert!(saved.contains("seal = \"on\""), "{saved}");
+    assert!(saved.contains("retain_days = \"7\""), "{saved}");
+    // The default model name is a Qdrant Cloud one; Ollama needs its own.
+    assert!(
+        saved.contains("embedding_model = \"all-minilm\""),
+        "{saved}"
+    );
+    // New settings are known keys, so `config set` accepts them.
+    let (ok, _, _) = run(wm(&cfg).args(["config", "set", "isolation", "collection"]));
+    assert!(ok);
+}
+
+#[test]
+fn doctor_explains_memory_in_plain_language_and_refused_http_says_what_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let (ok, out, _) = run(wm(&cfg)
+        .env("QDRANT_URL", "http://qdrant.example.com:6333")
+        .arg("doctor"));
+    assert!(!ok, "a refused transport must fail doctor");
+    for needle in [
+        "sealing:    ON",
+        "key:",
+        "unrecoverable",
+        "embeddings: cloud",
+        "isolation:  shared",
+        "transport:  http to a remote host: REFUSED",
+        "--allow-insecure-qdrant",
+    ] {
+        assert!(out.contains(needle), "missing {needle:?} in:\n{out}");
+    }
+    assert!(
+        !dir.path().join("memory.key").exists(),
+        "doctor must not create the key just by reporting"
+    );
+
+    let (_, out, _) = run(wm(&cfg)
+        .env("OSTLER_SEAL", "off")
+        .env("QDRANT_URL", "https://x.cloud.qdrant.io:6333")
+        .arg("doctor"));
+    assert!(out.contains("sealing:    OFF"), "{out}");
+    assert!(out.contains("ostler memory seal"), "{out}");
+}
+
+#[test]
+fn memory_errors_name_the_next_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "list"]));
+    assert!(!ok);
+    assert!(err.contains("ostler init"), "{err}");
+
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "token"]));
+    assert!(!ok);
+    assert!(err.contains("QDRANT_API_KEY"), "{err}");
+    assert!(err.contains("ostler init"), "{err}");
+
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "seal"]));
+    assert!(!ok);
+    assert!(err.contains("ostler init"), "{err}");
+
+    let (ok, _, err) = run(wm(&cfg)
+        .env("QDRANT_URL", "http://localhost:6333")
+        .args(["memory", "--seal", "off", "seal"]));
+    assert!(!ok);
+    assert!(err.contains("ostler config set seal on"), "{err}");
+
+    let (ok, _, err) = run(wm(&cfg)
+        .env("QDRANT_API_KEY", "admin")
+        .args(["memory", "token", "--days", "0"]));
+    assert!(!ok);
+    assert!(err.contains("--days"), "{err}");
+
+    let (ok, out, _) = run(wm(&cfg).args(["memory", "--memory", "ephemeral", "list"]));
+    assert!(ok);
+    assert!(out.contains("memory remember"), "{out}");
+
+    let (ok, _, err) = run(wm(&cfg).args(["memory", "--memory", "ephemeral", "wipe"]));
+    assert!(!ok);
+    assert!(err.contains("memory wipe --yes"), "{err}");
+}
+
+#[test]
+fn memory_help_describes_every_subcommand() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let (ok, out, _) = run(wm(&cfg).args(["memory", "--help"]));
+    assert!(ok);
+    for sub in ["list", "remember", "forget", "token", "seal", "wipe"] {
+        let line = out
+            .lines()
+            .find(|l| l.trim_start().starts_with(&format!("{sub} ")))
+            .unwrap_or_else(|| panic!("no {sub} line in:\n{out}"));
+        assert!(
+            line.trim().len() > sub.len() + 5,
+            "{sub} has no help: {line}"
+        );
+    }
+}

@@ -1,0 +1,16 @@
+<!doctype html><meta charset=utf-8><title>Sign up</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}.row{display:flex;gap:1rem;flex-wrap:wrap}.col{flex:1}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}.error-message{color:#b00020;width:100%}.help-block{color:#666;font-size:13px}</style>
+<h1>Sign up</h1>
+<form action="/submit" method="post">
+  <!-- Two fields share a wrapper; the message after the second one belongs to the second only. -->
+  <div class="row">
+    <div class="col"><label for="a">First name</label><input id="a" name="first" value="Ada"></div>
+    <div class="col"><label for="b">Last name</label><input id="b" name="last"></div>
+    <div class="error-message">Last name is required</div>
+  </div>
+  <!-- Bootstrap 3 help text is not an error. -->
+  <div class="form-group">
+    <label for="p">Phone</label><input id="p" name="phone">
+    <span class="help-block">We only call about your order.</span>
+  </div>
+  <button type="submit">Create account</button>
+</form>
