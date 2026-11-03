@@ -36,3 +36,7 @@ browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does
 5. Refresh `docs/BENCHMARKS.md` and `bench-results/compare.md` for the `auto` profile; first CI run; tag a release.
 
 Done so far this sprint: `hover`, `scroll`.
+
+## Product documentation
+
+Constraints, risks and operating policy live in: [SYSTEM-DESIGN.md](SYSTEM-DESIGN.md) (context, data flow, constraints, capacity, trade-offs), [THREAT-MODEL.md](THREAT-MODEL.md), [FAILURE-MODES.md](FAILURE-MODES.md), [SLOS.md](SLOS.md) (proposed), [COMPATIBILITY.md](COMPATIBILITY.md), [OPERATIONS.md](OPERATIONS.md) and [ADR-0011](adr/0011-reliability-principles.md).

@@ -1,0 +1,36 @@
+name: Security
+# Dependency policy (deny.toml) and RustSec advisories. Action versions are pinned by tag like ci.yml.
+# No `pull_request_target`: fork PRs run with a read-only token and no secrets.
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"   # weekly: new advisories can land without any code change
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  deny:
+    name: cargo-deny (licenses, bans, sources, advisories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with: { command: check, arguments: --all-features }
+  audit:
+    name: cargo-audit (Cargo.lock vs RustSec)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { shared-key: audit, cache-targets: false }
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit --deny warnings

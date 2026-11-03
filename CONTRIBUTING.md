@@ -24,7 +24,11 @@ OSTLER_QDRANT_BIN=/path/to/qdrant cargo test -p ostler-memory --test qdrant_real
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo deny check        # licenses, advisories, sources (cargo install cargo-deny --locked)
+cargo audit             # optional locally; CI runs it (cargo install cargo-audit --locked)
 ```
+
+If you add or bump a dependency, `cargo deny check` must pass; a new license needs a justified entry in `deny.toml`.
 
 ## How to add support for a new form pattern
 

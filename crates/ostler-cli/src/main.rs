@@ -165,6 +165,15 @@ struct A2aArgs {
     idle_secs: u64,
     #[arg(long, default_value_t = 120)]
     task_timeout_secs: u64,
+    /// Most tasks running or queued per conversation before HTTP 429 (default: the server's built-in limit).
+    #[arg(long)]
+    max_concurrent_tasks: Option<usize>,
+    /// Seconds in-flight work gets to finish after SIGTERM/SIGINT before exit.
+    #[arg(long)]
+    drain_secs: Option<u64>,
+    /// Largest accepted request body in bytes (HTTP 413 beyond it).
+    #[arg(long)]
+    max_body_bytes: Option<usize>,
     /// Treat `submit: true` as already confirmed (skips the input-required confirmation step).
     #[arg(long)]
     a2a_auto_submit: bool,
@@ -236,13 +245,23 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
     cfg.idle = Duration::from_secs(a.idle_secs);
     cfg.task_timeout = Duration::from_secs(a.task_timeout_secs);
     cfg.auto_submit = a.a2a_auto_submit;
+    cfg.chrome_path = s.chrome_path.clone();
+    if let Some(n) = a.max_concurrent_tasks {
+        cfg.max_concurrent_tasks = n.max(1);
+    }
+    if let Some(n) = a.drain_secs {
+        cfg.drain_timeout = Duration::from_secs(n);
+    }
+    if let Some(n) = a.max_body_bytes {
+        cfg.max_body_bytes = n.max(1024);
+    }
     ostler_a2a::serve(cfg, factory).await?;
     Ok(())
 }
 
 #[derive(Args)]
 struct InitArgs {
-    /// Qdrant URL, e.g. https://<cluster>.cloud.qdrant.io:6333 (the :6333 is added for Qdrant Cloud if missing).
+    /// Qdrant URL, e.g. `https://<cluster>.cloud.qdrant.io:6333` (the :6333 is added for Qdrant Cloud if missing).
     #[arg(long)]
     qdrant_url: Option<String>,
     /// No Qdrant: keep memory in one encrypted file on this machine (`--memory local`).
@@ -916,7 +935,7 @@ struct MemoryArgs {
         env = "OSTLER_MEMORY"
     )]
     memory: MemoryMode,
-    /// Qdrant REST URL, e.g. https://<cluster>.cloud.qdrant.io:6333 (or http://localhost:6333).
+    /// Qdrant REST URL, e.g. `https://<cluster>.cloud.qdrant.io:6333` (or http://localhost:6333).
     #[arg(long, global = true, env = "QDRANT_URL")]
     qdrant_url: Option<String>,
     /// Qdrant API key. Prefer `ostler init` or the environment variable: flags show up in `ps`.

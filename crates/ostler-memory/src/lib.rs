@@ -502,6 +502,14 @@ const SEMANTIC_MARGIN: f32 = 0.05;
 /// A skill not re-verified for this long counts half as much in ranking.
 const HALF_LIFE_SECS: u64 = 30 * 24 * 3600;
 
+/// Episodes (page problems seen while filling) are diagnostics, not knowledge: they expire after this
+/// long without being seen again.
+pub const EPISODE_TTL_SECS: u64 = 30 * 24 * 3600;
+
+/// Most episodes kept per tenant. When a new one would exceed it the least recently seen are dropped, so
+/// the collection cannot grow without bound however many pages misbehave.
+pub const MAX_EPISODES_PER_TENANT: usize = 500;
+
 /// Ranking used for learned records: similarity first, then evidence, then freshness.
 fn rank(min_similarity: f32) -> Rank {
     Rank {
@@ -696,10 +704,63 @@ impl Memory {
             .and_then(|h| Fact::from_payload(&h.payload)))
     }
 
+    /// Forget a fact and what was derived from it: playbook mappings that point at the key are cleared
+    /// (the form's structure and history stay, the field falls back to the agent), and episodes whose
+    /// text echoes the fact's value are deleted. Derived records go first and the fact last, so a failure
+    /// part-way leaves the fact in place and `forget` can simply be called again.
     pub async fn forget(&self, key: &str) -> Result<bool> {
-        let existed = self.fact(key).await?.is_some();
+        let fact = self.fact(key).await?;
+        self.cascade_forget(key, fact.as_ref()).await?;
         self.store.delete(Kind::Profile, &self.fact_id(key)).await?;
-        Ok(existed)
+        Ok(fact.is_some())
+    }
+
+    async fn cascade_forget(&self, key: &str, fact: Option<&Fact>) -> Result<()> {
+        let key_norm = norm(key);
+        let tenant = Filter::tenant(&self.tenant);
+        for h in scroll_all(self.store.as_ref(), Kind::Playbook, &tenant).await? {
+            let Ok(pb) = serde_json::from_value::<Playbook>(h.payload["playbook"].clone()) else {
+                continue;
+            };
+            let refers = |f: &PlaybookField| {
+                f.profile_key
+                    .as_deref()
+                    .is_some_and(|k| norm(k) == key_norm)
+            };
+            if !pb.fields.iter().any(refers) {
+                continue;
+            }
+            let _guard = stripe(&self.playbook_id(&pb.fingerprint)).lock().await;
+            // Re-read under the lock: an outcome may have been recorded since the scan.
+            let Some(mut pb) = self.playbook(&pb.fingerprint).await? else {
+                continue;
+            };
+            let mut changed = false;
+            for f in pb.fields.iter_mut().filter(|f| refers(f)) {
+                f.profile_key = None;
+                changed = true;
+            }
+            if changed {
+                self.save_playbook(&pb).await?;
+            }
+        }
+        // Episodes never name a fact, but their page text can echo its value.
+        let needle = fact
+            .and_then(|f| f.value.as_str())
+            .map(|v| v.trim().to_lowercase())
+            .filter(|v| v.chars().count() >= 3);
+        if let Some(needle) = needle {
+            for h in scroll_all(self.store.as_ref(), Kind::Episode, &tenant).await? {
+                let text = h.payload["episode"]["detail"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_lowercase();
+                if text.contains(&needle) {
+                    self.store.delete(Kind::Episode, &h.id).await?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Semantic search over what we know about the user.
@@ -966,7 +1027,35 @@ impl Memory {
             count: prior + 1,
             last_seen: now(),
         };
-        self.save_episode(&id, &ep).await
+        self.save_episode(&id, &ep).await?;
+        if prior == 0 {
+            // Housekeeping only when the set grew, and never at the cost of the write that just succeeded.
+            let _ = self
+                .trim_episodes(EPISODE_TTL_SECS, MAX_EPISODES_PER_TENANT)
+                .await;
+        }
+        Ok(())
+    }
+
+    /// Enforce episode retention for this tenant: drop episodes not seen for `ttl_secs`, then the least
+    /// recently seen beyond `max`. Returns how many went.
+    pub async fn trim_episodes(&self, ttl_secs: u64, max: usize) -> Result<usize> {
+        let tenant = Filter::tenant(&self.tenant);
+        let mut n = 0;
+        let expired = tenant
+            .clone()
+            .below("verified_ts", now().saturating_sub(ttl_secs) as f64);
+        n += self.store.count(Kind::Episode, &expired).await? as usize;
+        self.store.delete_matching(Kind::Episode, &expired).await?;
+        if self.store.count(Kind::Episode, &tenant).await? as usize > max {
+            let mut all = scroll_all(self.store.as_ref(), Kind::Episode, &tenant).await?;
+            all.sort_by_key(|h| std::cmp::Reverse(h.payload["verified_ts"].as_u64().unwrap_or(0)));
+            for h in all.into_iter().skip(max) {
+                self.store.delete(Kind::Episode, &h.id).await?;
+                n += 1;
+            }
+        }
+        Ok(n)
     }
 
     async fn save_episode(&self, id: &str, ep: &Episode) -> Result<()> {
@@ -1730,5 +1819,180 @@ mod card_tests {
         ] {
             assert!(!s("note", v), "should be allowed: {v}");
         }
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    fn mem() -> Memory {
+        Memory::new(
+            Arc::new(InMemoryStore::new(Arc::new(embed::HashEmbedder::default()))),
+            "t1",
+        )
+    }
+
+    async fn episode_count(m: &Memory) -> u64 {
+        m.store
+            .count(Kind::Episode, &Filter::tenant(&m.tenant))
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn forget_clears_playbook_mappings_and_echoing_episodes_but_keeps_the_rest() {
+        let m = mem();
+        m.remember("home_street", json!("Hawthorn Lane"), None, None, "user")
+            .await
+            .unwrap();
+        m.remember("city", json!("Pune"), None, None, "user")
+            .await
+            .unwrap();
+        m.record_success(
+            "h",
+            "fp",
+            &[],
+            vec![
+                PlaybookField::new("Email", "email", Some("home_street".into())),
+                PlaybookField::new("City", "text", Some("city".into())),
+            ],
+        )
+        .await
+        .unwrap();
+        m.record_episode(
+            "h",
+            "fp",
+            "Email",
+            "validation_error",
+            "Hawthorn Lane is not served",
+        )
+        .await
+        .unwrap();
+        m.record_episode("h", "fp", "City", "validation_error", "pick a city")
+            .await
+            .unwrap();
+
+        assert!(m.forget("Home Street").await.unwrap());
+
+        let pb = m.playbook("fp").await.unwrap().unwrap();
+        let by = |l: &str| pb.fields.iter().find(|f| f.label == l).unwrap().clone();
+        assert_eq!(
+            by("Email").profile_key,
+            None,
+            "mapping to the forgotten fact"
+        );
+        assert_eq!(by("Email").wins, 1, "the field's history is kept");
+        assert_eq!(by("City").profile_key.as_deref(), Some("city"));
+        assert!(m.fact("home_street").await.unwrap().is_none());
+        assert!(m.fact("city").await.unwrap().is_some());
+        let eps = m.episodes("fp", 10).await.unwrap();
+        assert_eq!(eps.len(), 1, "{eps:?}");
+        assert_eq!(eps[0].field, "City");
+    }
+
+    #[tokio::test]
+    async fn forget_cascades_within_the_tenant_only() {
+        let store: Arc<dyn Store> =
+            Arc::new(InMemoryStore::new(Arc::new(embed::HashEmbedder::default())));
+        let a = Memory::new(store.clone(), "a");
+        let b = Memory::new(store, "b");
+        for m in [&a, &b] {
+            m.remember("city", json!("Pune"), None, None, "user")
+                .await
+                .unwrap();
+            m.record_success(
+                "h",
+                "fp",
+                &[],
+                vec![PlaybookField::new("City", "text", Some("city".into()))],
+            )
+            .await
+            .unwrap();
+            m.record_episode("h", "fp", "City", "p", "Pune is not served")
+                .await
+                .unwrap();
+        }
+        a.forget("city").await.unwrap();
+        let pb = b.playbook("fp").await.unwrap().unwrap();
+        assert_eq!(pb.fields[0].profile_key.as_deref(), Some("city"));
+        assert_eq!(b.episodes("fp", 10).await.unwrap().len(), 1);
+        assert!(b.fact("city").await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn forgetting_an_unknown_key_is_false_and_harmless() {
+        let m = mem();
+        m.record_success("h", "fp", &[], vec![PlaybookField::new("A", "text", None)])
+            .await
+            .unwrap();
+        assert!(!m.forget("nothing").await.unwrap());
+        assert!(m.playbook("fp").await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn episodes_are_capped_per_tenant_and_the_oldest_go_first() {
+        let m = mem();
+        for i in 0..6u64 {
+            let ep = Episode {
+                host: "h".into(),
+                fingerprint: "fp".into(),
+                field: format!("f{i}"),
+                problem: "p".into(),
+                detail: String::new(),
+                count: 1,
+                last_seen: now() - (6 - i) * 10,
+            };
+            m.save_episode(&format!("id{i}"), &ep).await.unwrap();
+        }
+        let dropped = m.trim_episodes(EPISODE_TTL_SECS, 4).await.unwrap();
+        assert_eq!(dropped, 2);
+        let mut left: Vec<String> = m
+            .episodes("fp", 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|e| e.field)
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            ["f2", "f3", "f4", "f5"],
+            "the two oldest were dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_episodes_are_dropped_when_a_new_one_arrives() {
+        let m = mem();
+        let old = Episode {
+            host: "h".into(),
+            fingerprint: "fp".into(),
+            field: "old".into(),
+            problem: "p".into(),
+            detail: String::new(),
+            count: 9,
+            last_seen: now() - EPISODE_TTL_SECS - 100,
+        };
+        m.save_episode("old-id", &old).await.unwrap();
+        m.record_episode("h", "fp", "new", "p", "d").await.unwrap();
+        let eps = m.episodes("fp", 10).await.unwrap();
+        assert_eq!(eps.len(), 1, "{eps:?}");
+        assert_eq!(eps[0].field, "new");
+    }
+
+    #[tokio::test]
+    async fn other_tenants_episodes_do_not_count_against_the_cap() {
+        let store: Arc<dyn Store> =
+            Arc::new(InMemoryStore::new(Arc::new(embed::HashEmbedder::default())));
+        let a = Memory::new(store.clone(), "a");
+        let b = Memory::new(store, "b");
+        for i in 0..3 {
+            a.record_episode("h", "fp", &format!("f{i}"), "p", "d")
+                .await
+                .unwrap();
+        }
+        assert_eq!(b.trim_episodes(EPISODE_TTL_SECS, 0).await.unwrap(), 0);
+        assert_eq!(episode_count(&a).await, 3);
     }
 }

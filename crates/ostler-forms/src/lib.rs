@@ -312,3 +312,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod prop_tests;

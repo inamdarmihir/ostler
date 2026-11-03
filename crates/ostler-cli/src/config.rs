@@ -103,7 +103,7 @@ pub fn key_location() -> String {
 /// (`security -i`, commands on stdin) and Linux `secret-tool store` reads the secret from stdin. Reading
 /// uses `-w` / `lookup`, which print to stdout.
 ///
-/// Every call goes through a [`Runner`], so the Linux behaviour (which cannot run on a Mac) is tested with a
+/// Every call goes through a `Runner`, so the Linux behaviour (which cannot run on a Mac) is tested with a
 /// scripted fake, on any host.
 pub mod keychain {
     use std::io::Write;

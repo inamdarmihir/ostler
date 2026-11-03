@@ -1,5 +1,5 @@
 //! A2A v1.0 wire shapes (JSON-RPC binding), built as plain JSON so the format is visible in one place.
-//! Field names and enum strings follow https://a2a-protocol.org/latest/specification/ (camelCase, `TASK_STATE_*`).
+//! Field names and enum strings follow <https://a2a-protocol.org/latest/specification/> (camelCase, `TASK_STATE_*`).
 
 use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};

@@ -33,7 +33,18 @@ impl VectorSource {
             Self::Client(e) => e.dim(),
         }
     }
+    /// Name of the embedding model, recorded in the store so a later switch to another model is caught.
+    fn model_id(&self) -> String {
+        match self {
+            Self::CloudInference { model, .. } => model.clone(),
+            Self::Client(e) => e.model_id(),
+        }
+    }
 }
+
+/// Reserved point (in the profile collection) recording which embedding model built the vectors.
+/// It carries no `tenant`, so no tenant-scoped query, count or wipe ever touches it.
+const META_ID: &str = "00000000-0000-4000-8000-6f73746c6572";
 
 #[derive(Clone)]
 pub struct QdrantConfig {
@@ -47,7 +58,7 @@ pub struct QdrantConfig {
     /// Allow a plain `http://` URL to a non-loopback host. Off by default: the API key and every
     /// stored fact would cross the network in cleartext.
     pub allow_insecure: bool,
-    /// Prepended to every collection name. With [`tenant_prefix`] each tenant gets its own collections,
+    /// Prepended to every collection name. With [`tenant_prefix`](crate::tenant_prefix) each tenant gets its own collections,
     /// so a token scoped to them (see [`crate::mint_tenant_token`]) is enforced by the server.
     pub collection_prefix: String,
 }
@@ -245,6 +256,51 @@ pub struct QdrantStore {
     http: reqwest::Client,
     breaker: Breaker,
     cooldown: Duration,
+    retry: Retry,
+}
+
+/// Bounded retry of transient failures, for idempotent requests only (reads and upserts under a fixed id).
+/// Exponential backoff with jitter; the whole sequence is also bounded by the request timeout, so retrying
+/// can never make a lookup slower than one timeout plus a small delay.
+#[derive(Clone, Copy)]
+struct Retry {
+    /// Extra attempts after the first.
+    max: u32,
+    base: Duration,
+    cap: Duration,
+}
+
+impl Retry {
+    const DEFAULT: Retry = Retry {
+        max: 2,
+        base: Duration::from_millis(100),
+        cap: Duration::from_secs(1),
+    };
+
+    /// Delay before retry number `attempt` (0-based): half of `min(cap, base * 2^attempt)` plus a random
+    /// share of the other half, so concurrent callers do not retry in lockstep.
+    fn delay(&self, attempt: u32) -> Duration {
+        let ceil = self
+            .base
+            .saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX))
+            .min(self.cap);
+        let mut b = [0u8; 4];
+        let r = if getrandom::fill(&mut b).is_ok() {
+            u32::from_le_bytes(b) as f64 / u32::MAX as f64
+        } else {
+            0.5
+        };
+        ceil.mul_f64(0.5 + 0.5 * r)
+    }
+}
+
+/// Failures worth retrying: the request never completed, or the server said "try again" (not 500, which
+/// usually means a bug that will repeat).
+fn transient(r: &Result<(u16, Value)>) -> bool {
+    match r {
+        Err(_) => true,
+        Ok((status, _)) => matches!(*status, 429 | 502 | 503 | 504),
+    }
 }
 
 impl QdrantStore {
@@ -264,6 +320,7 @@ impl QdrantStore {
             http,
             breaker: Breaker::default(),
             cooldown: BREAKER_COOLDOWN,
+            retry: Retry::DEFAULT,
         })
     }
 
@@ -271,6 +328,17 @@ impl QdrantStore {
     #[cfg(test)]
     fn with_cooldown(mut self, d: Duration) -> Self {
         self.cooldown = d;
+        self
+    }
+
+    /// Set the retry policy (tests only; production uses the defaults).
+    #[cfg(test)]
+    fn with_retry(mut self, max: u32, base: Duration) -> Self {
+        self.retry = Retry {
+            max,
+            base,
+            cap: base.saturating_mul(8),
+        };
         self
     }
 
@@ -323,8 +391,34 @@ impl QdrantStore {
         path: &str,
         body: Option<Value>,
     ) -> Result<(u16, Value)> {
+        self.send_with(method, path, body, false).await
+    }
+
+    /// `idempotent` requests may be repeated: transient failures are retried with backoff. The sequence
+    /// counts as one outcome for the breaker, so a retried blip does not open it. Never pass `true` for
+    /// anything that is not safe to apply twice.
+    async fn send_with(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Value>,
+        idempotent: bool,
+    ) -> Result<(u16, Value)> {
         let permit = self.breaker.acquire()?;
-        let r = self.send_once(method, path, body).await;
+        let started = std::time::Instant::now();
+        let mut attempt = 0;
+        let r = loop {
+            let r = self.send_once(method.clone(), path, body.clone()).await;
+            if !idempotent || attempt >= self.retry.max || !transient(&r) {
+                break r;
+            }
+            let wait = self.retry.delay(attempt);
+            if started.elapsed() + wait >= self.cfg.timeout {
+                break r;
+            }
+            tokio::time::sleep(wait).await;
+            attempt += 1;
+        };
         match &r {
             // Server-side trouble counts; a 4xx is the caller's mistake and says the server is up.
             Ok((status, _)) if *status >= 500 => {
@@ -381,6 +475,21 @@ impl QdrantStore {
         }
     }
 
+    /// Like [`Self::ok`] for requests that are safe to repeat (reads, upserts under a fixed id).
+    async fn ok_idem(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Value> {
+        let (status, v) = self.send_with(method, path, body, true).await?;
+        if (200..300).contains(&status) {
+            Ok(v)
+        } else {
+            Err(self.status_error(status, &v))
+        }
+    }
+
     /// Bulk-load points: `(id, text, payload)` in one request. For imports and benchmarks.
     pub async fn upsert_batch(
         &self,
@@ -405,7 +514,7 @@ impl QdrantStore {
             .zip(vectors)
             .map(|((id, _, payload), vector)| json!({"id": id, "vector": vector, "payload": payload}))
             .collect();
-        self.ok(
+        self.ok_idem(
             reqwest::Method::PUT,
             &format!("/collections/{}/points?wait=true", self.coll(kind)),
             Some(json!({ "points": points })),
@@ -440,6 +549,49 @@ impl QdrantStore {
 }
 
 impl QdrantStore {
+    /// Refuse to run against vectors built by a different embedding model. Two models can share a
+    /// dimension, and then nothing errors: similarity scores are just quietly meaningless. The model name is
+    /// stored on first use; collections created before it was recorded adopt the configured model. Problems
+    /// reading or writing the marker are not fatal (memory still works; the check just cannot run).
+    async fn check_model(&self) -> Result<()> {
+        let model = self.cfg.vectors.model_id();
+        let name = self.coll(Kind::Profile);
+        let path = format!("/collections/{name}/points/{META_ID}");
+        let Ok((status, v)) = self
+            .send_with(reqwest::Method::GET, &path, None, true)
+            .await
+        else {
+            return Ok(());
+        };
+        match status {
+            200 => {
+                if let Some(stored) = v["result"]["payload"]["model"]
+                    .as_str()
+                    .filter(|m| *m != model)
+                {
+                    return Err(MemoryError::Invalid(format!(
+                        "collection {name} was built with embedding model {stored:?} but the configured model is {model:?}. \
+                         Their vectors are not comparable, so lookups would silently return wrong matches. Switch back to {stored:?}, \
+                         or use a different collection prefix to start a fresh memory (re-saving facts re-embeds them)"
+                    )));
+                }
+                Ok(())
+            }
+            404 => {
+                let _ = self
+                    .upsert(
+                        Kind::Profile,
+                        META_ID,
+                        &model,
+                        json!({ "ostler_meta": "embedding_model", "model": model, "dim": self.cfg.vectors.dim() }),
+                    )
+                    .await;
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Payload indexes. Creating an index that already exists is a no-op, so this runs on every start.
     async fn ensure_indexes(&self, name: &str) {
         // Tenant index first: with is_tenant Qdrant co-locates a tenant's points for fast filtered search.
@@ -518,12 +670,12 @@ impl Store for QdrantStore {
             }
             self.ensure_indexes(name).await;
         }
-        Ok(())
+        self.check_model().await
     }
 
     async fn upsert(&self, kind: Kind, id: &str, text: &str, payload: Value) -> Result<()> {
         let vector = self.vector_for(text).await?;
-        self.ok(
+        self.ok_idem(
             reqwest::Method::PUT,
             &format!("/collections/{}/points?wait=true", self.coll(kind)),
             Some(json!({ "points": [{ "id": id, "vector": vector, "payload": payload }] })),
@@ -544,7 +696,7 @@ impl Store for QdrantStore {
         }
         let query = self.vector_for(text).await?;
         let v = self
-            .ok(
+            .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/query", self.coll(kind)),
                 Some(json!({ "query": query, "filter": filter.to_qdrant(), "limit": limit, "with_payload": true })),
@@ -566,7 +718,7 @@ impl Store for QdrantStore {
         }
         let vector = self.vector_for(text).await?;
         let v = self
-            .ok(
+            .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/query", self.coll(kind)),
                 Some(rank.to_qdrant_query(vector, filter, limit)),
@@ -580,7 +732,7 @@ impl Store for QdrantStore {
             return Ok(vec![]);
         }
         let v = self
-            .ok(
+            .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/scroll", self.coll(kind)),
                 Some(json!({ "filter": filter.to_qdrant(), "limit": limit, "with_payload": true, "with_vector": false })),
@@ -616,7 +768,7 @@ impl Store for QdrantStore {
 
     async fn count(&self, kind: Kind, filter: &Filter) -> Result<u64> {
         let v = self
-            .ok(
+            .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/count", self.coll(kind)),
                 Some(json!({ "filter": filter.to_qdrant(), "exact": true })),
@@ -647,7 +799,7 @@ fn parse_hits(points: &Value) -> Vec<Hit> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{body_partial_json, header, method, path};
+    use wiremock::matchers::{body_partial_json, header, method, path, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn cloud(url: String) -> QdrantStore {
@@ -661,6 +813,12 @@ mod tests {
             collection_prefix: String::new(),
         })
         .unwrap()
+        // The tests below count requests exactly; retries are exercised by their own tests.
+        .with_retry(0, Duration::from_millis(1))
+    }
+
+    fn retrying(url: String, max: u32) -> QdrantStore {
+        cloud(url).with_retry(max, Duration::from_millis(1))
     }
 
     /// Cloud Inference must send text+model documents (no client-side vectors) with the api-key header.
@@ -1017,6 +1175,180 @@ mod tests {
             assert!(matches!(e, MemoryError::Status { status: 403, .. }), "{e}");
         }
         assert!(store.degraded().is_none());
+    }
+
+    #[tokio::test]
+    async fn idempotent_requests_retry_transient_failures_then_succeed() {
+        let srv = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_profile/points/scroll"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(2)
+            .expect(2)
+            .mount(&srv)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_profile/points/scroll"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result":{"points":[]}})))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        let store = retrying(srv.uri(), 2);
+        store
+            .scroll(Kind::Profile, &Filter::tenant("t"), 1)
+            .await
+            .unwrap();
+        // A retried blip is one outcome for the breaker: it stays closed.
+        assert!(store.degraded().is_none());
+    }
+
+    #[tokio::test]
+    async fn upserts_retry_but_deletes_never_do() {
+        let srv = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/collections/ostler_profile/points"))
+            .respond_with(ResponseTemplate::new(502))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&srv)
+            .await;
+        Mock::given(method("PUT"))
+            .and(path("/collections/ostler_profile/points"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result":{}})))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_profile/points/delete"))
+            .respond_with(ResponseTemplate::new(503))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        let store = retrying(srv.uri(), 3);
+        store
+            .upsert(Kind::Profile, "id", "text", json!({"tenant": "t"}))
+            .await
+            .unwrap();
+        let e = store.delete(Kind::Profile, "id").await.unwrap_err();
+        assert!(matches!(e, MemoryError::Status { status: 503, .. }), "{e}");
+    }
+
+    #[tokio::test]
+    async fn retries_are_bounded_and_skip_client_and_server_bugs() {
+        let srv = MockServer::start().await;
+        // 500 and 4xx are not transient: exactly one request each.
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_profile/points/count"))
+            .respond_with(ResponseTemplate::new(400))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        // A persistently unavailable server gets 1 + max attempts, then the error surfaces.
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_profile/points/scroll"))
+            .respond_with(ResponseTemplate::new(503))
+            .expect(3)
+            .mount(&srv)
+            .await;
+        let store = retrying(srv.uri(), 2);
+        let f = Filter::tenant("t");
+        assert!(matches!(
+            store.count(Kind::Profile, &f).await.unwrap_err(),
+            MemoryError::Status { status: 400, .. }
+        ));
+        assert!(matches!(
+            store.scroll(Kind::Profile, &f, 1).await.unwrap_err(),
+            MemoryError::Status { status: 503, .. }
+        ));
+    }
+
+    #[test]
+    fn backoff_grows_is_capped_and_jittered_within_bounds() {
+        let r = Retry {
+            max: 5,
+            base: Duration::from_millis(100),
+            cap: Duration::from_millis(500),
+        };
+        for attempt in 0..40 {
+            let ceil =
+                Duration::from_millis(100u64.saturating_mul(1 << attempt.min(20))).min(r.cap);
+            let d = r.delay(attempt);
+            assert!(
+                d <= ceil && d >= ceil / 2,
+                "attempt {attempt}: {d:?} vs {ceil:?}"
+            );
+        }
+    }
+
+    fn collection_ok(size: u64) -> ResponseTemplate {
+        ResponseTemplate::new(200).set_body_json(
+            json!({"result":{"config":{"params":{"vectors":{"size":size,"distance":"Cosine"}}}}}),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_different_embedding_model_with_the_same_dimension_is_refused_with_advice() {
+        let srv = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("^/collections/ostler_[a-z]+$"))
+            .respond_with(collection_ok(384))
+            .mount(&srv)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result":{}})))
+            .mount(&srv)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/collections/ostler_profile/points/{META_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"result":{"id":META_ID,"payload":{"model":"some/other-model-384","dim":384}}}),
+            ))
+            .mount(&srv)
+            .await;
+        let err = cloud(srv.uri()).ensure().await.unwrap_err().to_string();
+        assert!(
+            err.contains("some/other-model-384")
+                && err.contains("sentence-transformers/all-minilm-l6-v2")
+                && err.contains("collection prefix"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_model_is_recorded_on_first_use_and_the_same_model_passes() {
+        let srv = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("^/collections/ostler_[a-z]+$"))
+            .respond_with(collection_ok(384))
+            .mount(&srv)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result":{}})))
+            .mount(&srv)
+            .await;
+        let marker = format!("/collections/ostler_profile/points/{META_ID}");
+        Mock::given(method("GET"))
+            .and(path(marker.clone()))
+            .respond_with(ResponseTemplate::new(404))
+            .up_to_n_times(1)
+            .mount(&srv)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(marker))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"result":{"payload":{"model":"sentence-transformers/all-minilm-l6-v2"}}}),
+            ))
+            .mount(&srv)
+            .await;
+        let store = cloud(srv.uri());
+        store.ensure().await.unwrap(); // first use: marker absent, gets written
+        store.ensure().await.unwrap(); // second: marker matches
+        let wrote = srv.received_requests().await.unwrap().iter().any(|r| {
+            r.method.as_str() == "PUT"
+                && r.url.path() == "/collections/ostler_profile/points"
+                && String::from_utf8_lossy(&r.body).contains("embedding_model")
+        });
+        assert!(wrote, "the marker point was never written");
     }
 }
 

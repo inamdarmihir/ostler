@@ -27,6 +27,15 @@ pub enum BrowserError {
     Policy(String),
     #[error("navigation failed: {0}")]
     Navigation(String),
+    /// A ref that no longer resolves: re-snapshot, then retry.
+    #[error("{0}")]
+    StaleRef(String),
+    /// The page changed while an action ran: it may or may not have completed.
+    #[error("{0}")]
+    Uncertain(String),
+    /// The target exists but cannot take this action now (disabled, read-only).
+    #[error("{0}")]
+    NotActionable(String),
     #[error("{0}")]
     Other(String),
 }
@@ -256,6 +265,9 @@ pub(crate) struct PageState {
     /// Ref of the form the last `fill_form` worked on, so a bare `form_submit` sends that form and not
     /// whichever form comes first on the page (a header newsletter box, a search form).
     pub(crate) last_form: Option<String>,
+    /// Form key and time of the last submit whose outcome may have been "accepted" (or is unknown), for the
+    /// double-submit guard.
+    pub(crate) last_submit: Option<(String, std::time::Instant)>,
 }
 
 #[derive(Clone)]
@@ -625,14 +637,19 @@ impl Page {
                     .trim_start_matches("Error: ")
                     .to_string();
                 if first.starts_with("unknown ref") {
-                    return Err(BrowserError::Other(first));
+                    return Err(BrowserError::StaleRef(first));
+                }
+                if first.contains("is stale") {
+                    return Err(BrowserError::StaleRef(format!(
+                        "page script error: {first}"
+                    )));
                 }
                 return Err(BrowserError::Js(first));
             }
             return Ok(res["result"].get("value").cloned().unwrap_or(Value::Null));
         }
         if attempts == 1 {
-            return Err(BrowserError::Navigation(format!(
+            return Err(BrowserError::Uncertain(format!(
                 "the page changed while the action was running ({last}); it may or may not have completed"
             )));
         }
@@ -1146,7 +1163,7 @@ impl Page {
                 let info = self.rt("clickInfo", &[json!(r)]).await?;
                 let mut warn = None;
                 if info["disabled"].as_bool() == Some(true) {
-                    return Err(BrowserError::Other(format!("{r} is disabled")));
+                    return Err(BrowserError::NotActionable(format!("{r} is disabled")));
                 }
                 if info["zero"].as_bool() == Some(true) || info["covered"].as_bool() == Some(true) {
                     if info["covered"].as_bool() == Some(true) {
@@ -1157,7 +1174,7 @@ impl Page {
                     }
                     match self.rt_effect("jsClick", &[json!(r)]).await {
                         // The click replaced the page it was running in: that is the click working.
-                        Ok(_) | Err(BrowserError::Navigation(_)) => {}
+                        Ok(_) | Err(BrowserError::Navigation(_) | BrowserError::Uncertain(_)) => {}
                         Err(e) => return Err(e),
                     }
                 } else {
@@ -1269,10 +1286,10 @@ impl Page {
     pub async fn type_into(&self, r: &str, text: &str) -> Result<()> {
         let p = self.rt("prepare", &[json!(r)]).await?;
         if p["disabled"].as_bool() == Some(true) {
-            return Err(BrowserError::Other(format!("{r} is disabled")));
+            return Err(BrowserError::NotActionable(format!("{r} is disabled")));
         }
         if p["readonly"].as_bool() == Some(true) {
-            return Err(BrowserError::Other(format!("{r} is read-only")));
+            return Err(BrowserError::NotActionable(format!("{r} is read-only")));
         }
         if text.is_empty() {
             self.rt_effect("setNative", &[json!(r), json!("")]).await?;

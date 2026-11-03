@@ -14,6 +14,7 @@ rust-version.workspace = true
 workspace = true
 
 [dev-dependencies]
+proptest = "1"
 tempfile = "3.27.0"
 tiny_http = "0.12.0"
 ostler-fixtures = { path = "../ostler-fixtures" }

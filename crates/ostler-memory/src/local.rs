@@ -27,6 +27,9 @@ const FORMAT: u32 = 1;
 struct Doc {
     format: u32,
     dim: usize,
+    /// Embedding model that produced the vectors. Absent in files written before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
     points: Vec<Rec>,
 }
 
@@ -148,6 +151,14 @@ impl LocalStore {
                 doc.dim
             )));
         }
+        let model = self.inner.embedder().model_id();
+        if let Some(stored) = doc.model.as_deref().filter(|m| *m != model) {
+            return Err(MemoryError::Invalid(format!(
+                "{} was built with embedding model {stored:?} but the configured model is {model:?}; their vectors are not comparable. \
+                 Switch back to {stored:?}, or delete the file to start over",
+                self.path.display()
+            )));
+        }
         let mut points = Vec::with_capacity(doc.points.len());
         for r in doc.points {
             let kind = Kind::from_collection(&r.kind).ok_or_else(|| {
@@ -184,6 +195,7 @@ impl LocalStore {
         let doc = Doc {
             format: FORMAT,
             dim: self.inner.embedder().dim(),
+            model: Some(self.inner.embedder().model_id()),
             points: self
                 .inner
                 .export()
@@ -462,5 +474,43 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    /// Same dimension as `HashEmbedder`, different model.
+    struct OtherModel(HashEmbedder);
+
+    #[async_trait::async_trait]
+    impl Embedder for OtherModel {
+        fn dim(&self) -> usize {
+            self.0.dim()
+        }
+        fn model_id(&self) -> String {
+            "other-model".into()
+        }
+        async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            self.0.embed(texts).await
+        }
+    }
+
+    #[tokio::test]
+    async fn changing_the_embedding_model_at_the_same_size_is_a_clear_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("memory.local");
+        memory(open(&p, Some(KEY)).unwrap())
+            .remember("city", json!("Pune"), None, None, "user")
+            .await
+            .unwrap();
+        let err = LocalStore::open(&p, Arc::new(OtherModel(HashEmbedder::default())), Some(KEY))
+            .err()
+            .expect("model mismatch")
+            .to_string();
+        assert!(
+            err.contains("hash-256d")
+                && err.contains("other-model")
+                && err.contains("delete the file"),
+            "{err}"
+        );
+        // The same model reopens fine.
+        assert!(open(&p, Some(KEY)).is_ok());
     }
 }
