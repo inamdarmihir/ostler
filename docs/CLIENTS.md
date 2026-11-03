@@ -50,7 +50,8 @@ ostler setup claude --apply -- --learn
 Or non-interactively: `export QDRANT_URL=… QDRANT_API_KEY=…` (these override the saved config). See the README's [Configure](../README.md#configure) section for every setting and where it comes from.
 
 - Embeddings default to **Qdrant Cloud Inference** (`sentence-transformers/all-minilm-l6-v2`, 384 dims). Enable Inference on the cluster in the Qdrant Cloud console. This path follows Qdrant's documentation and is covered by request-shape tests, but has not been exercised against a live cluster by the maintainers; please report problems.
-- Against open-source Qdrant (no inference): `--embeddings dev-hash` uses non-semantic client-side vectors. Exact lookups and `autocomplete` matching work; semantic matching is poor. For development only.
+- Against open-source Qdrant (no inference): `--embeddings ollama` embeds on your machine with a local Ollama server (semantic; only vectors reach Qdrant; `--embedding-model`/`--embedding-dim` must match the model, e.g. `all-minilm`, 384), or `--embeddings dev-hash` uses non-semantic client-side vectors (exact lookups and `autocomplete` matching work; semantic matching is poor; development only). With the default `cloud`, field text is sent to Qdrant Cloud Inference.
+- Memory in Qdrant is encrypted on your machine by default (`--seal auto`); back up the sealing key, because lost keys cannot be recovered. See the README's [privacy and security model](../README.md#privacy-and-security-model-of-memory) and [SECURITY.md](../SECURITY.md). `--isolation collection` and `ostler memory token` give per-tenant Qdrant access.
 - `--memory ephemeral` keeps memory in-process (lost on exit) for trying things out.
 - `--tenant` (or `OSTLER_TENANT`) separates users sharing a cluster. `--qdrant-on-disk` lowers RAM per user.
 - `--learn` saves non-sensitive values the agent typed after a form is accepted. Off by default: Ostler records *how* forms were filled automatically, but only stores *your data* when you opt in or call `memory_remember`.
@@ -81,6 +82,6 @@ ostler memory wipe --yes
 1. `navigate` (returns the page's interactive elements)
 2. `form_inspect` (typed fields; shows what memory knows about this form)
 3. `form_fill` with `{label: value}` for what you know; add `auto: "required"` to fill the rest from memory
-4. `form_submit`, then read the status: *Submitted*, *Advanced* (next step: repeat 2-4), or *NOT SUBMITTED* with the page's validation messages.
+4. `form_submit`, then read the status: *Submitted*, *Advanced* (next step: repeat 2-4), or *NOT ACCEPTED* with the page's validation messages.
 
 `ostler inspect <url>` prints the form model as JSON for debugging. `ostler fixtures` serves the test pages for a local demo.

@@ -1,0 +1,10 @@
+<!doctype html><meta charset=utf-8><title>Constraints</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}</style>
+<h1>Booking</h1>
+<form action="/submit" method="post" novalidate>
+  <label for="t">Pickup time</label><input id="t" name="t" type="time" min="11:00" max="21:00">
+  <label for="e">Contact email</label><input id="e" name="e" type="email">
+  <label for="c">Code</label><input id="c" name="c" pattern="[A-Z]{3}-[0-9]{3}" title="Three capitals, a dash, three digits">
+  <label for="q">Quantity</label><input id="q" name="q" type="number" min="1" max="10" step="1">
+  <label for="n">Nickname</label><input id="n" name="n">
+  <button type="submit">Book</button>
+</form>

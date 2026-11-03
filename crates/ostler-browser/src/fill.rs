@@ -78,6 +78,9 @@ pub struct FieldResult {
     pub note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The value took, but the control's own constraints (range, pattern, type) say it is not valid.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -140,7 +143,8 @@ impl FillReport {
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SubmitStatus {
-    /// Same form still showing with validation messages.
+    /// The server (or page) received the submit and answered with problems: the same form is showing with
+    /// validation messages, or the page reloaded and says something is invalid/incorrect/failed.
     ValidationFailed,
     /// A new form/step appeared (wizard) or the page changed to another form.
     Advanced,
@@ -148,6 +152,19 @@ pub enum SubmitStatus {
     Submitted,
     /// Nothing observable happened.
     Unchanged,
+    /// The server answered the submit with an HTTP error (4xx/5xx) and showed no validation messages.
+    /// The data may or may not have been stored: do not report success and do not blindly retry.
+    ServerError,
+}
+
+/// Disarms the submit gate when dropped, so a cancelled or timed-out submit (an A2A deadline, a cancelled
+/// task) cannot leave the page able to send data.
+struct Disarm<'a>(&'a Page);
+
+impl Drop for Disarm<'_> {
+    fn drop(&mut self) {
+        self.0.arm_submit(false);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -171,6 +188,12 @@ pub struct FieldDrift {
     pub now: String,
 }
 
+fn path_of(url: &str) -> String {
+    url::Url::parse(url)
+        .map(|u| format!("{}{}", u.origin().ascii_serialization(), u.path()))
+        .unwrap_or_else(|_| url.to_string())
+}
+
 fn host_of(url: &str) -> String {
     url::Url::parse(url)
         .ok()
@@ -192,12 +215,7 @@ fn pick_form<'a>(
     forms
         .iter()
         .max_by_key(|f| {
-            let vis: Vec<Field> = f
-                .fields
-                .iter()
-                .filter(|x| !x.hidden && !x.disabled)
-                .cloned()
-                .collect();
+            let vis = with_options(&f.fields);
             resolve_values(&vis, values).matched.len()
         })
         .or(forms.first())
@@ -217,6 +235,137 @@ fn find_form<'a>(
             None
         }
     })
+}
+
+/// The visible fields of a form, each radio/checkbox group followed by one pseudo-field per option
+/// (ref `<group>#<index>`, kind checkbox) so a single option can be addressed by its own label:
+/// `{"College": true}`. Disabled fields are kept (resolution reports them as disabled).
+fn with_options(fields: &[Field]) -> Vec<Field> {
+    let mut out = Vec::with_capacity(fields.len());
+    for f in fields.iter().filter(|f| !f.hidden) {
+        out.push(f.clone());
+        if f.grouped {
+            for (i, o) in f.options.iter().enumerate() {
+                out.push(Field {
+                    r#ref: format!("{}#{i}", f.r#ref),
+                    kind: FieldKind::Checkbox,
+                    label: o.label.clone(),
+                    name: None,
+                    id: None,
+                    required: false,
+                    disabled: f.disabled || o.disabled,
+                    readonly: false,
+                    placeholder: None,
+                    autocomplete: None,
+                    pattern: None,
+                    min: None,
+                    max: None,
+                    step: None,
+                    minlength: None,
+                    maxlength: None,
+                    options: vec![],
+                    value: json!(o.selected),
+                    section: Some(f.label.clone()),
+                    error: None,
+                    hidden: false,
+                    grouped: false,
+                    format: None,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parsed date format such as `mm/dd/yyyy`: separator, order of the parts (`d`/`m`/`y`) and the year width.
+struct DateFormat {
+    sep: char,
+    parts: Vec<(char, usize)>,
+}
+
+impl DateFormat {
+    fn parse(fmt: &str) -> Option<Self> {
+        let sep = fmt.chars().find(|c| matches!(c, '/' | '-' | '.'))?;
+        let parts: Vec<(char, usize)> = fmt
+            .to_lowercase()
+            .split(sep)
+            .filter_map(|t| Some((t.chars().next()?, t.chars().count())))
+            .collect();
+        let kinds: HashSet<char> = parts.iter().map(|p| p.0).collect();
+        (parts.len() == 3 && kinds.len() == 3 && ['d', 'm', 'y'].iter().all(|k| kinds.contains(k)))
+            .then_some(Self { sep, parts })
+    }
+
+    /// Already written the way the field wants it (digits, right separator, right widths).
+    fn fits(&self, text: &str) -> bool {
+        let pieces: Vec<&str> = text.split(self.sep).collect();
+        pieces.len() == 3
+            && pieces.iter().zip(&self.parts).all(|(p, (k, w))| {
+                !p.is_empty()
+                    && p.chars().all(|c| c.is_ascii_digit())
+                    && if *k == 'y' {
+                        p.len() == *w
+                    } else {
+                        (1..=2).contains(&p.len())
+                    }
+            })
+    }
+
+    fn write(&self, iso: &str) -> String {
+        let n: Vec<&str> = iso.split('-').collect();
+        let (y, m, d) = (n[0], n[1], n[2]);
+        let pieces: Vec<String> = self
+            .parts
+            .iter()
+            .map(|(k, w)| match k {
+                'y' if *w == 2 => format!("{:02}", y.parse::<u32>().unwrap_or(0) % 100),
+                'y' => y.to_string(),
+                'm' => m.to_string(),
+                _ => d.to_string(),
+            })
+            .collect();
+        pieces.join(&self.sep.to_string())
+    }
+}
+
+/// A text box that names a date format wants the date written that way: pages with such widgets rewrite
+/// anything else on submit. Returns the value to type, a note when it was rewritten and a warning when the
+/// value is not recognisably a date in that shape.
+fn plan_date_format(f: &Field, value: &Value) -> (Value, Option<String>, Option<String>) {
+    let keep = (value.clone(), None, None);
+    let Some(fmt) = f.format.as_deref() else {
+        return keep;
+    };
+    // A read-only box is fronted by a calendar that takes the ISO date; only typeable boxes are rewritten.
+    if f.kind != FieldKind::Text || f.readonly || matches!(value, Value::Null | Value::Bool(_)) {
+        return keep;
+    }
+    let assumed = fmt.ends_with('?');
+    let fmt = fmt.trim_end_matches('?');
+    let Some(df) = DateFormat::parse(fmt) else {
+        return keep;
+    };
+    let text = text_of(value).trim().to_string();
+    if text.is_empty() || df.fits(&text) {
+        return keep;
+    }
+    match normalize_date(&text) {
+        Ok(iso) => {
+            let written = df.write(&iso);
+            let note = format!("written as {written} to match the field's date format {fmt}");
+            let warn = assumed.then(|| {
+                format!("assumed {fmt}, the page did not state a format; check the date landed as intended")
+            });
+            (json!(written), Some(note), warn)
+        }
+        Err(_) => (
+            value.clone(),
+            None,
+            Some(format!(
+                "value {text:?} does not look like the date format this field expects ({fmt}); the page may rewrite it"
+            )),
+        ),
+    }
 }
 
 fn text_of(v: &Value) -> String {
@@ -271,6 +420,9 @@ impl Page {
                 }
                 break;
             };
+            // Remembered with the document it belongs to: refs restart at e1 on every page.
+            let doc = self.current_doc().await;
+            self.state.lock().unwrap().last_form = Some(format!("{doc}\u{1f}{}", form.r#ref));
             form_ref = Some(form.r#ref.clone());
             if results.is_empty() {
                 for f in &form.fields {
@@ -283,15 +435,11 @@ impl Page {
             // Resolve against every visible field, including ones already filled. If a key was
             // ambiguous when its rivals were still empty, it must stay ambiguous once they are filled;
             // otherwise the last remaining rival would silently win by elimination.
-            let all_fields: Vec<Field> = form
-                .fields
-                .iter()
-                .filter(|f| !f.hidden && !f.disabled)
-                .cloned()
-                .collect();
+            // Disabled controls stay in the list so a key that names one is told so instead of "no match".
+            let all_fields: Vec<Field> = with_options(&form.fields);
             let candidates: Vec<Field> = all_fields
                 .iter()
-                .filter(|f| !attempted.contains(&f.r#ref))
+                .filter(|f| !attempted.contains(&f.r#ref) && !f.disabled)
                 .cloned()
                 .collect();
 
@@ -307,7 +455,7 @@ impl Page {
                 attempted.insert(field.r#ref.clone());
                 pending.remove(&key);
                 results.push(self.fill_one(&field, &value, "provided").await);
-                self.settle(1500, 80).await;
+                self.settle_scoped(3000, 80, form_ref.as_deref(), 700).await;
                 continue;
             }
 
@@ -318,6 +466,7 @@ impl Page {
                         .iter()
                         .filter(|f| {
                             f.is_empty_value()
+                                && !f.r#ref.contains('#')
                                 && !f.is_sensitive()
                                 && !f.readonly
                                 && f.kind != FieldKind::File
@@ -351,7 +500,7 @@ impl Page {
                         r.profile_key = s.profile_key.clone();
                         r.via = Some(s.via.clone());
                         results.push(r);
-                        self.settle(1500, 80).await;
+                        self.settle_scoped(3000, 80, form_ref.as_deref(), 700).await;
                         continue;
                     }
                 }
@@ -365,12 +514,7 @@ impl Page {
         let (mut unmatched, mut missing, mut errors, mut page_errors, mut submit, mut step) =
             (vec![], vec![], vec![], vec![], vec![], None);
         if let Some(form) = form {
-            let vis: Vec<Field> = form
-                .fields
-                .iter()
-                .filter(|f| !f.hidden && !f.disabled)
-                .cloned()
-                .collect();
+            let vis: Vec<Field> = with_options(&form.fields);
             if !pending.is_empty() {
                 unmatched = resolve_values(&vis, &pending).unmatched;
                 // Keys that matched a field we already touched are conflicts, not misses.
@@ -386,7 +530,7 @@ impl Page {
                     });
                 }
             }
-            for f in &vis {
+            for f in vis.iter().filter(|f| !f.disabled) {
                 let empty = f.is_empty_value();
                 if f.required && empty {
                     missing.push(MissingField {
@@ -454,7 +598,99 @@ impl Page {
         })
     }
 
+    /// One option of a radio/checkbox group, addressed by its own label.
+    async fn fill_option(&self, planned: &Field, value: &Value, source: &str) -> FieldResult {
+        let mut result = FieldResult {
+            r#ref: planned.r#ref.clone(),
+            label: planned.display(),
+            kind: FieldKind::Checkbox,
+            status: FillStatus::Failed,
+            requested: value.clone(),
+            observed: Value::Null,
+            source: source.to_string(),
+            profile_key: None,
+            via: None,
+            note: None,
+            error: None,
+            warning: None,
+        };
+        let run = async {
+            let (group, idx) = planned
+                .r#ref
+                .split_once('#')
+                .and_then(|(g, i)| Some((g, i.parse::<usize>().ok()?)))
+                .ok_or_else(|| BrowserError::Other("bad option ref".into()))?;
+            let want = coerce_bool(value).ok_or_else(|| {
+                BrowserError::Other(format!("cannot read {value} as true/false"))
+            })?;
+            let live = self.field(group).await?;
+            // The index came from an earlier inspection; the group may have been re-rendered since. Find the
+            // option by its label (keeping the old index when it still carries that label).
+            let same = |o: &ostler_forms::FieldOption| {
+                alnum(&o.label).to_lowercase() == alnum(&planned.label).to_lowercase()
+            };
+            let idx = if live.options.get(idx).is_some_and(same) {
+                idx
+            } else {
+                match live.options.iter().position(same) {
+                    Some(i) => i,
+                    None => {
+                        return Err(BrowserError::Other(format!(
+                            "option {:?} is no longer in that group (the page changed since it was inspected); inspect again",
+                            planned.label
+                        )))
+                    }
+                }
+            };
+            let opt = &live.options[idx];
+            if opt.disabled {
+                return Err(BrowserError::Other("that option is disabled".into()));
+            }
+            if live.kind == FieldKind::Radio {
+                if !want {
+                    return Err(BrowserError::Other(
+                        "a radio option cannot be unchecked; choose another option of the group instead".into(),
+                    ));
+                }
+                if !opt.selected {
+                    self.rt_effect("apply", &[json!(group), json!("radio"), json!(idx)])
+                        .await?;
+                }
+            } else if opt.selected != want {
+                let keep: Vec<usize> = live
+                    .options
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, o)| if *i == idx { want } else { o.selected })
+                    .map(|(i, _)| i)
+                    .collect();
+                self.rt_effect("apply", &[json!(group), json!("multi_select"), json!(keep)])
+                    .await?;
+            }
+            let after = self.field(group).await?;
+            Ok::<bool, BrowserError>(after.options.get(idx).is_some_and(|o| o.selected))
+        }
+        .await;
+        match run {
+            Ok(on) => {
+                result.observed = json!(on);
+                if coerce_bool(value) == Some(on) {
+                    result.status = FillStatus::Verified;
+                } else {
+                    result.note = Some(format!("page shows {on} after filling; expected {value}"));
+                }
+            }
+            Err(e) => result.note = Some(e.to_string()),
+        }
+        result
+    }
+
     async fn fill_one(&self, planned: &Field, value: &Value, source: &str) -> FieldResult {
+        if planned.r#ref.contains('#') {
+            return self.fill_option(planned, value, source).await;
+        }
+        // A text date box is written in its own format; the typed value (and the check) use that form.
+        let (typed, format_note, format_warning) = plan_date_format(planned, value);
         let mut result = FieldResult {
             r#ref: planned.r#ref.clone(),
             label: planned.display(),
@@ -467,19 +703,36 @@ impl Page {
             via: None,
             note: None,
             error: None,
+            warning: None,
         };
-        match self.fill_field(planned, value).await {
+        match self.fill_field(planned, &typed).await {
             Ok((status, observed, note)) => {
                 result.status = status;
                 result.observed = observed;
-                result.note = note;
+                result.note = match (note, format_note) {
+                    (Some(a), Some(b)) => Some(format!("{a}; {b}")),
+                    (a, b) => a.or(b),
+                };
             }
             Err((msg, observed)) => {
                 result.note = Some(msg);
                 result.observed = observed;
             }
         }
+        // The value took; does the control itself consider it valid? ("verified" must not hide an invalid value.)
+        if result.status != FillStatus::Failed {
+            let mut warnings: Vec<String> = format_warning.into_iter().collect();
+            if let Ok(Value::String(w)) = self.rt("validity", &[json!(result.r#ref)]).await {
+                warnings.push(w);
+            }
+            if !warnings.is_empty() {
+                result.warning = Some(warnings.join("; "));
+            }
+        }
         if planned.is_sensitive() {
+            if result.warning.is_some() {
+                result.warning = Some("details hidden: this is a sensitive field".into());
+            }
             // Never echo secrets back into transcripts or logs. Notes can quote the value
             // ("page shows X after filling; expected Y"), so they are hidden as well.
             result.requested = json!("***");
@@ -524,7 +777,7 @@ impl Page {
                         let mut m = match_option(&live.options, w);
                         if matches!(m, Err(ValueError::NoMatch(_))) {
                             // Options may still be loading (dependent dropdowns): wait once and retry.
-                            self.settle(2500, 120).await;
+                            self.settle_scoped(2500, 120, Some(r), 2500).await;
                             live = self.field(r).await?;
                             m = match_option(&live.options, w);
                         }
@@ -586,8 +839,25 @@ impl Page {
                 _ if live.readonly && !live.disabled => {
                     // Read-only text inputs are usually fronted by a calendar popup.
                     let text = text_of(value);
+                    let datey = live.format.is_some()
+                        || [
+                            Some(live.label.as_str()),
+                            live.name.as_deref(),
+                            live.id.as_deref(),
+                            live.placeholder.as_deref(),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .any(|t| {
+                            let t = t.to_lowercase();
+                            ["date", "calendar", "birth", "dob"].iter().any(|w| t.contains(w))
+                        });
                     let iso = ostler_forms::normalize_date(&text).map_err(|_| {
-                        BrowserError::Other(format!("{r} is read-only and the value is not a date"))
+                        BrowserError::Other(if datey {
+                            format!("{r} is read-only and looks like a date picker, but {text:?} is not a date")
+                        } else {
+                            format!("{r} is read-only: the page does not let this field be typed into")
+                        })
                     })?;
                     let res = self.rt_effect("pickDate", &[json!(r), json!(iso)]).await?;
                     if res["ok"].as_bool() != Some(true) {
@@ -663,6 +933,42 @@ impl Page {
         st.filled.push((f.r#ref.clone(), f.display(), val));
     }
 
+    /// Visible "thank you / has been sent" texts on the page right now (empty when the runtime is gone).
+    async fn confirmations(&self) -> Vec<String> {
+        match self.rt("confirmations", &[]).await {
+            Ok(Value::Array(a)) => a
+                .into_iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Error-like messages on the page right now, plus which document is showing: (document id, strong, weak).
+    /// `strong` ones announce themselves (role=alert, error/flash/danger class); `weak` ones are short text
+    /// that says something went wrong. Empty when the runtime is gone.
+    async fn problem_texts(&self) -> (String, Vec<String>, Vec<String>) {
+        let doc = self
+            .rt("docId", &[])
+            .await
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        let list = |v: &Value| -> Vec<String> {
+            v.as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        match self.rt("problems", &[]).await {
+            Ok(v) => (doc, list(&v["strong"]), list(&v["weak"])),
+            Err(_) => (doc, vec![], vec![]),
+        }
+    }
+
     /// Fields that no longer hold what they were verified with (a date picker or script cleared them).
     async fn drifted_fields(&self) -> Vec<FieldDrift> {
         let filled = std::mem::take(&mut self.state.lock().unwrap().filled);
@@ -671,7 +977,12 @@ impl Page {
             if let Ok(f) = self.field(&r).await {
                 let now = text_of(&f.value);
                 if now != was {
-                    out.push(FieldDrift { r#ref: r, label, was, now });
+                    out.push(FieldDrift {
+                        r#ref: r,
+                        label,
+                        was,
+                        now,
+                    });
                 }
             }
         }
@@ -685,7 +996,7 @@ impl Page {
         match self.field(&planned.r#ref).await {
             Ok(f) => Ok(f),
             Err(e) if e.to_string().contains("stale") => {
-                self.settle(1500, 80).await;
+                self.settle_scoped(1500, 80, None, 700).await;
                 let ir = self.forms().await?;
                 let label = planned.display();
                 let mut hits = ir
@@ -748,12 +1059,22 @@ impl Page {
         )))
     }
 
+    /// Id of the document showing now (empty when the runtime is gone).
+    async fn current_doc(&self) -> String {
+        self.rt("docId", &[])
+            .await
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default()
+    }
+
     /// Click a submit/next control and classify what happened.
     pub async fn submit(&self, form: Option<&str>, control: Option<&str>) -> Result<SubmitOutcome> {
         // The caller has already obtained confirmation (if required); only this window may send data.
         self.arm_submit(true);
+        let _gate = Disarm(self);
         let out = self.submit_inner(form, control).await;
-        self.arm_submit(false);
+        self.state.lock().unwrap().last_form = None;
         out
     }
 
@@ -764,7 +1085,25 @@ impl Page {
     ) -> Result<SubmitOutcome> {
         self.guard().await?;
         let before = self.forms().await?;
-        let target = pick_form(&before.forms, form, &BTreeMap::new()).cloned();
+        let cur_doc = self.current_doc().await;
+        // Which form: the one named, else the one we last filled, else the only one. With several forms and
+        // no hint, refuse: guessing "the first" once sent a header newsletter box instead of the order form.
+        let want: Option<String> = form.map(String::from).or_else(|| {
+            let last = self.state.lock().unwrap().last_form.clone();
+            let (doc, r) = last.as_deref()?.split_once('\u{1f}')?;
+            // A form filled on another document (navigated or went back since) says nothing about this one.
+            (!cur_doc.is_empty() && doc == cur_doc && before.forms.iter().any(|f| f.r#ref == r))
+                .then(|| r.to_string())
+        });
+        if want.is_none() && control.is_none() && before.forms.len() > 1 {
+            let list: Vec<String> = before.forms.iter().map(|f| f.r#ref.clone()).collect();
+            return Err(BrowserError::Other(format!(
+                "{} forms on this page and none was filled: pass `form` ({}) or a submit `control` ref",
+                before.forms.len(),
+                list.join(", ")
+            )));
+        }
+        let target = pick_form(&before.forms, want.as_deref(), &BTreeMap::new()).cloned();
         let before_fp = target
             .as_ref()
             .map(|f| f.fingerprint(&host_of(&before.url)));
@@ -785,6 +1124,8 @@ impl Page {
             }
         };
         let drift = self.drifted_fields().await;
+        let confirm_before = self.confirmations().await;
+        let (doc_before, strong_before, weak_before) = self.problem_texts().await;
         let action = self.click(&ctl).await?;
         let after = self.forms().await.ok();
         let host = host_of(&action.url);
@@ -808,14 +1149,54 @@ impl Page {
             page_errors = f.errors.clone();
         }
         let url_changed = action.url != before.url;
+        // A round trip that lands back on the same form (a bad login redirecting to the login page) is a new
+        // document even when the URL is unchanged. Whatever error text that document shows is the server's
+        // answer to this submit.
+        let (doc_after, strong_after, weak_after) = self.problem_texts().await;
+        let reloaded = url_changed || (!doc_before.is_empty() && doc_after != doc_before);
+        // Plain text ("invalid", "incorrect") only answers this submit when we are back on the same page
+        // (a login flash). On a different page (search results quoting an error) it is just content.
+        let same_page = path_of(&action.url) == path_of(&before.url);
+        if reloaded && same_form.is_some() {
+            let fresh =
+                strong_after.iter().chain(weak_after.iter().filter(|t| {
+                    same_page && !weak_before.contains(t) && !strong_before.contains(t)
+                }));
+            for t in fresh {
+                if !page_errors.contains(t) {
+                    page_errors.push(t.clone());
+                }
+            }
+        }
+        // Text that says "sent / thank you" and was not there before the click.
+        let confirmed: Vec<String> = self
+            .confirmations()
+            .await
+            .into_iter()
+            .filter(|t| !confirm_before.contains(t))
+            .collect();
         let (status, next_form) = if !field_errors.is_empty() || !page_errors.is_empty() {
             (SubmitStatus::ValidationFailed, None)
+        } else if action.status.is_some_and(|s| s >= 400) {
+            (SubmitStatus::ServerError, None)
         } else if same_form.is_some() && !url_changed {
-            (SubmitStatus::Unchanged, None)
-        } else if after
-            .as_ref()
-            .is_some_and(|ir| ir.forms.iter().any(|f| f.fields.iter().any(|x| !x.hidden)))
-        {
+            // An XHR form often stays put and shows a confirmation in place.
+            if confirmed.is_empty() {
+                (SubmitStatus::Unchanged, None)
+            } else {
+                (SubmitStatus::Submitted, None)
+            }
+        } else if after.as_ref().is_some_and(|ir| {
+            ir.forms.iter().any(|f| f.fields.iter().any(|x| !x.hidden))
+                // A confirmation page with a stray input (newsletter box, search) is not a next step:
+                // a next step has something required to fill, a step counter or a "next" button.
+                && !(!confirmed.is_empty()
+                    && !ir.forms.iter().any(|f| {
+                        f.step.is_some()
+                            || f.submit.iter().any(|c| c.role == "next")
+                            || f.fields.iter().any(|x| !x.hidden && x.required)
+                    }))
+        }) {
             let nf = after
                 .as_ref()
                 .and_then(|ir| ir.forms.first())
@@ -824,24 +1205,32 @@ impl Page {
         } else {
             (SubmitStatus::Submitted, None)
         };
-        let excerpt = if matches!(status, SubmitStatus::Submitted | SubmitStatus::Advanced) {
-            let snap = self
-                .snapshot(crate::page::SnapshotOpts {
-                    max_chars: Some(1500),
-                    ..Default::default()
-                })
-                .await?;
-            snap.text
-                .lines()
-                .filter(|l| {
-                    l.trim_start().starts_with("heading") || l.trim_start().starts_with("text")
-                })
-                .take(6)
-                .map(|l| l.trim().to_string())
-                .collect()
-        } else {
-            vec![]
-        };
+        let mut excerpt: Vec<String> =
+            if matches!(status, SubmitStatus::Submitted | SubmitStatus::Advanced) {
+                let snap = self
+                    .snapshot(crate::page::SnapshotOpts {
+                        max_chars: Some(1500),
+                        ..Default::default()
+                    })
+                    .await?;
+                snap.text
+                    .lines()
+                    .filter(|l| {
+                        l.trim_start().starts_with("heading") || l.trim_start().starts_with("text")
+                    })
+                    .take(6)
+                    .map(|l| l.trim().to_string())
+                    .collect()
+            } else {
+                vec![]
+            };
+        if matches!(status, SubmitStatus::Submitted) {
+            for t in confirmed.iter().rev() {
+                if !excerpt.iter().any(|l| l.contains(t.as_str())) {
+                    excerpt.insert(0, format!("text {t:?}"));
+                }
+            }
+        }
         Ok(SubmitOutcome {
             status,
             action,
@@ -998,6 +1387,98 @@ mod tests {
 
     fn fld(kind: FieldKind) -> Field {
         serde_json::from_value(json!({"ref":"e1","kind":kind,"label":"x"})).unwrap()
+    }
+
+    #[test]
+    fn date_format_plan() {
+        let mut f = fld(FieldKind::Text);
+        f.format = Some("mm/dd/yyyy".into());
+        let (v, note, warn) = plan_date_format(&f, &json!("2026-11-02"));
+        assert_eq!((v, note.is_some(), warn), (json!("11/02/2026"), true, None));
+        // already in shape: untouched
+        assert_eq!(
+            plan_date_format(&f, &json!("11/02/2026")).0,
+            json!("11/02/2026")
+        );
+        // ambiguous order in another shape: not guessed, warned
+        let (v, note, warn) = plan_date_format(&f, &json!("02-11-2026"));
+        assert_eq!((v, note, warn.is_some()), (json!("02-11-2026"), None, true));
+        f.format = Some("dd-mm-yy".into());
+        assert_eq!(
+            plan_date_format(&f, &json!("2026-11-02")).0,
+            json!("02-11-26")
+        );
+        // no format: nothing happens
+        assert_eq!(
+            plan_date_format(&fld(FieldKind::Text), &json!("2026-11-02")).0,
+            json!("2026-11-02")
+        );
+        // read-only (calendar-fronted): the ISO date goes through untouched
+        let mut ro = fld(FieldKind::Text);
+        ro.format = Some("dd/mm/yyyy".into());
+        ro.readonly = true;
+        assert_eq!(
+            plan_date_format(&ro, &json!("2026-03-04")),
+            (json!("2026-03-04"), None, None)
+        );
+        // a format that is only assumed is disclosed
+        let mut a = fld(FieldKind::Text);
+        a.format = Some("mm/dd/yyyy?".into());
+        let (v, _, warn) = plan_date_format(&a, &json!("2026-03-04"));
+        assert_eq!(v, json!("03/04/2026"));
+        assert!(warn.unwrap().contains("assumed mm/dd/yyyy"));
+        // years: two digits expand by rule, out-of-range and negative years are refused, never a panic
+        f.format = Some("dd-mm-yy".into());
+        assert_eq!(
+            plan_date_format(&f, &json!("March 5, 24")).0,
+            json!("05-03-24")
+        );
+        for bad in [
+            "March 5, -5",
+            "March 5, 0024x",
+            "March 5, 3024",
+            "March 5, 1850",
+        ] {
+            let (v, note, warn) = plan_date_format(&f, &json!(bad));
+            assert_eq!((v, note, warn.is_some()), (json!(bad), None, true), "{bad}");
+        }
+        assert_eq!(
+            DateFormat::parse("dd-mm-yy").unwrap().write("0005-03-05"),
+            "05-03-05"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reordered_option_group_is_not_filled_blindly() {
+        use crate::{Browser, LaunchOptions, Policy};
+        if ostler_cdp::find_chrome(None).is_err() {
+            return;
+        }
+        let srv = ostler_fixtures::FixtureServer::start();
+        let b = Browser::launch(LaunchOptions::default(), Policy::default())
+            .await
+            .expect("launch");
+        let page = b.page();
+        page.navigate(&srv.url("/reorder.html")).await.unwrap();
+        let ir = page.forms().await.unwrap();
+        let vis = with_options(&ir.forms[0].fields);
+        let large = vis.iter().find(|f| f.label == "Medium").unwrap().clone();
+        // The page re-renders the group with the last two options swapped after inspection.
+        page.eval("(()=>{const g=document.getElementById('g');const ls=g.querySelectorAll('label');g.appendChild(ls[1])})()")
+            .await
+            .unwrap();
+        // Any later inspection (a settle, another tool call) rebuilds the group in its new order.
+        page.forms().await.unwrap();
+        let r = page.fill_one(&large, &json!(true), "provided").await;
+        let live = page
+            .eval("document.querySelector('input[name=size]:checked')?.value || ''")
+            .await
+            .unwrap();
+        // Either the right option got picked or the fill says it did not work; never Verified on the wrong one.
+        assert_ne!(live, json!("l"), "wrong option selected: {r:?}");
+        assert_eq!(live, json!("m"), "{r:?}");
+        assert_eq!(r.status, FillStatus::Verified, "{r:?}");
+        b.close().await;
     }
 
     #[test]

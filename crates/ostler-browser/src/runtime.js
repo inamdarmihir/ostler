@@ -6,15 +6,92 @@
   // ---------------------------------------------------------------- activity tracking
   // We count in-flight fetch/XHR and short timers so "settle" can wait for real
   // work to finish instead of sleeping for a fixed time.
-  const W = { fetches: 0, lastActivity: performance.now() };
-  const touch = () => { W.lastActivity = performance.now(); };
-  const activeTimers = new Set();
+  const W = { fetches: 0, lastActivity: performance.now(), lastRel: 0 };
+  // lastRel moves only for activity a fill should wait for; lastActivity moves for everything (plain settle).
+  const touch = (rel = true) => { const t = performance.now(); W.lastActivity = t; if (rel) W.lastRel = t; };
+  // In-flight requests and short timers, with enough detail for a scoped settle to tell work the page
+  // started because of us from background chatter (polling, analytics, long polls, tickers).
+  const reqs = new Set();
+  const activeTimers = new Map(); // timer id -> entry
+  const hist = new Map();         // recurrence key -> recent start times
+  const BG_HOSTS = /(^|\.)(google-analytics|googletagmanager|doubleclick|googlesyndication|googleadservices|adservice\.google|facebook\.net|hotjar|segment\.(io|com)|mixpanel|sentry\.io|clarity\.ms|newrelic|nr-data|datadoghq|amplitude|taboola|outbrain|criteo|scorecardresearch|quantserve|adnxs|fullstory|heap(analytics)?|optimizely|intercom|hubspot|clickagy|adsrvr|rubiconproject|pubmatic|openx)\b/i;
+  const BG_PATH = /\/(beacon|collect|telemetry|analytics|heartbeat|rum|csp-report)\b/i;
+  function recurs(key, t) {
+    let a = hist.get(key);
+    if (!a) { a = []; hist.set(key, a); }
+    a.push(t);
+    while (a.length && t - a[0] > 6000) a.shift();
+    if (hist.size > 400) hist.delete(hist.keys().next().value);
+    return a.length;
+  }
+  function reqKey(method, url, body) {
+    let u;
+    try { u = new URL(String(url), location.href); } catch { return method + ' ' + String(url); }
+    if (method === 'GET') {
+      // Cache-busting stamps must not make every poll look new.
+      const q = [...u.searchParams].map(([k, v]) => k + '=' + (/^\d{8,}$|^0\.\d+$/.test(v) ? '*' : v)).join('&');
+      return method + ' ' + u.origin + u.pathname + '?' + q;
+    }
+    return method + ' ' + u.origin + u.pathname + ' ' + bodyKey(body);
+  }
+  function bodyKey(body) {
+    try {
+      if (typeof body === 'string') return body.slice(0, 200);
+      if (body instanceof URLSearchParams) return body.toString().slice(0, 200);
+      if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        return [...body.entries()].map(([k, v]) => k + '=' + (typeof v === 'string' ? v : 'file')).join('&').slice(0, 200);
+      }
+      if (body && typeof body === 'object') return '[' + (body.constructor && body.constructor.name) + (body.size != null ? ':' + body.size : '') + ']';
+    } catch { /* ignore */ }
+    return '';
+  }
+  // A user/fill action (input, change, click, key) starts a new causal window: whatever the page fires in
+  // response must not be mistaken for repeated chatter, so recurrence counting restarts here. A burst is a run
+  // of actions less than 5 s apart (one fill); work that began before the burst is what the page was already doing.
+  const ambient = new Set(); // keys known to be background chatter (long-pending before the fill, or recurring with no input)
+  let burstStart = 0, lastAct = 0, settleStart = 0;
+  for (const type of ['input', 'change', 'click', 'keydown', 'pointerdown']) {
+    document.addEventListener(type, () => {
+      const t = performance.now();
+      if (!lastAct || t - lastAct > 5000) burstStart = t;
+      lastAct = t;
+      hist.clear();
+    }, true);
+  }
+  const preBurst = (e) => e.start < (lastAct ? burstStart : settleStart);
+  function trackReq(method, url, body, keepalive) {
+    method = String(method || 'GET').toUpperCase();
+    const t = performance.now();
+    const e = { start: t, bg: !!keepalive, key: reqKey(method, url, body) };
+    try {
+      const u = new URL(String(url), location.href);
+      if (BG_HOSTS.test(u.hostname) || BG_PATH.test(u.pathname)) e.bg = true;
+    } catch { /* ignore */ }
+    e.n = recurs(e.key, t);
+    reqs.add(e);
+    W.fetches++;
+    return () => { reqs.delete(e); W.fetches--; touch(!isBg(e, performance.now(), 700)); };
+  }
+  // Background = known beacon/ad traffic, the same thing fired over and over with no input in between, or work that
+  // was already pending (and long) before the fill began. Work the fill itself set going is never aged out by
+  // duration alone: a slow uniqueness check or a debounce is exactly what a fill must wait for.
+  function isBg(e, now, bgMs) {
+    if (e.bg || ambient.has(e.key)) return true;
+    if (e.n >= 4) { ambient.add(e.key); if (ambient.size > 300) ambient.delete(ambient.values().next().value); return true; }
+    if (preBurst(e) && (now - e.start > bgMs || (e.delay || 0) > bgMs)) { e.bg = true; ambient.add(e.key); return true; }
+    return false;
+  }
 
   const origFetch = window.fetch;
   if (origFetch) {
     window.fetch = function (...args) {
-      W.fetches++;
-      const done = () => { W.fetches--; touch(); };
+      let method = 'GET', url = args[0], body, ka = false;
+      try {
+        const r = args[0], init = args[1] || {};
+        if (typeof Request !== 'undefined' && r instanceof Request) { url = r.url; method = r.method; ka = r.keepalive; }
+        method = init.method || method; body = init.body; ka = init.keepalive || ka;
+      } catch { /* ignore */ }
+      const done = trackReq(method, url, body, ka);
       let p;
       try { p = origFetch.apply(this, args); } catch (e) { done(); throw e; }
       p.then(done, done);
@@ -22,23 +99,30 @@
     };
   }
   const xhrSend = XMLHttpRequest.prototype.send;
+  const xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (m, u, ...rest) { this.__wmReq = [m, u]; return xhrOpen.call(this, m, u, ...rest); };
   XMLHttpRequest.prototype.send = function (...args) {
-    W.fetches++;
-    this.addEventListener('loadend', () => { W.fetches--; touch(); }, { once: true });
+    const r = this.__wmReq || [];
+    const done = trackReq(r[0], r[1], args[0], false);
+    this.addEventListener('loadend', done, { once: true });
     return xhrSend.apply(this, args);
   };
   const origST = window.setTimeout.bind(window);
   const origCT = window.clearTimeout.bind(window);
   window.setTimeout = function (fn, delay, ...rest) {
     const d = Number(delay) || 0;
-    if (typeof fn !== 'function' || d > 1500) return origST(fn, delay, ...rest);
+    if (typeof fn !== 'function' || d > 2500) return origST(fn, delay, ...rest);
     let id;
+    const t = performance.now();
+    let key = 'T';
+    try { key = 'T ' + Function.prototype.toString.call(fn).slice(0, 160); } catch { /* ignore */ }
+    const e = { start: t, delay: d, bg: false, key, n: recurs(key, t) };
     id = origST(function () {
       activeTimers.delete(id);
-      touch();
+      touch(!isBg(e, performance.now(), 700));
       return fn.apply(this, rest);
     }, d);
-    activeTimers.add(id);
+    activeTimers.set(id, e);
     return id;
   };
   window.clearTimeout = function (id) { activeTimers.delete(id); return origCT(id); };
@@ -201,7 +285,8 @@
       for (let hops = 0; s && hops < 3; hops++, s = s.previousSibling) {
         if (s.nodeType === 3) { const t = clean(s.nodeValue); if (t) return t.slice(0, 80); continue; }
         if (s.nodeType !== 1 || SKIP.has(s.tagName)) continue;
-        if (s.querySelector && s.querySelector('input,select,textarea,button')) break;
+        // A neighbouring control (or one inside the neighbour) has its own label; this text is not ours.
+        if (/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(s.tagName) || (s.querySelector && s.querySelector('input,select,textarea,button'))) break;
         if (!rendered(s)) continue;
         const t = ownText(s);
         if (t && t.length <= 80) return t;
@@ -265,6 +350,68 @@
   }
   const INTERACTIVE = new Set(['link', 'button', 'textbox', 'searchbox', 'spinbutton', 'checkbox', 'radio', 'combobox', 'listbox', 'slider', 'switch', 'tab', 'menuitem', 'option', 'file', 'clickable', 'form', 'iframe', 'treeitem', 'menuitemcheckbox', 'menuitemradio']);
 
+  // ---- checkbox / radio labels --------------------------------------------------------------------
+  // A bare checkbox is almost always written `<input type=checkbox> its label`: the text AFTER the control
+  // names it. Reading the text before it (the previous control's label, or the section heading) names the
+  // wrong box, and a fill then flips a different control than the one asked for.
+  const INLINE = new Set(['A', 'B', 'I', 'EM', 'STRONG', 'SPAN', 'SMALL', 'FONT', 'U', 'CODE', 'ABBR', 'MARK', 'SUB', 'SUP', 'LABEL']);
+  const isChoice = (el) => el.tagName === 'INPUT' && ['checkbox', 'radio'].includes((el.type || '').toLowerCase());
+  const nextContent = (n) => { for (let s = n.nextSibling; s; s = s.nextSibling) { if (s.nodeType === 3 ? clean(s.nodeValue) : s.nodeType === 1) return true; } return false; };
+  function afterText(el) {
+    let node = el;
+    // `<span class=custom><input></span> Label`: the text follows the wrapper.
+    for (let up = 0; up < 2 && !nextContent(node) && node.parentElement && INLINE.has(node.parentElement.tagName); up++) node = node.parentElement;
+    let out = '';
+    for (let n = node.nextSibling, hops = 0; n && hops < 10; n = n.nextSibling, hops++) {
+      if (n.nodeType === 3) { const t = clean(n.nodeValue); if (t) out = clean(out + ' ' + t); continue; }
+      if (n.nodeType !== 1) continue;
+      if (n.tagName === 'BR' || !INLINE.has(n.tagName) || n.querySelector('input,select,textarea,button')) break;
+      if (SKIP.has(n.tagName) || !rendered(n)) continue;
+      const t = ownText(n);
+      if (t) out = clean(out + ' ' + t);
+    }
+    return out.length <= 80 ? out : '';
+  }
+  // Mirror of afterText: the inline text directly before the control, up to a <br>, block or another control.
+  const prevContent = (n) => { for (let s = n.previousSibling; s; s = s.previousSibling) { if (s.nodeType === 3 ? clean(s.nodeValue) : s.nodeType === 1) return true; } return false; };
+  function beforeText(el) {
+    let node = el;
+    for (let up = 0; up < 2 && !prevContent(node) && node.parentElement && INLINE.has(node.parentElement.tagName); up++) node = node.parentElement;
+    let out = '';
+    for (let n = node.previousSibling, hops = 0; n && hops < 10; n = n.previousSibling, hops++) {
+      if (n.nodeType === 3) { const t = clean(n.nodeValue); if (t) out = clean(t + ' ' + out); continue; }
+      if (n.nodeType !== 1) continue;
+      if (n.tagName === 'BR' || !INLINE.has(n.tagName) || n.querySelector('input,select,textarea,button')) break;
+      if (SKIP.has(n.tagName) || !rendered(n)) continue;
+      const t = ownText(n);
+      if (t) out = clean(t + ' ' + out);
+    }
+    return out.length <= 80 ? out : '';
+  }
+  // Text on both sides of a bare checkbox (`Email <input> Phone <input>`): which side names the box is a
+  // property of the whole group's layout. The last control has trailing text only when every label follows its
+  // control; otherwise every label precedes it. When that cannot be told, return '' so the caller refuses to guess.
+  function choiceSide(el) {
+    let box = el.parentElement, group = [el];
+    for (let up = 0; up < 3 && box; up++, box = box.parentElement) {
+      const g = [...box.querySelectorAll('input[type=checkbox],input[type=radio]')];
+      if (g.length > 1) { group = g; break; }
+    }
+    if (group.length < 2) return 'after'; // lone control: leading text is a lead-in, the trailing text is its label
+    const first = group[0], last = group[group.length - 1];
+    if (afterText(last)) return 'after';
+    return beforeText(first) ? 'before' : '';
+  }
+  // Text that is some other checkbox's own trailing label cannot also name this one.
+  function claimedByAnother(el, text) {
+    const scope = el.form || el.getRootNode();
+    if (!scope || !scope.querySelectorAll) return false;
+    for (const c of scope.querySelectorAll('input[type=checkbox],input[type=radio]')) {
+      if (c !== el && afterText(c) === text) return true;
+    }
+    return false;
+  }
+
   function labelFor(el) {
     const lb = el.getAttribute('aria-labelledby');
     if (lb) { const t = textOfIds(el, lb); if (t) return t; }
@@ -273,6 +420,26 @@
     if (el.labels && el.labels.length) {
       const t = clean([...el.labels].map(ownText).join(' '));
       if (t) return t;
+    }
+    if (isChoice(el)) {
+      const after = afterText(el);
+      if (after) {
+        const adj = beforeText(el);
+        if (adj) {
+          // Text on both sides: the group's layout decides which one is ours.
+          const side = choiceSide(el);
+          if (side === 'after') return after;
+          if (side === 'before') return adj;
+          return clean(el.title || el.getAttribute('name') || '');
+        }
+        return after;
+      }
+      // No trailing text: in a group whose labels all precede their controls, the text just before is ours.
+      const adjBefore = beforeText(el);
+      if (adjBefore && choiceSide(el) === 'before') return adjBefore;
+      const before = nearbyText(el);
+      if (before && !claimedByAnother(el, before)) return before;
+      return clean(el.title || el.getAttribute('name') || '');
     }
     const near = nearbyText(el);
     if (near) return near;
@@ -589,6 +756,20 @@
     }
     return out;
   }
+  // True when `cand` is this control's own message: the control is the only one in `scope`, or the message
+  // sits after it and before the next different control. Stops one invalid field's message being
+  // attached to its neighbours (a shared wrapper holds several fields and several messages).
+  function messageBelongsTo(el, cand, scope) {
+    const foreign = [...scope.querySelectorAll('input,select,textarea')].filter((c) => {
+      if (c === el) return false;
+      const ty = (c.type || '').toLowerCase();
+      if (['hidden', 'submit', 'button', 'reset', 'image'].includes(ty)) return false;
+      return !(c.name && c.name === el.name && ty === (el.type || '').toLowerCase()); // same radio/checkbox group
+    });
+    if (!foreign.length) return true;
+    if (!(el.compareDocumentPosition(cand) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
+    return foreign.every((c) => !(el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) || (cand.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING));
+  }
   function errorText(el) {
     const grab = (id) => { const t = byId(el, id); return t && rendered(t) ? ownText(t) : ''; };
     const em = el.getAttribute('aria-errormessage');
@@ -598,11 +779,13 @@
     if (invalid && db) { const t = db.split(/\s+/).map(grab).filter(Boolean).join(' '); if (t) return t; }
     if (el.validity && el.validity.customError && el.validationMessage) return el.validationMessage;
     if (el.validity && !el.validity.valid && invalidSeen.has(el)) return el.validationMessage;
-    // Nearby visible error element (common framework patterns).
+    // Nearby visible error element (common framework patterns). `.help-block` is help text in Bootstrap 3
+    // unless the group is marked `.has-error`.
     const scopes = [el.parentElement, el.parentElement && el.parentElement.parentElement].filter(Boolean);
     for (const s of scopes) {
-      for (const cand of s.querySelectorAll('[role=alert],.error,.invalid-feedback,.field-error,.error-message,.help-block,[class*="error-"],[class*="-error"],[data-error]')) {
+      for (const cand of s.querySelectorAll('[role=alert],.error,.invalid-feedback,.field-error,.error-message,.has-error .help-block,[class*="error-"],[class*="-error"],[data-error]')) {
         if (cand.contains(el) || cand.querySelector('input,select,textarea') || !rendered(cand)) continue;
+        if (!messageBelongsTo(el, cand, s)) continue;
         const t = ownText(cand);
         if (t && t.length < 200) return t;
       }
@@ -616,6 +799,17 @@
     return [...el.options].map((o) => ({ value: o.value, label: clean(o.text), selected: o.selected, disabled: o.disabled || (o.parentElement && o.parentElement.disabled) || false }));
   }
   function fileNames(el) { return el.files ? [...el.files].map((f) => f.name) : []; }
+  // A text box that wants a date in a particular shape says so in its placeholder or a widget attribute.
+  const FMT_RE = /^(?:d{1,2}|m{1,2}|y{2}|y{4})([\/.\-])(?:d{1,2}|m{1,2}|y{2}|y{4})\1(?:d{1,2}|m{1,2}|y{2}|y{4})$/;
+  function dateFormat(el) {
+    if (el.tagName !== 'INPUT' || (el.type || 'text').toLowerCase() !== 'text') return null;
+    for (const a of ['placeholder', 'data-date-format', 'data-format', 'data-inputmask-inputformat']) {
+      const t = clean(el.getAttribute(a) || '').toLowerCase();
+      if (FMT_RE.test(t) && /d/.test(t) && /m/.test(t) && /y/.test(t)) return t;
+    }
+    if ((el.getAttribute('data-provide') || '').toLowerCase() === 'datepicker') return 'mm/dd/yyyy?'; // bootstrap-datepicker default; the trailing ? marks it as assumed, not stated
+    return null;
+  }
   function baseField(el) {
     const kind = kindOf(el);
     const lab = stripLabel(labelFor(el));
@@ -630,7 +824,8 @@
       pattern: el.getAttribute('pattern') || null,
       min: el.getAttribute('min'), max: el.getAttribute('max'), step: el.getAttribute('step'),
       minlength: el.minLength > 0 ? el.minLength : null, maxlength: el.maxLength > 0 ? el.maxLength : null,
-      options: [], value: '', section: null, error: errorText(el), hidden: false,
+      options: [], value: '', section: null, error: errorText(el), hidden: false, grouped: false,
+      format: dateFormat(el),
     };
     const fs = el.closest && el.closest('fieldset');
     if (fs) { const lg = fs.querySelector(':scope > legend'); if (lg) f.section = clean(lg.textContent); }
@@ -670,12 +865,27 @@
     f.label = lab.text;
     f.required = members.some((m) => m.required) || lab.required;
     f.kind = type === 'radio' ? 'radio' : 'multi_select';
+    f.grouped = true;
+    f.format = null;
     f.options = members.map((m) => ({ value: valOf(m), label: labOf(m) || valOf(m), selected: isOn(m), disabled: !!m.disabled || m.getAttribute('aria-disabled') === 'true' }));
     f.value = type === 'radio' ? ((members.find(isOn) && valOf(members.find(isOn))) || '') : members.filter(isOn).map(valOf);
     f.disabled = f.options.every((o) => o.disabled);
     f.error = members.map(errorText).find(Boolean) || null;
     groups.set(f.ref, members);
     return f;
+  }
+  // react-select and friends keep an empty search <input> and show the choice in a sibling "single value"
+  // element. Only looked at when the input itself is empty, and never across another combobox.
+  function shownChoice(el) {
+    let box = el.parentElement;
+    for (let i = 0; i < 4 && box && !box.matches('form,body'); i++, box = box.parentElement) {
+      if (box.querySelectorAll('[role=combobox],input[aria-autocomplete]').length > 1) break;
+      const hits = [...box.querySelectorAll('[class*="single-value" i],[class*="singlevalue" i],[class*="selected-value" i],[class*="selectedvalue" i]')]
+        .filter((n) => !n.contains(el) && !n.querySelector('input') && rendered(n));
+      const t = clean(hits.map(ownText).join(' '));
+      if (t) return t;
+    }
+    return '';
   }
   function buildField(el) {
     const f = baseField(el);
@@ -685,7 +895,7 @@
       const lid = el.getAttribute('aria-controls') || el.getAttribute('aria-owns');
       const lb = lid && byId(el, lid);
       if (lb && rendered(lb)) f.options = [...lb.querySelectorAll('[role=option]')].map((o) => ({ value: o.getAttribute('data-value') || clean(o.textContent), label: clean(o.textContent), selected: o.getAttribute('aria-selected') === 'true', disabled: o.getAttribute('aria-disabled') === 'true' }));
-      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') f.value = el.value;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') f.value = el.value || shownChoice(el);
       else f.value = clean(el.innerText);
     }
     return f;
@@ -694,13 +904,20 @@
   const SUBMIT_RE = /^(submit|send|save|continue|next|finish|finish up|review|apply|register|sign ?up|sign ?in|log ?in|create|pay|confirm|book|place order|complete|done|proceed|get started|subscribe|checkout|search|go)\b/i;
   const NEXT_RE = /\b(next|continue|proceed|review|step)\b/i;
   const NOT_SUBMIT_RE = /\b(back|previous|prev|cancel|reset|clear|close|skip)\b/i;
-  function submitControls(scopeEl, root) {
+  const CHROME_LANDMARK = 'header,nav,[role=banner],[role=navigation],[role=search],[role=menubar]';
+  // `hasForm` is false for the synthetic "page" form made of controls outside any <form>. There a button
+  // does not submit anything by default, so a type-less <button> only counts when its label says so, and
+  // the site's header/navigation/search chrome is never a candidate.
+  function submitControls(scopeEl, root, hasForm) {
     const out = [];
     const cands = deepQueryAll(root || scopeEl, 'button,input[type=submit],input[type=button],input[type=image],[role=button]');
     for (const b of cands) {
       if (!rendered(b)) continue;
+      if (!hasForm && b.closest(CHROME_LANDMARK)) continue;
       const label = nameOf(b);
-      const type = (b.getAttribute('type') || (b.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
+      const declared = (b.getAttribute('type') || '').toLowerCase();
+      const owned = !!(b.form || (b.closest && b.closest('form')));
+      const type = declared || (b.tagName === 'BUTTON' && (hasForm || owned) ? 'submit' : '');
       if (NOT_SUBMIT_RE.test(label) && type !== 'submit') continue;
       if (b.tagName === 'BUTTON' && type === 'reset') continue;
       const isSubmitType = type === 'submit' || type === 'image';
@@ -784,7 +1001,7 @@
         method: formEl ? (formEl.getAttribute('method') || 'get').toLowerCase() : null,
         headings: headingsIn(container && container.querySelectorAll ? container : document.body),
         fields, hidden_fields: hiddenCount,
-        submit: submitControls(scope, submitRoot),
+        submit: submitControls(scope, submitRoot, !!formEl),
         step: stepInfo(container && container.querySelectorAll ? container : document.body),
         errors: pageErrors(container && container.querySelectorAll ? container : document.body).concat(toasts()).filter((t, i, a) => a.indexOf(t) === i).slice(0, 4),
       });
@@ -799,6 +1016,27 @@
       return buildGroup(members, ty);
     }
     return buildField(el);
+  }
+
+  // What the control itself says about the value it now holds (constraint validation), or null when it is fine.
+  // Never fires events and never changes anything.
+  function validity(ref) {
+    const el = elOf(ref);
+    if (!el.validity || el.validity.valid || el.disabled) return null;
+    if (el.tagName === 'INPUT' && ['checkbox', 'radio', 'file'].includes((el.type || '').toLowerCase())) return null;
+    const val = el.value;
+    if (val === '' || val === undefined) return null;
+    const v = el.validity;
+    const min = el.getAttribute('min') || '', max = el.getAttribute('max') || '';
+    if (v.rangeUnderflow || v.rangeOverflow) return `value ${val} is outside the allowed range ${min}..${max}`;
+    if (v.typeMismatch) return `value ${val} is not a valid ${({ email: 'email address', url: 'URL' })[el.type] || el.type}`;
+    if (v.patternMismatch) return `value ${val} does not match the required pattern ${el.getAttribute('pattern')}${el.title ? ' (' + clean(el.title) + ')' : ''}`;
+    if (v.tooLong) return `value is longer than the allowed ${el.maxLength} characters`;
+    if (v.tooShort) return `value is shorter than the required ${el.minLength} characters`;
+    if (v.stepMismatch) return `value ${val} does not fit the step ${el.getAttribute('step') || 1}`;
+    if (v.badInput) return `value ${val} cannot be read as ${el.type}`;
+    if (v.customError) return el.validationMessage || 'value rejected by the page';
+    return el.validationMessage || 'value is not valid';
   }
 
   // ---------------------------------------------------------------- acting on fields
@@ -992,27 +1230,64 @@
   }
 
   // ---------------------------------------------------------------- settle / wait
-  function pendingDeep() {
-    let n = W.fetches + activeTimers.size;
+  // opts (fill mode): { scope: ref of the form/control whose changes matter, bgMs: age at which pending work is
+  // treated as background }. Without opts the behaviour is the plain "everything must be quiet" wait.
+  function pendingDeep(opts) {
+    let n;
+    if (!opts) n = W.fetches + activeTimers.size;
+    else {
+      const now = performance.now(), bg = opts.bgMs || 700;
+      n = 0;
+      for (const e of reqs) if (!isBg(e, now, bg)) n++;
+      for (const e of activeTimers.values()) if (!isBg(e, now, bg)) n++;
+    }
     try {
       for (const f of document.querySelectorAll('iframe')) {
         const w = f.contentWindow;
-        if (w && w.__wm) n += w.__wm.pending();
+        if (w && w.__wm) n += w.__wm.pending(opts);
       }
     } catch { /* cross-origin */ }
     return n;
   }
-  async function settle(maxMs = 3000, quietMs = 150) {
+  const CTRL_SEL = 'input,select,textarea,[role=listbox],[role=option],[role=combobox],[role=menu],[role=dialog],[role=alertdialog]';
+  // Would this DOM change matter to a fill? Anything inside the scope does, as does a rebuild of the scope
+  // itself or a popup (listbox, dialog) appearing; a ticker elsewhere on the page does not.
+  function relevantMutation(m, scope, noisy) {
+    const t = m.target;
+    const inScope = scope.contains(t);
+    if (inScope) {
+      // A node rewriting itself over and over (clock, counter) is chatter, not a response to us.
+      const n = (noisy.get(t) || 0) + 1;
+      noisy.set(t, n);
+      return n <= 6;
+    }
+    if (m.type !== 'childList') return false;
+    const hit = (n) => n.nodeType === 1 && (n.contains(scope) || (n.matches(CTRL_SEL) || n.querySelector(CTRL_SEL)));
+    for (const n of m.removedNodes) if (n.nodeType === 1 && n.contains(scope)) return true;
+    for (const n of m.addedNodes) if (hit(n)) return true;
+    return false;
+  }
+  async function settle(maxMs = 3000, quietMs = 150, opts) {
     const start = performance.now();
-    let last = Math.max(W.lastActivity, start - quietMs + 10);
-    const mo = new MutationObserver(() => { last = performance.now(); });
+    settleStart = start;
+    let last = Math.max(opts ? W.lastRel : W.lastActivity, start - quietMs + 10);
+    let scope = null;
+    if (opts && opts.scope) {
+      const el = refs.get(String(opts.scope).replace(/^@/, ''));
+      if (el && el.isConnected) scope = el;
+    }
+    const noisy = new Map();
+    const mo = new MutationObserver((recs) => {
+      if (!opts || !scope) { last = performance.now(); return; }
+      for (const m of recs) if (relevantMutation(m, scope, noisy)) { last = performance.now(); return; }
+    });
     mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
     try {
       for (;;) {
         const now = performance.now();
-        const quiet = now - Math.max(last, W.lastActivity) >= quietMs;
-        if (document.readyState !== 'loading' && quiet && pendingDeep() === 0) break;
-        if (now - start > maxMs) return { settled: false, waited: Math.round(now - start), pending: pendingDeep() };
+        const quiet = now - Math.max(last, opts ? W.lastRel : W.lastActivity) >= quietMs;
+        if (document.readyState !== 'loading' && quiet && pendingDeep(opts) === 0) break;
+        if (now - start > maxMs) return { settled: false, waited: Math.round(now - start), pending: pendingDeep(opts) };
         await sleep(25);
       }
     } finally { mo.disconnect(); }
@@ -1154,10 +1429,65 @@
     }
     return null;
   }
+  // Visible text that says a submission went through ("Thank you", "has been sent", ...). Compared before
+  // and after a click: new confirmation text is evidence the page accepted the data even when the URL
+  // did not change (XHR forms) or the next page still has inputs (a newsletter box on a thank-you page).
+  const CONFIRM_RE = /\b(thank you|thanks for|successfully|has been (?:sent|submitted|received|saved|created|placed|registered)|was (?:sent|submitted|received|saved|created)|we(?:'ll| will) (?:be in touch|get back|contact)|confirmation (?:number|email|code)|order (?:confirmed|placed|received)|you(?:'re| are) (?:all set|registered|subscribed))\b/i;
+  function confirmations() {
+    const out = [];
+    for (const n of deepQueryAll(document.documentElement, '[role=status],[role=alert],[aria-live],.alert-success,.success,.toast,.notification,[class*=success],[class*=confirm],[class*=thank],h1,h2,h3,h4,p,li')) {
+      if (!rendered(n) || n.querySelector('input,select,textarea,form')) continue;
+      const t = ownText(n);
+      if (!t || t.length > 200 || !CONFIRM_RE.test(t)) continue;
+      // An error that merely contains the word ("could not be sent successfully") is not a confirmation.
+      if (ALERT_WORDS.test(t) && !/\b(thank you|thanks for)\b/i.test(t)) continue;
+      if (!out.includes(t)) out.push(t);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  // Identity of this document: a server round trip that lands on the same URL (a failed login redirecting back
+  // to the login page) is still a new document, which the URL alone cannot show.
+  const DOC_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const PROBLEM_WORDS = /\b(invalid|incorrect|failed|failure|not valid|wrong|denied|unable|error|errors)\b/i;
+  const STRONG_SEL = '[role=alert],[class*=error i],[class*=flash i],[class*=alert i],[class*=danger i],[class*=invalid i],[class*=fail i]';
+  // Error-like messages on the page now. `strong` ones announce themselves (role=alert, an error/flash/danger
+  // class); `weak` ones are only short text that says something went wrong, so a caller should ignore any
+  // that were already there before.
+  function problems() {
+    const strong = [], weak = [];
+    const skipEl = (n) => !rendered(n) || n.matches('script,style,form,input,select,textarea,button,option,label') || n.querySelector('input,select,textarea,button,form');
+    for (const n of document.querySelectorAll(STRONG_SEL)) {
+      if (strong.length >= 4) break;
+      const cls = String(n.className || '');
+      if (/success|info|\bok\b|notice|valid-feedback/i.test(cls) && !n.matches('[role=alert]')) continue;
+      if (skipEl(n)) continue;
+      const t = ownText(n);
+      if (!t || t.length > 200) continue;
+      const loud = n.matches('[role=alert]') || /error|danger|invalid|fail/i.test(cls);
+      if ((loud || PROBLEM_WORDS.test(t)) && !strong.includes(t)) strong.push(t);
+    }
+    // Plain text only answers a submit when it sits with the form (same landmark region) and is not an item in a
+    // list or table: a results page that happens to quote "invalid certificate" is content, not a verdict.
+    const LM = 'main,header,nav,footer,aside,dialog,[role=main],[role=banner],[role=navigation],[role=contentinfo],[role=complementary],[role=dialog]';
+    const regions = [...document.forms].filter((f) => rendered(f)).map((f) => (f.parentElement && f.parentElement.closest(LM)) || document.body);
+    const nearForm = (n) => !n.closest('ul,ol,li,table,dl,[role=list],[role=listitem],[role=row],[role=grid],article') && regions.some((r) => r.contains(n));
+    let seen = 0;
+    for (const n of document.querySelectorAll('p,li,span,div,td,small,strong,b,em,h4,h5,h6')) {
+      if (weak.length >= 4 || ++seen > 4000) break;
+      if (n.childElementCount > 2 || !PROBLEM_WORDS.test(n.textContent || '') || (n.textContent || '').length > 200) continue;
+      if (skipEl(n) || !nearForm(n)) continue;
+      const t = ownText(n);
+      if (t && t.length <= 200 && PROBLEM_WORDS.test(t) && !strong.includes(t) && !weak.includes(t)) weak.push(t);
+    }
+    return { strong, weak };
+  }
 
   window.__wm = {
-    snapshot, forms, field, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
-    settle, textPresent, selectorPresent, challenge,
+    docId: () => DOC_ID, problems,
+    snapshot, forms, field, validity, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
+    settle, textPresent, selectorPresent, challenge, confirmations,
     el: (ref) => elOf(ref),
     pending: pendingDeep,
     version: 1,

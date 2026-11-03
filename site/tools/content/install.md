@@ -15,7 +15,7 @@ Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You n
 ## Verify
 
 ```sh
-ostler doctor        # Chrome launches? Qdrant reachable (if you set one)? prints the fix when not
+ostler doctor        # Chrome launches? Memory report (sealing, key, embeddings, isolation, transport); Qdrant reachable? Prints the fix when not
 ```
 
 `ostler doctor` explains launch failures: sandbox or root problems, a profile already in use, missing libraries, and otherwise how to see Chrome's own error.

@@ -1204,7 +1204,10 @@ async fn footer_collapses_and_expands_by_ref() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/bigfooter.html"))
+        .await
+        .unwrap();
     let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
     assert!(full.text.contains("Link 30"), "{}", full.text);
     let i = b
@@ -1215,7 +1218,11 @@ async fn footer_collapses_and_expands_by_ref() {
         })
         .await
         .unwrap();
-    assert!(i.text.contains("30 links omitted; snapshot ref=e"), "{}", i.text);
+    assert!(
+        i.text.contains("30 links omitted; snapshot ref=e"),
+        "{}",
+        i.text
+    );
     assert!(!i.text.contains("Link 30"), "{}", i.text);
     let r = i
         .text
@@ -1270,7 +1277,10 @@ async fn refs_survive_truncation_and_unknown_ref_is_actionable() {
     let Some((srv, b)) = setup().await else {
         return;
     };
-    b.page().navigate(&srv.url("/bigfooter.html")).await.unwrap();
+    b.page()
+        .navigate(&srv.url("/bigfooter.html"))
+        .await
+        .unwrap();
     let s = b
         .page()
         .snapshot(SnapshotOpts {
@@ -1283,7 +1293,10 @@ async fn refs_survive_truncation_and_unknown_ref_is_actionable() {
     // Past the cut, but numbered in document order (main: heading, Home link = e1; footer links follow).
     b.page().click("e20").await.unwrap();
     let err = b.page().click("e9999").await.unwrap_err().to_string();
-    assert!(err.contains("page changed") && err.contains("snapshot"), "{err}");
+    assert!(
+        err.contains("page changed") && err.contains("snapshot"),
+        "{err}"
+    );
     b.close().await;
 }
 
@@ -1294,7 +1307,10 @@ async fn delta_after_navigating_to_similar_page_is_small() {
     };
     b.page().navigate(&srv.url("/results.html")).await.unwrap();
     let full = b.page().snapshot(SnapshotOpts::default()).await.unwrap();
-    b.page().click("e42").await.unwrap_or_else(|e| panic!("{e}\n{}", full.text));
+    b.page()
+        .click("e42")
+        .await
+        .unwrap_or_else(|e| panic!("{e}\n{}", full.text));
     let d = b
         .page()
         .snapshot(SnapshotOpts {
@@ -1364,7 +1380,10 @@ async fn back_with_no_history_says_so() {
     // The tab started on about:blank, which is not a page to return to.
     let o = b.page().back().await.unwrap();
     assert!(!o.changed, "{o:#?}");
-    assert!(o.notes.iter().any(|n| n.contains("no earlier page")), "{o:#?}");
+    assert!(
+        o.notes.iter().any(|n| n.contains("no earlier page")),
+        "{o:#?}"
+    );
     b.close().await;
 }
 
@@ -1463,5 +1482,745 @@ async fn a_heading_ref_reads_its_section_only() {
     assert!(s.text.contains("Detailed feedforward text"), "{}", s.text);
     assert!(!s.text.contains("History text"), "{}", s.text);
     assert!(!s.text.contains("Intro text"), "{}", s.text);
+    b.close().await;
+}
+
+#[tokio::test]
+async fn on_a_page_without_a_form_only_a_real_action_button_is_a_submit_candidate() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/formless.html")).await.unwrap();
+    let ir = b.page().forms().await.unwrap();
+    assert_eq!(ir.forms.len(), 1, "{ir:#?}");
+    let labels: Vec<&str> = ir.forms[0]
+        .submit
+        .iter()
+        .map(|s| s.label.as_str())
+        .collect();
+    // The header's "Search" button and the type-less "Show tips" button submit nothing.
+    assert_eq!(labels, vec!["Save profile"], "{ir:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn an_in_place_confirmation_after_an_xhr_post_counts_as_submitted() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/xhr_form.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Your name": "Ada", "Your email": "ada@example.com"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    // The URL did not change and the form is still showing, but the page said "has been sent".
+    assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
+    assert!(
+        out.excerpt.iter().any(|l| l.contains("has been sent")),
+        "{:?}",
+        out.excerpt
+    );
+    assert_eq!(srv.last().unwrap()["email"], "ada@example.com");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn an_xhr_form_that_says_nothing_stays_unchanged() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    // Same form, but the page never says anything after the post: we cannot know it worked.
+    b.page()
+        .navigate(&srv.url("/xhr_form.html?quiet=1"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Your name": "Ada", "Your email": "ada@example.com"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::Unchanged, "{out:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_confirmation_page_with_an_optional_input_is_submitted_not_advanced() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/order.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Item": "Horseshoe"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
+    assert!(out.next_form.is_none(), "{out:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_field_error_is_attached_to_its_own_field_not_its_neighbours() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/shared_errors.html"))
+        .await
+        .unwrap();
+    let ir = b.page().forms().await.unwrap();
+    let err = |label: &str| {
+        ir.forms[0]
+            .fields
+            .iter()
+            .find(|f| f.label == label)
+            .unwrap_or_else(|| panic!("no field {label}: {ir:#?}"))
+            .error
+            .clone()
+    };
+    assert_eq!(err("First name"), None, "{ir:#?}");
+    assert_eq!(err("Last name").as_deref(), Some("Last name is required"));
+    // Help text is not an error.
+    assert_eq!(err("Phone"), None, "{ir:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_bare_submit_sends_the_form_that_was_filled_not_the_first_one() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/two_forms.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Item": "Astrolabe"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert!(
+        out.action.url.contains("item=Astrolabe") && !out.action.url.contains("nl="),
+        "sent the wrong form: {}",
+        out.action.url
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn a_bare_submit_with_several_forms_and_nothing_filled_refuses_to_guess() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/two_forms.html"))
+        .await
+        .unwrap();
+    let err = b.page().submit(None, None).await.unwrap_err().to_string();
+    assert!(
+        err.contains("2 forms") && err.contains("pass `form`"),
+        "{err}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn an_http_500_after_submit_is_a_server_error_not_success() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/server_error.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Message": "hello"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::ServerError, "{out:#?}");
+    b.close().await;
+}
+
+// ---------------------------------------------------------------- wave 2: correctness defects from the public-site trial
+
+async fn checked_states(b: &Browser) -> Value {
+    b.page()
+        .eval("[...document.querySelectorAll('input[type=checkbox],input[type=radio]')].map(i=>i.checked)")
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn d2_checkbox_label_is_the_text_after_the_control() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/checks.html")).await.unwrap();
+    let ir = b.page().forms().await.unwrap();
+    let labels: Vec<String> = ir.forms[0].fields.iter().map(|f| f.label.clone()).collect();
+    assert_eq!(labels, vec!["checkbox 1", "checkbox 2"], "{ir:#?}");
+    // box 1 starts unchecked, box 2 checked: ask for the opposite of each.
+    assert_eq!(checked_states(&b).await, json!([false, true]));
+    let rep = b
+        .page()
+        .fill_form(req(json!({"checkbox 1": true, "checkbox 2": false})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.fields.len(), 2, "{rep:#?}");
+    assert!(rep.ok(), "{rep:#?}");
+    assert_eq!(checked_states(&b).await, json!([true, false]), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d5_options_of_a_group_are_addressable() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/choices.html")).await.unwrap();
+    let ir = b.page().forms().await.unwrap();
+    let f = &ir.forms[0].fields;
+    assert_eq!(f[0].label, "Highest level of education", "{ir:#?}");
+    let opts: Vec<&str> = f[0].options.iter().map(|o| o.label.as_str()).collect();
+    assert_eq!(
+        opts,
+        vec!["High school", "College", "Grad school"],
+        "{ir:#?}"
+    );
+    let opts: Vec<&str> = f[1].options.iter().map(|o| o.label.as_str()).collect();
+    assert_eq!(opts, vec!["Email", "Text message", "Post"], "{ir:#?}");
+    // group question + option label
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Highest level of education": "College"})), None)
+        .await
+        .unwrap();
+    assert!(
+        rep.ok() && rep.fields[0].status == FillStatus::Verified,
+        "{rep:#?}"
+    );
+    assert_eq!(
+        checked_states(&b).await,
+        json!([false, true, false, false, false, false, false])
+    );
+    // the option label alone
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Grad school": true})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok() && rep.fields.len() == 1, "{rep:#?}");
+    assert_eq!(
+        checked_states(&b).await,
+        json!([false, false, true, false, false, false, false])
+    );
+    // several checkbox options at once, each kept
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Email": true, "Post": true, "Default checkbox": true})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok() && rep.fields.len() == 3, "{rep:#?}");
+    assert_eq!(
+        checked_states(&b).await,
+        json!([false, false, true, true, false, true, true])
+    );
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Email": false})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    assert_eq!(
+        checked_states(&b).await,
+        json!([false, false, true, false, false, true, true])
+    );
+    // a radio option cannot be unchecked: say so, do not pretend
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Grad school": false})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    // the name attribute still addresses the whole group
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"my-radio": "High school", "my-check": ["Text message", "Post"]})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok() && rep.fields.len() == 2, "{rep:#?}");
+    assert_eq!(
+        checked_states(&b).await,
+        json!([true, false, false, false, true, true, true])
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d4_combobox_widget_reads_back_the_displayed_value() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/react_select.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Select State": "NCR"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.fields.len(), 1, "{rep:#?}");
+    assert_eq!(rep.fields[0].status, FillStatus::Verified, "{rep:#?}");
+    assert_eq!(rep.fields[0].observed, json!("NCR"), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
+    assert_eq!(srv.last().unwrap()["state"], "NCR");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d4_combobox_pick_that_did_not_take_still_fails() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/react_select_broken.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Select State": "NCR"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.fields[0].status, FillStatus::Failed, "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d6_verified_value_that_violates_constraints_carries_a_warning() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/constraints.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Pickup time": "23:00", "Contact email": "nope", "Code": "abc", "Quantity": 42, "Nickname": "x"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rep.fields.len(), 5, "{rep:#?}");
+    assert!(
+        rep.fields.iter().all(|f| f.status == FillStatus::Verified),
+        "{rep:#?}"
+    );
+    let w = |label: &str| {
+        rep.fields
+            .iter()
+            .find(|f| f.label == label)
+            .and_then(|f| f.warning.clone())
+    };
+    let t = w("Pickup time").expect("time warning");
+    assert!(
+        t.contains("23:00")
+            && t.contains("outside the allowed range")
+            && t.contains("11:00..21:00"),
+        "{t}"
+    );
+    assert!(
+        w("Contact email").expect("email").contains("email"),
+        "{rep:#?}"
+    );
+    assert!(w("Code").expect("pattern").contains("pattern"), "{rep:#?}");
+    assert!(w("Quantity").expect("number").contains("1..10"), "{rep:#?}");
+    assert_eq!(w("Nickname"), None, "{rep:#?}");
+    // A valid value carries none.
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Pickup time": "12:30", "Contact email": "a@b.co", "Code": "ABC-123", "Quantity": 3})), None)
+        .await
+        .unwrap();
+    assert!(rep.fields.iter().all(|f| f.warning.is_none()), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d1_text_date_field_gets_its_own_format() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/datefmt.html")).await.unwrap();
+    let ir = b.page().forms().await.unwrap();
+    assert_eq!(
+        ir.forms[0].fields[0].format.as_deref(),
+        Some("mm/dd/yyyy"),
+        "{ir:#?}"
+    );
+    assert_eq!(
+        ir.forms[0].fields[1].format.as_deref(),
+        Some("dd-mm-yyyy"),
+        "{ir:#?}"
+    );
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Departure date": "2026-11-02", "Return date": "2026-11-09"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    assert_eq!(rep.fields[0].observed, json!("11/02/2026"), "{rep:#?}");
+    assert_eq!(rep.fields[1].observed, json!("09-11-2026"), "{rep:#?}");
+    assert!(rep.fields.iter().all(|f| f.warning.is_none()), "{rep:#?}");
+    let out = b.page().submit(None, None).await.unwrap();
+    assert_eq!(out.status, SubmitStatus::Submitted, "{out:#?}");
+    let got = srv.last().unwrap();
+    assert_eq!(got["d"], "11/02/2026");
+    assert_eq!(got["r"], "09-11-2026");
+    // Not a date in any known shape: typed as given, with a warning about the expected format.
+    b.page().navigate(&srv.url("/datefmt.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Departure date": "next tuesday"})), None)
+        .await
+        .unwrap();
+    let w = rep.fields[0].warning.clone().expect("warning");
+    assert!(w.contains("mm/dd/yyyy"), "{w}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d3_bad_login_after_reload_is_always_not_accepted() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    for round in 0..3 {
+        b.page()
+            .navigate(&srv.url("/login_flash.html"))
+            .await
+            .unwrap();
+        let rep = b
+            .page()
+            .fill_form(req(json!({"Username": "bad", "Password": "nope"})), None)
+            .await
+            .unwrap();
+        assert!(rep.ok(), "{rep:#?}");
+        let out = b.page().submit(None, None).await.unwrap();
+        assert_eq!(
+            out.status,
+            SubmitStatus::ValidationFailed,
+            "round {round}: {out:#?}"
+        );
+        assert!(
+            out.page_errors
+                .iter()
+                .any(|e| e.contains("Your username is invalid")),
+            "round {round}: {out:#?}"
+        );
+    }
+    // The same round trip with a plain, unclassed message: still the server's answer, still not accepted.
+    for round in 0..2 {
+        b.page()
+            .navigate(&srv.url("/login_flash.html"))
+            .await
+            .unwrap();
+        b.page()
+            .fill_form(req(json!({"Username": "plain", "Password": "nope"})), None)
+            .await
+            .unwrap();
+        let out = b.page().submit(None, None).await.unwrap();
+        assert_eq!(
+            out.status,
+            SubmitStatus::ValidationFailed,
+            "round {round}: {out:#?}"
+        );
+        assert!(
+            out.page_errors.iter().any(|e| e.contains("incorrect")),
+            "round {round}: {out:#?}"
+        );
+    }
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d8_counts_and_messages_for_unmatched_disabled_and_readonly() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/lockout.html")).await.unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Nonexistent field": "x", "Customer name": "A"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rep.fields.len(), 1, "{rep:#?}");
+    assert_eq!(rep.unmatched.len(), 1, "{rep:#?}");
+    assert_eq!(rep.unmatched[0].key, "Nonexistent field");
+    // a disabled control that matches is named as such
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Account ID": "x"})), None)
+        .await
+        .unwrap();
+    assert!(rep.fields.is_empty(), "{rep:#?}");
+    let u = &rep.unmatched[0];
+    assert!(u.reason.contains("disabled"), "{u:?}");
+    assert!(u.candidates.is_empty(), "{u:?}");
+    // a read-only plain text field: no talk of dates
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Reference": "zzz"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.failed(), 1, "{rep:#?}");
+    let note = rep.fields[0].note.clone().unwrap();
+    assert!(
+        note.contains("read-only") && !note.contains("date"),
+        "{note}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn d8_unlabelled_controls_are_named_by_what_they_are() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/unlabelled.html"))
+        .await
+        .unwrap();
+    let ir = b.page().forms().await.unwrap();
+    let shown: Vec<String> = ir.forms[0].fields.iter().map(|f| f.display()).collect();
+    assert_eq!(
+        shown,
+        vec![
+            "unlabelled checkbox",
+            "unlabelled text",
+            "nick",
+            "Search here"
+        ],
+        "{ir:#?}"
+    );
+    b.close().await;
+}
+
+/// A page with constant unrelated background activity (polling fetch, DOM ticker, recursive timer, animation,
+/// long poll) must not make every settle run to its ceiling.
+#[tokio::test]
+async fn a_busy_page_fills_fast_and_still_verifies() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/chatty.html")).await.unwrap();
+    let calls0 = b.cdp_calls();
+    let t0 = std::time::Instant::now();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"First name": "Ada", "Last name": "Lovelace", "Email": "ada@example.com", "Plan": "Pro"})),
+            None,
+        )
+        .await
+        .unwrap();
+    let wall = t0.elapsed();
+    eprintln!(
+        "CHATTY fill: wall={wall:?} elapsed_ms={} unsettled={} cdp_calls={}",
+        rep.elapsed_ms,
+        rep.unsettled,
+        b.cdp_calls() - calls0
+    );
+    assert_eq!(rep.fields.len(), 4, "{rep:#?}");
+    assert!(
+        rep.fields.iter().all(|f| f.status == FillStatus::Verified),
+        "{rep:#?}"
+    );
+    assert_eq!(rep.unsettled, 0, "{rep:#?}");
+    assert!(
+        wall < Duration::from_millis(2500),
+        "busy-page fill took {wall:?}"
+    );
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_email_key_prefers_the_real_field_over_a_group_option() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/contactpref.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Email": "a@b.co"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    assert!(rep.unmatched.is_empty(), "{rep:#?}");
+    assert_eq!(rep.fields[0].observed, json!("a@b.co"), "{rep:#?}");
+    // The option is still reachable through its group: key = option label alone is taken by the real field,
+    // but the group itself and the qualified option label work.
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Contact preference": "Phone"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_billing_and_shipping_address_keys_use_the_fieldset() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/addresses.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Billing Address": "1 Main St", "shipping address": "9 Side Rd"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok() && rep.unmatched.is_empty(), "{rep:#?}");
+    b.page().submit(None, None).await.ok();
+    // A bare "Address" is still ambiguous.
+    b.page()
+        .navigate(&srv.url("/addresses.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Address": "x"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.unmatched.len(), 1, "{rep:#?}");
+    assert!(rep.unmatched[0].reason.contains("ambiguous"), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_readonly_dmy_datepicker_gets_the_iso_value() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/datepicker_dmy.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Arrival": "2026-03-04"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    assert_eq!(rep.fields[0].status, FillStatus::Verified, "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_assumed_date_format_is_disclosed() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/datepicker_assumed.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Start date": "2026-03-04"})), None)
+        .await
+        .unwrap();
+    let f = &rep.fields[0];
+    assert_eq!(f.observed, json!("03/04/2026"), "{rep:#?}");
+    let w = f.warning.clone().unwrap_or_default();
+    assert!(w.contains("assumed mm/dd/yyyy"), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_bad_years_never_panic_and_are_refused() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/datefmt.html")).await.unwrap();
+    for v in ["March 5, -5", "March 5, 0024x", "March 5, 3024"] {
+        let rep = b
+            .page()
+            .fill_form(req(json!({"Departure date": v})), None)
+            .await
+            .unwrap();
+        assert!(rep.fields[0].warning.is_some(), "{v}: {rep:#?}");
+    }
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Departure date": "March 5, 24"})), None)
+        .await
+        .unwrap();
+    assert_eq!(rep.fields[0].observed, json!("03/05/2024"), "{rep:#?}");
+    b.close().await;
+}
+
+#[tokio::test]
+async fn w4_last_form_does_not_survive_navigation() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page()
+        .navigate(&srv.url("/two_forms.html"))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(req(json!({"Item": "Astrolabe"})), None)
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.page()
+        .navigate(&srv.url("/two_forms.html?again=1"))
+        .await
+        .unwrap();
+    let err = b.page().submit(None, None).await.unwrap_err().to_string();
+    assert!(err.contains("none was filled"), "{err}");
     b.close().await;
 }

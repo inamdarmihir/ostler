@@ -1,0 +1,21 @@
+<!doctype html><meta charset=utf-8><title>Recheck</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}.error{color:#b00020;font-size:13px}</style>
+<h1>Codes</h1>
+<form id="f" novalidate>
+  <label for="c1">Code one</label><input id="c1" name="c1"><div class="error" id="c1-err"></div>
+  <label for="c2">Code two</label><input id="c2" name="c2"><div class="error" id="c2-err"></div>
+  <label for="c3">Code three</label><input id="c3" name="c3"><div class="error" id="c3-err"></div>
+  <label for="c4">Code four</label><input id="c4" name="c4"><div class="error" id="c4-err"></div>
+  <label for="c5">Code five</label><input id="c5" name="c5"><div class="error" id="c5-err"></div>
+  <button type="submit">Save</button>
+</form>
+<script>
+// Every field fires the very same GET (400 ms server side); the verdict shows 1 s after the reply.
+for (const el of document.querySelectorAll('input')) {
+  el.addEventListener('change', () => {
+    fetch('/api/check').then(r => r.text()).then(() => setTimeout(() => {
+      document.getElementById(el.id + '-err').textContent = el.value === 'bad' ? 'That value is not allowed' : '';
+    }, 1000));
+  });
+}
+document.getElementById('f').addEventListener('submit', e => e.preventDefault());
+</script>

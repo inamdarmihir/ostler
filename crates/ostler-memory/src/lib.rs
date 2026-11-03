@@ -25,11 +25,15 @@
 
 mod embed;
 mod qdrant;
+mod sealed;
 mod store;
+mod token;
 
-pub use embed::{Embedder, HashEmbedder};
+pub use embed::{Embedder, HashEmbedder, OllamaEmbedder};
 pub use qdrant::{QdrantConfig, QdrantStore, VectorSource};
+pub use sealed::{probe_key, seal_legacy, KeyProbe, SealKey, SealReport, SealedStore};
 pub use store::{Filter, Hit, InMemoryStore, Kind, Rank, Store};
+pub use token::{mint_tenant_token, tenant_prefix};
 
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -48,6 +52,8 @@ pub enum MemoryError {
     Invalid(String),
     #[error("embedding failed: {0}")]
     Embed(String),
+    #[error("qdrant is unavailable (recent failures: {0}); memory is skipped until it recovers")]
+    Unavailable(String),
 }
 
 pub type Result<T> = std::result::Result<T, MemoryError>;
@@ -60,12 +66,66 @@ fn now() -> u64 {
 }
 
 /// Stable point id from arbitrary parts, so re-saving the same thing is an upsert.
+///
+/// Parts are joined with U+001F. If a part itself contains that character the join is ambiguous
+/// (`["a\x1fb", "c"]` and `["a", "b\x1fc"]` would collide, which across tenants means one tenant overwriting
+/// another's point), so such input is length-prefixed instead. Ordinary input keeps the original encoding,
+/// so ids already stored stay valid.
 fn point_id(parts: &[&str]) -> String {
-    Uuid::new_v5(&Uuid::NAMESPACE_OID, parts.join("\u{1f}").as_bytes()).to_string()
+    let joined = if parts.iter().any(|p| p.contains('\u{1f}')) {
+        parts
+            .iter()
+            .map(|p| format!("{}:{p}", p.len()))
+            .collect::<Vec<_>>()
+            .join("\u{1e}")
+    } else {
+        parts.join("\u{1f}")
+    };
+    Uuid::new_v5(&Uuid::NAMESPACE_OID, joined.as_bytes()).to_string()
+}
+
+/// Every point matching `filter`, however many there are. A plain `scroll` silently stops at its limit, which
+/// for `prune` or a key probe means "everything" quietly becomes "the first page".
+pub(crate) async fn scroll_all(store: &dyn Store, kind: Kind, filter: &Filter) -> Result<Vec<Hit>> {
+    const START: usize = 10_000;
+    const MAX: usize = 4_000_000;
+    let mut limit = START;
+    loop {
+        let hits = store.scroll(kind, filter, limit).await?;
+        if hits.len() < limit {
+            return Ok(hits);
+        }
+        if limit >= MAX {
+            return Err(MemoryError::Invalid(format!(
+                "more than {MAX} points in {}: refusing to act on a partial view",
+                kind.collection()
+            )));
+        }
+        limit = (limit * 4).min(MAX);
+    }
+}
+
+/// Read-modify-write on one point (episode counters, playbook wins and losses) must not interleave with
+/// another in the same process, or both read the same count and one increment is lost. Striped by id so
+/// unrelated points rarely wait for each other. Other processes sharing a server are not covered: counters
+/// are exact within a process and best-effort across them.
+fn stripe(id: &str) -> &'static tokio::sync::Mutex<()> {
+    use std::sync::OnceLock;
+    const N: usize = 64;
+    static LOCKS: OnceLock<Vec<tokio::sync::Mutex<()>>> = OnceLock::new();
+    let locks = LOCKS.get_or_init(|| (0..N).map(|_| tokio::sync::Mutex::new(())).collect());
+    let h = id.bytes().fold(0xcbf29ce484222325u64, |h, b| {
+        (h ^ b as u64).wrapping_mul(0x100000001b3)
+    });
+    &locks[(h % N as u64) as usize]
 }
 
 /// Keys/values we refuse to persist or auto-fill.
 pub fn looks_sensitive(key: &str, value: &str) -> bool {
+    key_looks_sensitive(key) || contains_card_number(value)
+}
+
+fn key_looks_sensitive(key: &str) -> bool {
     let k = key.to_lowercase();
     const KEYS: &[&str] = &[
         "password",
@@ -86,15 +146,198 @@ pub fn looks_sensitive(key: &str, value: &str) -> bool {
         "account_number",
         "private_key",
     ];
-    if KEYS.iter().any(|m| k.contains(m)) {
-        return true;
+    KEYS.iter().any(|m| k.contains(m))
+}
+
+/// Like [`looks_sensitive`] for a JSON value: every nested key and every string or number inside it is checked,
+/// so a card number cannot get in by being wrapped in an object or array.
+fn value_looks_sensitive(v: &Value) -> bool {
+    match v {
+        Value::String(s) => contains_card_number(s),
+        Value::Number(n) => contains_card_number(&n.to_string()),
+        Value::Array(a) => a.iter().any(value_looks_sensitive),
+        Value::Object(o) => o
+            .iter()
+            .any(|(k, v)| key_looks_sensitive(k) || value_looks_sensitive(v)),
+        _ => false,
     }
-    // 13-19 digit runs (card numbers), allowing spaces/dashes.
-    let digits: String = value
-        .chars()
-        .filter(|c| !c.is_whitespace() && *c != '-')
-        .collect();
-    digits.len() >= 13 && digits.len() <= 19 && digits.chars().all(|c| c.is_ascii_digit())
+}
+
+/// A 13-19 digit number in any script, written plainly or grouped by spaces, dashes, dots or underscores.
+/// A value that is nothing but such a number is refused outright; inside longer text it must also pass the
+/// Luhn check, so "order 1234567890123" is not mistaken for a card but "my card is 4111 1111 1111 1111" is.
+fn contains_card_number(s: &str) -> bool {
+    let chars: Vec<char> = s.chars().filter(|c| !invisible(*c)).collect();
+    let whole = !chars.iter().any(|c| c.is_alphabetic());
+    // A run is digits with any punctuation or spaces in between ("4111 - 1111,1111/1111"); letters end it.
+    let mut run: Vec<u32> = vec![];
+    for c in chars.iter().copied().chain(std::iter::once('a')) {
+        if c.is_numeric() {
+            run.push(c.to_digit(10).unwrap_or(0));
+        } else if c.is_alphabetic() {
+            // A value that is nothing but digits and punctuation is refused when it holds a card-length
+            // run, whatever its checksum (this also catches two cards, or 23 digits, written together).
+            if run.len() >= 13 && whole {
+                return true;
+            }
+            // Inside longer text a window must also pass Luhn, so "order 1234567890123" is not a card.
+            for len in 13..=19usize.min(run.len()) {
+                if run.windows(len).any(luhn) {
+                    return true;
+                }
+            }
+            run.clear();
+        }
+    }
+    false
+}
+
+fn luhn(digits: &[u32]) -> bool {
+    let sum: u32 = digits
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(i, d)| {
+            if i % 2 == 1 {
+                let x = d * 2;
+                if x > 9 {
+                    x - 9
+                } else {
+                    x
+                }
+            } else {
+                *d
+            }
+        })
+        .sum();
+    matches!(sum % 10, 0)
+}
+
+/// Mask personal data a page may echo back in an error message ("ada@x.com is not valid").
+/// Defence in depth: callers already scrub the values they typed, but this runs for every episode
+/// before it is embedded (cloud inference) or stored, so no caller can leak by forgetting.
+/// Masks email addresses, runs of 4+ digits (phones, ZIP/PIN codes, card and ID numbers) and URL queries.
+pub fn redact_detail(s: &str) -> String {
+    // Masking a number can swallow the whitespace between two words (`98765 -43210`), which changes how the
+    // next pass tokenises. Run to a fixed point so that redacting twice is always the same as once.
+    let mut cur = redact_once(s);
+    for _ in 0..8 {
+        let next = redact_once(&cur);
+        if next == cur {
+            break;
+        }
+        cur = next;
+    }
+    cur
+}
+
+fn redact_once(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        if word.is_empty() {
+            return;
+        }
+        let w = word.as_str();
+        // A query string or fragment on anything URL-shaped (with or without a scheme) can carry tokens.
+        let urlish = w.contains("://") || w.contains('.') || w.contains('/');
+        let cut = if urlish { w.find(['?', '#']) } else { None }.filter(|i| *i > 0);
+        // Judge the email check on what survives the cut, so `ada@x.com?utm=1` is still an email while
+        // an address that only appears inside a dropped query is simply dropped with it.
+        // Our own `?[query]` marker is not page text: ignoring it keeps a second pass identical to the first.
+        let head = cut.map_or_else(|| w.strip_suffix("?[query]").unwrap_or(w), |i| &w[..i]);
+        if email_like(head) {
+            out.push_str("[email]");
+        } else if let Some(i) = cut {
+            out.push_str(&w[..i]);
+            out.push_str("?[query]");
+        } else {
+            out.push_str(w);
+        }
+        word.clear();
+    };
+    for c in s.chars() {
+        if c.is_whitespace() {
+            flush(&mut word, &mut out);
+            out.push(c);
+        } else {
+            word.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    mask_digit_runs(&out)
+}
+
+/// `@`, its fullwidth form and the small-commercial-at: all read as an address separator.
+fn is_at(c: char) -> bool {
+    matches!(c, '@' | '\u{ff20}' | '\u{fe6b}')
+}
+
+/// Any `@` that is not the first character and has something alphanumeric after it. Looks at every
+/// `@`, so a leading one (`@ada@x.com`) cannot hide a later one.
+fn email_like(w: &str) -> bool {
+    w.char_indices()
+        .any(|(i, c)| is_at(c) && i > 0 && w[i + c.len_utf8()..].chars().any(char::is_alphanumeric))
+}
+
+/// Characters that render as nothing (zero-width, bidi controls, soft hyphen, variation selectors,
+/// combining marks). They must not be usable to cut a number in two.
+fn invisible(c: char) -> bool {
+    matches!(c,
+        '\u{ad}' | '\u{34f}' | '\u{300}'..='\u{36f}' | '\u{61c}' | '\u{180e}'
+        | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2064}'
+        | '\u{2066}'..='\u{2069}' | '\u{fe00}'..='\u{fe0f}' | '\u{feff}')
+}
+
+/// Replace runs of 4+ digits (any script) with `[number]`. A run may span one or two separator characters
+/// between digits, so phone numbers, dates and grouped card numbers are caught: `(555) 123-4567`, `12/05/1990`.
+/// Invisible characters inside a run are transparent.
+fn mask_digit_runs(s: &str) -> String {
+    const SEP: &[char] = &[' ', '-', '.', '/', '(', ')'];
+    let chars: Vec<char> = s.chars().collect();
+    let mut res = String::with_capacity(chars.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_numeric() {
+            res.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        let (mut j, mut digits, mut end) = (i, 0, i);
+        loop {
+            while j < chars.len() && (chars[j].is_numeric() || invisible(chars[j])) {
+                if chars[j].is_numeric() {
+                    digits += 1;
+                    end = j + 1;
+                }
+                j += 1;
+            }
+            // Look past up to two separators (and any invisibles) for another digit.
+            let (mut k, mut seps) = (j, 0);
+            while k < chars.len() {
+                if invisible(chars[k]) {
+                    k += 1;
+                } else if seps < 2 && SEP.contains(&chars[k]) {
+                    seps += 1;
+                    k += 1;
+                } else {
+                    break;
+                }
+            }
+            if k > j && k < chars.len() && chars[k].is_numeric() {
+                j = k;
+            } else {
+                break;
+            }
+        }
+        if digits >= 4 {
+            res.push_str("[number]");
+        } else {
+            res.extend(&chars[i..end]);
+        }
+        i = end;
+    }
+    res
 }
 
 /// Conventional `autocomplete` tokens for common profile keys.
@@ -293,12 +536,27 @@ fn mentions_other_person(label_norm: &str) -> bool {
     OTHERS.iter().any(|w| label_norm.contains(w))
 }
 
+/// Combining marks. They belong to the letter before them, so they must not split a word: `cafe` + U+0301 is
+/// a different word from `cafe`, not the same one.
+fn combining(c: char) -> bool {
+    matches!(c, '\u{300}'..='\u{36f}' | '\u{1ab0}'..='\u{1aff}' | '\u{1dc0}'..='\u{1dff}'
+        | '\u{20d0}'..='\u{20ff}' | '\u{fe20}'..='\u{fe2f}')
+}
+
+/// Lower-cased words of `s`, single-spaced: "Work-Email", "work_email" and " WORK  email " are one key. A
+/// string with no letters or digits at all ("😀", "***") would normalise to nothing and every such key would
+/// collapse into one, so it keeps its own (lower-cased, trimmed) text behind a `~`, which a real word never has.
 fn norm(s: &str) -> String {
-    s.to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
+    let words = s
+        .to_lowercase()
+        .split(|c: char| !(c.is_alphanumeric() || combining(c)))
         .filter(|t| !t.is_empty())
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    if words.is_empty() && !s.trim().is_empty() {
+        return format!("~{}", s.trim().to_lowercase());
+    }
+    words
 }
 
 /// High-level memory API for one tenant.
@@ -320,6 +578,12 @@ impl Memory {
         self.store.ensure().await
     }
 
+    /// `Some(reason)` while the store is failing and lookups are being skipped, so callers can tell
+    /// the user memory is off instead of silently returning nothing.
+    pub fn degraded(&self) -> Option<String> {
+        self.store.degraded()
+    }
+
     // ---------------------------------------------------------------- profile
 
     pub async fn remember(
@@ -338,15 +602,36 @@ impl Memory {
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        if looks_sensitive(key, &text_value) {
+        if looks_sensitive(key, &text_value) || value_looks_sensitive(&value) {
             return Err(MemoryError::Invalid(format!(
                 "{key:?} looks like a secret (password, card, token…). Ostler never stores those."
             )));
         }
+        let _guard = stripe(&self.fact_id(key)).lock().await;
+        self.put_fact(key, value, description, autocomplete, source, None)
+            .await
+    }
+
+    fn fact_id(&self, key: &str) -> String {
+        point_id(&[&self.tenant, "profile", &norm(key)])
+    }
+
+    /// Store a fact without the secret check. `remember` is the checked entry point; the sealing
+    /// migration uses this to carry over facts saved before a rule existed (a key like "shipping address"
+    /// once tripped the "pin" rule) and keeps their original `updated_at`.
+    pub(crate) async fn put_fact(
+        &self,
+        key: &str,
+        value: Value,
+        description: Option<&str>,
+        autocomplete: Option<&str>,
+        source: &str,
+        updated_at: Option<u64>,
+    ) -> Result<Fact> {
         let ac = autocomplete
             .map(String::from)
             .or_else(|| default_autocomplete(key).map(String::from));
-        let updated_at = now();
+        let updated_at = updated_at.unwrap_or_else(now);
         let embed_text = format!(
             "{}{}{}",
             key.replace('_', " "),
@@ -358,7 +643,7 @@ impl Memory {
         self.store
             .upsert(
                 Kind::Profile,
-                &point_id(&[&self.tenant, "profile", &norm(key)]),
+                &self.fact_id(key),
                 &embed_text,
                 json!({
                     "tenant": self.tenant, "key": key, "key_norm": norm(key), "value": value,
@@ -402,12 +687,7 @@ impl Memory {
 
     pub async fn forget(&self, key: &str) -> Result<bool> {
         let existed = self.fact(key).await?.is_some();
-        self.store
-            .delete(
-                Kind::Profile,
-                &point_id(&[&self.tenant, "profile", &norm(key)]),
-            )
-            .await?;
+        self.store.delete(Kind::Profile, &self.fact_id(key)).await?;
         Ok(existed)
     }
 
@@ -476,6 +756,7 @@ impl Memory {
         accepted: bool,
         learned_from: Option<&str>,
     ) -> Result<Playbook> {
+        let _guard = stripe(&self.playbook_id(fingerprint)).lock().await;
         let prior = self.playbook(fingerprint).await?;
         let mut fields = prior.as_ref().map(|p| p.fields.clone()).unwrap_or_default();
         for o in outcomes {
@@ -542,13 +823,17 @@ impl Memory {
         Ok(pb)
     }
 
+    fn playbook_id(&self, fingerprint: &str) -> String {
+        point_id(&[&self.tenant, "playbook", fingerprint])
+    }
+
     async fn save_playbook(&self, pb: &Playbook) -> Result<()> {
         let labels: Vec<&str> = pb.fields.iter().map(|f| f.label.as_str()).collect();
         let labels_norm: Vec<String> = pb.fields.iter().map(|f| norm(&f.label)).collect();
         self.store
             .upsert(
                 Kind::Playbook,
-                &point_id(&[&self.tenant, "playbook", &pb.fingerprint]),
+                &self.playbook_id(&pb.fingerprint),
                 &structure_text(&pb.host, &pb.headings, &labels),
                 json!({
                     "tenant": self.tenant, "host": pb.host, "fingerprint": pb.fingerprint,
@@ -576,7 +861,7 @@ impl Memory {
                 Kind::Playbook,
                 &structure_text(host, headings, labels),
                 &Filter::tenant(&self.tenant).and("host", json!(host)),
-                limit + 1,
+                limit.saturating_add(1),
                 &rank(0.5),
             )
             .await?;
@@ -615,7 +900,7 @@ impl Memory {
         let cutoff = now().saturating_sub(max_age_secs) as f64;
         let stale = Filter::tenant(&self.tenant).below("verified_ts", cutoff);
         let mut n = 0;
-        for h in self.store.scroll(Kind::Playbook, &stale, 10_000).await? {
+        for h in scroll_all(self.store.as_ref(), Kind::Playbook, &stale).await? {
             let (w, l) = (
                 h.payload["wins"].as_u64().unwrap_or(0),
                 h.payload["losses"].as_u64().unwrap_or(0),
@@ -640,6 +925,7 @@ impl Memory {
         problem: &str,
         detail: &str,
     ) -> Result<()> {
+        let detail = &redact_detail(detail);
         let id = point_id(&[
             &self.tenant,
             "episode",
@@ -648,6 +934,7 @@ impl Memory {
             problem,
             detail,
         ]);
+        let _guard = stripe(&id).lock().await;
         let prior = self
             .store
             .scroll(
@@ -695,12 +982,27 @@ impl Memory {
     /// Save a value observed on a page. Unlike [`Memory::remember`] this never replaces a fact the
     /// user supplied: page labels are chosen by the page ("Email" on a refer-a-friend form), not by the user.
     pub async fn learn(&self, key: &str, value: Value) -> Result<Option<Fact>> {
+        // Check-then-write under the fact's lock, or a `remember` landing in between would be overwritten.
+        let _guard = stripe(&self.fact_id(key.trim())).lock().await;
         if let Some(existing) = self.fact(key).await? {
             if existing.source != "learned" {
                 return Ok(None);
             }
         }
-        self.remember(key, value, None, None, "learned")
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(MemoryError::Invalid("key must not be empty".into()));
+        }
+        let text_value = match &value {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        if looks_sensitive(key, &text_value) || value_looks_sensitive(&value) {
+            return Err(MemoryError::Invalid(format!(
+                "{key:?} looks like a secret (password, card, token…). Ostler never stores those."
+            )));
+        }
+        self.put_fact(key, value, None, None, "learned", None)
             .await
             .map(Some)
     }
@@ -1302,5 +1604,68 @@ mod learning_tests {
         assert_eq!(q["prefetch"]["score_threshold"], json!(0.0));
         assert_eq!(q["query"]["formula"]["sum"][0], json!("$score"));
         assert_eq!(q["limit"], json!(3));
+    }
+}
+
+#[cfg(test)]
+mod redact_tests {
+    use super::redact_detail as r;
+
+    #[test]
+    fn masks_emails_numbers_and_queries_but_keeps_the_message() {
+        assert_eq!(
+            r("ada@example.com is not a valid email"),
+            "[email] is not a valid email"
+        );
+        assert_eq!(
+            r("Phone 98765 43210 is invalid"),
+            "Phone [number] is invalid"
+        );
+        assert_eq!(
+            r("ZIP 411029 must be 5 digits"),
+            "ZIP [number] must be 5 digits"
+        );
+        assert_eq!(
+            r("Card 4111-1111-1111-1111 rejected"),
+            "Card [number] rejected"
+        );
+        assert_eq!(
+            r("see https://x.test/f?id=7&e=a@b.co"),
+            "see https://x.test/f?[query]"
+        );
+        assert_eq!(
+            r("Age must be between 18 and 120"),
+            "Age must be between 18 and 120"
+        );
+    }
+}
+
+#[cfg(test)]
+mod card_tests {
+    use super::looks_sensitive as s;
+
+    #[test]
+    fn card_numbers_are_caught_through_odd_separators_and_not_in_ordinary_text() {
+        for v in [
+            "4111111111111111",
+            "4111 1111 1111 1111",
+            "4111 - 1111 - 1111 - 1111",
+            "4111,1111,1111,1111",
+            "4111/1111/1111/1111",
+            "4111 1111 1111 1111 4111 1111 1111 1111",
+            "my card is 4111 1111 1111 1111 ok",
+            "id=4111-1111-1111-1111",
+        ] {
+            assert!(s("note", v), "should be refused: {v}");
+        }
+        for v in [
+            "order 1234567890123 shipped",
+            "call 555 123 4567",
+            "ada@example.com",
+            "Pune 411029",
+            "2026-11-02",
+        ] {
+            assert!(!s("note", v), "should be allowed: {v}");
+        }
     }
 }

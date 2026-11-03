@@ -50,9 +50,197 @@ struct Shared {
     /// `--require-confirm-submit`: block every non-GET request unless a confirmed `form_submit` is running.
     gate: AtomicBool,
     armed: AtomicBool,
+    /// A popup opened by a confirmed submit's click: its first request may carry the confirmation (once).
+    inherit_armed: AtomicBool,
+    /// Things that went wrong with our own bookkeeping (lost events, a frame that could not be secured),
+    /// reported with the next action's warnings.
+    notices: Mutex<Vec<String>>,
     blocked: Mutex<Vec<String>>,
     /// Latest main-frame document response (status, content type): redirects overwrite, so the final one wins.
     doc: Mutex<Option<(u16, String)>>,
+    /// Sessions of cross-site iframes and workers attached to this page, kept so the gate reaches them too.
+    children: Mutex<Vec<Session>>,
+}
+
+/// Pause new related targets (cross-site iframes, workers) until interception is set up on them.
+static AUTO_ATTACH: std::sync::LazyLock<Value> = std::sync::LazyLock::new(
+    || json!({ "autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true }),
+);
+
+/// What interception must see: everything under an allowlist or the private-network block (whatever the
+/// request type: an <img src>, a stylesheet or a font carries data out exactly as well as fetch() does, and a
+/// public URL can redirect inward); only requests that can have a body under the submit gate; else nothing.
+fn fetch_patterns(policy: &Policy, gate: bool) -> Option<Vec<Value>> {
+    if policy.restricts() || policy.block_private_networks {
+        Some(vec![
+            json!({ "urlPattern": "*", "requestStage": "Request" }),
+        ])
+    } else if gate {
+        Some(
+            ["Document", "XHR", "Fetch", "Ping", "EventSource", "Other"]
+                .iter()
+                .map(|t| json!({ "urlPattern": "*", "resourceType": t, "requestStage": "Request" }))
+                .collect(),
+        )
+    } else {
+        None
+    }
+}
+
+/// Decide a paused request. Runs as its own task: never let a slow reply (or a DNS lookup) stall an event loop.
+fn spawn_verdict(params: &Value, sess: Session, policy: Arc<Policy>, shared: Arc<Shared>) {
+    let id = params["requestId"].clone();
+    let url = params["request"]["url"].as_str().unwrap_or("").to_string();
+    let method = params["request"]["method"]
+        .as_str()
+        .unwrap_or("GET")
+        .to_uppercase();
+    let is_doc = params["resourceType"].as_str() == Some("Document");
+    tokio::spawn(async move {
+        let mut verdict = policy.check_resolved(&url).await;
+        // A popup spawned by the click of a confirmed submit carries that confirmation for its first request.
+        let inherited = shared.inherit_armed.swap(false, Ordering::SeqCst);
+        if verdict.is_ok()
+            && shared.gate.load(Ordering::SeqCst)
+            && !shared.armed.load(Ordering::SeqCst)
+            && !inherited
+            && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
+        {
+            shared
+                .blocked
+                .lock()
+                .unwrap()
+                .push(format!("{method} {url}"));
+            verdict = Err("blocked by --require-confirm-submit".into());
+        }
+        let _ = match (verdict, is_doc) {
+            (Ok(()), _) => {
+                sess.call("Fetch.continueRequest", json!({ "requestId": id }))
+                    .await
+            }
+            // A blocked navigation answered with "204 No Content" leaves the current page in
+            // place; failing it would replace the page with a browser error screen.
+            (Err(_), true) => {
+                sess.call(
+                    "Fetch.fulfillRequest",
+                    json!({ "requestId": id, "responseCode": 204, "responseHeaders": [] }),
+                )
+                .await
+            }
+            (Err(_), false) => {
+                sess.call(
+                    "Fetch.failRequest",
+                    json!({ "requestId": id, "errorReason": "BlockedByClient" }),
+                )
+                .await
+            }
+        };
+    });
+}
+
+/// Take over a session Chrome attached to (a child of a page): intercept first, then let it run.
+fn spawn_child(
+    conn: &Arc<ostler_cdp::Connection>,
+    params: &Value,
+    shared: Arc<Shared>,
+    policy: Arc<Policy>,
+) {
+    let (Some(sid), Some(tid)) = (
+        params["sessionId"].as_str(),
+        params["targetInfo"]["targetId"].as_str(),
+    ) else {
+        return;
+    };
+    let kind = params["targetInfo"]["type"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let waiting = params["waitingForDebugger"].as_bool().unwrap_or(false);
+    let child = Session::from_attached(conn.clone(), sid.to_string(), tid.to_string());
+    let mut rx = conn.subscribe();
+    let conn = conn.clone();
+    shared.children.lock().unwrap().push(child.clone());
+    tokio::spawn(async move {
+        let sid = child.session_id().to_string();
+        let ready = async {
+            if let Some(p) = fetch_patterns(&policy, shared.gate.load(Ordering::SeqCst)) {
+                child.call("Fetch.enable", json!({ "patterns": p })).await?;
+            }
+            child
+                .call("Target.setAutoAttach", AUTO_ATTACH.clone())
+                .await
+        };
+        // If interception cannot be set up on a frame or worker, never let it run unchecked: it stays
+        // paused (our session keeps it so) and is closed if the browser lets us.
+        if ready.await.is_ok() {
+            if waiting {
+                let _ = child
+                    .call("Runtime.runIfWaitingForDebugger", json!({}))
+                    .await;
+            }
+        } else {
+            shared.notices.lock().unwrap().push(format!(
+                "a {kind} could not be put under the request policy, so it was left paused"
+            ));
+            let _ = conn
+                .call(
+                    "Target.closeTarget",
+                    json!({ "targetId": child.target_id }),
+                    None,
+                    ostler_cdp::DEFAULT_TIMEOUT,
+                )
+                .await;
+        }
+        // A probe that finds the session gone ends the loop (a lost detach event would never).
+        let gone = Arc::new(tokio::sync::Notify::new());
+        loop {
+            let ev = tokio::select! {
+                ev = rx.recv() => match ev {
+                    Ok(ev) => ev,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        // Dropped events cannot be replayed: a request whose `Fetch.requestPaused` was lost
+                        // stays paused (fail closed, but hangs), and a lost attach leaves a frame paused.
+                        shared.notices.lock().unwrap().push(format!(
+                            "{n} browser events were lost; a request or frame may stay stuck until the next navigation"
+                        ));
+                        let (c, g) = (child.clone(), gone.clone());
+                        tokio::spawn(async move {
+                            if let Err(ostler_cdp::CdpError::Protocol { .. }) =
+                                c.call("Target.setAutoAttach", AUTO_ATTACH.clone()).await
+                            {
+                                g.notify_one();
+                            }
+                        });
+                        continue;
+                    }
+                    Err(_) => break,
+                },
+                _ = gone.notified() => break,
+            };
+            if ev.method == "Target.detachedFromTarget"
+                && ev.params["sessionId"].as_str() == Some(&sid)
+            {
+                break;
+            }
+            if ev.session_id.as_deref() != Some(&sid) {
+                continue;
+            }
+            match ev.method.as_str() {
+                "Fetch.requestPaused" => {
+                    spawn_verdict(&ev.params, child.clone(), policy.clone(), shared.clone())
+                }
+                "Target.attachedToTarget" => {
+                    spawn_child(&conn, &ev.params, shared.clone(), policy.clone())
+                }
+                _ => {}
+            }
+        }
+        shared
+            .children
+            .lock()
+            .unwrap()
+            .retain(|c| c.session_id() != sid);
+    });
 }
 
 #[derive(Default)]
@@ -61,6 +249,9 @@ pub(crate) struct PageState {
     prev_url: String,
     /// Fields filled and verified since the last submit: (ref, label, value). Re-read before submitting.
     pub(crate) filled: Vec<(String, String, String)>,
+    /// Ref of the form the last `fill_form` worked on, so a bare `form_submit` sends that form and not
+    /// whichever form comes first on the page (a header newsletter box, a search form).
+    pub(crate) last_form: Option<String>,
 }
 
 #[derive(Clone)]
@@ -193,44 +384,70 @@ impl Page {
     }
 
     pub async fn attach(session: Session, policy: Policy) -> Result<Self> {
+        Self::attach_inner(session, policy, false, false, false).await
+    }
+
+    /// Attach to a target Chrome is holding at start (`waitForDebuggerOnStart`) and release it only once
+    /// interception is on, so the target's very first request is already subject to the policy and the gate.
+    /// `inherit_armed`: the popup was opened by the click of a confirmed submit, so its first request may
+    /// carry that confirmation.
+    pub(crate) async fn attach_held(
+        session: Session,
+        policy: Policy,
+        gate: bool,
+        inherit_armed: bool,
+    ) -> Result<Self> {
+        Self::attach_inner(session, policy, true, gate, inherit_armed).await
+    }
+
+    async fn attach_inner(
+        session: Session,
+        policy: Policy,
+        held: bool,
+        gate: bool,
+        inherit_armed: bool,
+    ) -> Result<Self> {
         let page = Self {
             session,
             shared: Arc::default(),
             state: Arc::default(),
             policy: Arc::new(policy),
         };
+        page.shared.gate.store(gate, Ordering::SeqCst);
+        page.shared
+            .inherit_armed
+            .store(inherit_armed, Ordering::SeqCst);
         let s = &page.session;
-        s.call("Page.enable", json!({})).await?;
-        s.call("Runtime.enable", json!({})).await?;
-        s.call("DOM.enable", json!({})).await?;
-        // Headless Chrome otherwise reports the page as unfocused, which suppresses focus/blur/change events.
-        s.call(
-            "Emulation.setFocusEmulationEnabled",
-            json!({ "enabled": true }),
-        )
-        .await?;
-        s.call(
-            "Page.addScriptToEvaluateOnNewDocument",
-            json!({ "source": RUNTIME_JS, "runImmediately": true }),
-        )
-        .await?;
-        let tree = s.call("Page.getFrameTree", json!({})).await?;
-        *page.shared.main_frame.lock().unwrap() =
-            tree["frameTree"]["frame"]["id"].as_str().map(String::from);
-
+        // Subscribe before anything can attach, so no event is missed.
+        let mut events = s.events();
         // With an allowlist, hold every navigation and every script-initiated request that could carry data
         // out, and let only allowed ones proceed. Without this, a form action, redirect or fetch() reaches the
         // forbidden origin (cookies and body included) before any after-the-fact check could notice.
         page.sync_fetch().await?;
-
-        // Main-document HTTP status comes from the network layer; the page itself never shows it.
-        s.call("Network.enable", json!({})).await?;
-        let mut events = s.events();
+        let conn = s.connection().clone();
         let shared = page.shared.clone();
         let sess = s.clone();
         let fetch_policy = page.policy.clone();
         tokio::spawn(async move {
             while let Some(ev) = events.next().await {
+                // The target is gone: nothing more will come, so the task (and its subscription) ends.
+                if ev.method == "Target.detachedFromTarget" {
+                    break;
+                }
+                if ev.method == ostler_cdp::LAGGED {
+                    // Lost events cannot be replayed. A request whose `Fetch.requestPaused` was lost stays
+                    // paused (it hangs rather than escaping), and a lost attach leaves a frame paused.
+                    // Say so, and ask again for the frames we should be holding.
+                    shared.notices.lock().unwrap().push(format!(
+                        "{} browser events were lost; a request or frame may stay stuck until the next navigation",
+                        ev.params["missed"]
+                    ));
+                    let s2 = sess.clone();
+                    tokio::spawn(async move {
+                        let _ = s2.call("Target.setAutoAttach", AUTO_ATTACH.clone()).await;
+                    });
+                    continue;
+                }
                 let is_main = |frame_id: Option<&str>| {
                     frame_id.is_some() && frame_id == shared.main_frame.lock().unwrap().as_deref()
                 };
@@ -254,56 +471,17 @@ impl Page {
                         *shared.doc.lock().unwrap() = Some((status, mime));
                     }
                     "Fetch.requestPaused" => {
-                        let id = ev.params["requestId"].clone();
-                        let url = ev.params["request"]["url"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
-                        let method = ev.params["request"]["method"]
-                            .as_str()
-                            .unwrap_or("GET")
-                            .to_uppercase();
-                        let is_doc = ev.params["resourceType"].as_str() == Some("Document");
-                        let (policy, shared, sess) =
-                            (fetch_policy.clone(), shared.clone(), sess.clone());
-                        // Separate task: never let a slow reply (or a DNS lookup) stall the event loop.
-                        tokio::spawn(async move {
-                            let mut verdict = policy.check_resolved(&url).await;
-                            if verdict.is_ok()
-                                && shared.gate.load(Ordering::SeqCst)
-                                && !shared.armed.load(Ordering::SeqCst)
-                                && !matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS")
-                            {
-                                shared
-                                    .blocked
-                                    .lock()
-                                    .unwrap()
-                                    .push(format!("{method} {url}"));
-                                verdict = Err("blocked by --require-confirm-submit".into());
-                            }
-                            let _ = match (verdict, is_doc) {
-                                (Ok(()), _) => {
-                                    sess.call("Fetch.continueRequest", json!({ "requestId": id }))
-                                        .await
-                                }
-                                // A blocked navigation answered with "204 No Content" leaves the current page in
-                                // place; failing it would replace the page with a browser error screen.
-                                (Err(_), true) => {
-                                    sess.call(
-                                        "Fetch.fulfillRequest",
-                                        json!({ "requestId": id, "responseCode": 204, "responseHeaders": [] }),
-                                    )
-                                    .await
-                                }
-                                (Err(_), false) => {
-                                    sess.call(
-                                        "Fetch.failRequest",
-                                        json!({ "requestId": id, "errorReason": "BlockedByClient" }),
-                                    )
-                                    .await
-                                }
-                            };
-                        });
+                        spawn_verdict(
+                            &ev.params,
+                            sess.clone(),
+                            fetch_policy.clone(),
+                            shared.clone(),
+                        );
+                    }
+                    // An out-of-process iframe (or worker) arrives paused on its own session; it gets the
+                    // same interception before it is allowed to send anything.
+                    "Target.attachedToTarget" => {
+                        spawn_child(&conn, &ev.params, shared.clone(), fetch_policy.clone());
                     }
                     // A navigation that never commits (blocked by policy, answered with 204) fires no load
                     // event; "stopped loading" is the signal that the attempt is over either way.
@@ -337,6 +515,46 @@ impl Page {
                 }
             }
         });
+
+        // The rest of the setup. For a held target the release is sent alongside it: the renderer only
+        // starts (and so only answers these) once released, and its first request already faces interception.
+        // Order matters for a held target: only Page.enable goes out before the release (sending more first
+        // lets the held target's first request escape), the rest is sent back to back after it.
+        let s = &page.session;
+        if held {
+            let (enabled, released) = tokio::join!(
+                s.call("Page.enable", json!({})),
+                s.call("Runtime.runIfWaitingForDebugger", json!({}))
+            );
+            enabled?;
+            released?;
+        } else {
+            s.call("Page.enable", json!({})).await?;
+        }
+        // A session handles its commands in order, so sending these together has the same effect as one
+        // after another, without a round trip each.
+        let (_, _, _, _, _, tree, _) = tokio::try_join!(
+            // Cross-site iframes live in other processes with sessions of their own. Chrome pauses them at
+            // start until we have enabled interception there, so their very first request is seen too.
+            s.call("Target.setAutoAttach", AUTO_ATTACH.clone()),
+            s.call("Runtime.enable", json!({})),
+            s.call("DOM.enable", json!({})),
+            // Headless Chrome otherwise reports the page as unfocused, which suppresses focus/blur/change
+            // events.
+            s.call(
+                "Emulation.setFocusEmulationEnabled",
+                json!({ "enabled": true }),
+            ),
+            s.call(
+                "Page.addScriptToEvaluateOnNewDocument",
+                json!({ "source": RUNTIME_JS, "runImmediately": true }),
+            ),
+            s.call("Page.getFrameTree", json!({})),
+            // Main-document HTTP status comes from the network layer; the page itself never shows it.
+            s.call("Network.enable", json!({})),
+        )?;
+        *page.shared.main_frame.lock().unwrap() =
+            tree["frameTree"]["frame"]["id"].as_str().map(String::from);
         Ok(page)
     }
 
@@ -443,7 +661,10 @@ impl Page {
                 .and_then(Value::as_str)
                 .unwrap_or("unknown")
                 .to_string(),
-            interstitial: matches!(o.get("kind").and_then(Value::as_str), Some("interstitial" | "block")),
+            interstitial: matches!(
+                o.get("kind").and_then(Value::as_str),
+                Some("interstitial" | "block")
+            ),
         }))
     }
 
@@ -554,6 +775,28 @@ impl Page {
         v
     }
 
+    /// Settle after a form action: wait only for what the action can have caused. DOM changes outside `scope`
+    /// (a form or control ref) are ignored, and so are background requests and timers (beacons, ad hosts,
+    /// requests repeated over and over, anything pending longer than `bg_ms`). Falls back to the whole page
+    /// when the scope is unknown or gone.
+    pub async fn settle_scoped(
+        &self,
+        max_ms: u64,
+        quiet_ms: u64,
+        scope: Option<&str>,
+        bg_ms: u64,
+    ) -> Value {
+        let opts = json!({ "scope": scope, "bgMs": bg_ms });
+        let v = self
+            .rt("settle", &[json!(max_ms), json!(quiet_ms), opts])
+            .await
+            .unwrap_or(Value::Null);
+        if v.get("settled").and_then(Value::as_bool) == Some(false) {
+            self.shared.unsettled.fetch_add(1, Ordering::SeqCst);
+        }
+        v
+    }
+
     /// Number of timed-out settles so far; fill_form diffs this to report unstable pages.
     pub(crate) fn unsettled_count(&self) -> u64 {
         self.shared.unsettled.load(Ordering::SeqCst)
@@ -613,6 +856,7 @@ impl Page {
                 info.url
             )));
         }
+        warnings.append(&mut self.shared.notices.lock().unwrap());
         for b in std::mem::take(&mut *self.shared.blocked.lock().unwrap()) {
             warnings.push(format!(
                 "blocked {b}: --require-confirm-submit is on, so only form_submit with confirm=true may send data"
@@ -645,10 +889,16 @@ impl Page {
 
     pub async fn back(&self) -> Result<ActionOutcome> {
         // Nothing to go back to when the previous history entry is the tab's initial blank page.
-        if let Ok(h) = self.session.call("Page.getNavigationHistory", json!({})).await {
+        if let Ok(h) = self
+            .session
+            .call("Page.getNavigationHistory", json!({}))
+            .await
+        {
             let idx = h["currentIndex"].as_i64().unwrap_or(0);
             let prev = if idx > 0 {
-                h["entries"][(idx - 1) as usize]["url"].as_str().unwrap_or("")
+                h["entries"][(idx - 1) as usize]["url"]
+                    .as_str()
+                    .unwrap_or("")
             } else {
                 ""
             };
@@ -683,25 +933,21 @@ impl Page {
     // ------------------------------------------------------------------ snapshots
 
     /// Network interception is on whenever there is something to enforce: an allowlist or the submit gate.
+    /// Applies to the page and to every child session (cross-site iframes, workers) attached to it.
     async fn sync_fetch(&self) -> Result<()> {
-        if self.policy.restricts() {
-            // An allowlist must see every request, whatever its type: an <img src>, a stylesheet or a font
-            // carries data out exactly as well as fetch() does.
-            self.session
-                .call(
-                    "Fetch.enable",
-                    json!({ "patterns": [{ "urlPattern": "*", "requestStage": "Request" }] }),
-                )
-                .await?;
-        } else if self.shared.gate.load(Ordering::SeqCst) {
-            // The submit gate only cares about requests that can have a body.
-            let patterns: Vec<Value> = ["Document", "XHR", "Fetch", "Ping", "EventSource", "Other"]
-                .iter()
-                .map(|t| json!({ "urlPattern": "*", "resourceType": t, "requestStage": "Request" }))
-                .collect();
-            self.session
+        let Some(patterns) = fetch_patterns(&self.policy, self.shared.gate.load(Ordering::SeqCst))
+        else {
+            return Ok(());
+        };
+        self.session
+            .call("Fetch.enable", json!({ "patterns": patterns }))
+            .await?;
+        let kids: Vec<Session> = self.shared.children.lock().unwrap().clone();
+        for k in kids {
+            // A child that has just gone away is not a failure.
+            let _ = k
                 .call("Fetch.enable", json!({ "patterns": patterns }))
-                .await?;
+                .await;
         }
         Ok(())
     }
@@ -710,6 +956,11 @@ impl Page {
     pub async fn set_submit_gate(&self, on: bool) -> Result<()> {
         self.shared.gate.store(on, Ordering::SeqCst);
         self.sync_fetch().await
+    }
+
+    /// True while a confirmed `form_submit` is in flight on this page.
+    pub(crate) fn is_armed(&self) -> bool {
+        self.shared.armed.load(Ordering::SeqCst)
     }
 
     pub(crate) fn arm_submit(&self, on: bool) {
@@ -762,12 +1013,18 @@ impl Page {
 
         // Interactive views leave out text, so a later delta (which includes text) would have nothing to
         // compare with and print the whole page. Record the text-inclusive baseline silently.
-        let baseline: Option<Vec<String>> = if opts.mode == SnapshotMode::Interactive && opts.scope.is_none() {
+        let baseline: Option<Vec<String>> = if opts.mode == SnapshotMode::Interactive
+            && opts.scope.is_none()
+        {
             let o2 = json!({ "interactiveOnly": false, "collapseFooter": true, "maxChars": 20000 });
             self.rt("snapshot", &[o2]).await.ok().map(|v2| {
                 v2["lines"]
                     .as_array()
-                    .map(|a| a.iter().filter_map(|l| l.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|l| l.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default()
             })
         } else {
@@ -1194,31 +1451,6 @@ fn diff_lines(prev: &[String], next: &[String]) -> (Vec<String>, Vec<String>, us
     (added, removed, unchanged)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn diff_detects_changes() {
-        let a: Vec<String> = ["x", "y", "z"].iter().map(|s| s.to_string()).collect();
-        let b: Vec<String> = ["x", "z", "w"].iter().map(|s| s.to_string()).collect();
-        let (added, removed, same) = diff_lines(&a, &b);
-        assert_eq!(added, vec!["w"]);
-        assert_eq!(removed, vec!["y"]);
-        assert_eq!(same, 2);
-    }
-
-    #[test]
-    fn diff_handles_duplicates() {
-        let a: Vec<String> = ["x", "x"].iter().map(|s| s.to_string()).collect();
-        let b: Vec<String> = ["x"].iter().map(|s| s.to_string()).collect();
-        let (added, removed, same) = diff_lines(&a, &b);
-        assert!(added.is_empty());
-        assert_eq!(removed, vec!["x"]);
-        assert_eq!(same, 1);
-    }
-}
-
 /// Turn a raw Chromium `net::ERR_*` code into something an agent can act on.
 fn friendly_net_error(err: &str, url: &str) -> String {
     let host = url
@@ -1250,4 +1482,127 @@ fn friendly_net_error(err: &str, url: &str) -> String {
         _ => String::new(),
     };
     hint
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diff_detects_changes() {
+        let a: Vec<String> = ["x", "y", "z"].iter().map(|s| s.to_string()).collect();
+        let b: Vec<String> = ["x", "z", "w"].iter().map(|s| s.to_string()).collect();
+        let (added, removed, same) = diff_lines(&a, &b);
+        assert_eq!(added, vec!["w"]);
+        assert_eq!(removed, vec!["y"]);
+        assert_eq!(same, 2);
+    }
+
+    #[test]
+    fn diff_handles_duplicates() {
+        let a: Vec<String> = ["x", "x"].iter().map(|s| s.to_string()).collect();
+        let b: Vec<String> = ["x"].iter().map(|s| s.to_string()).collect();
+        let (added, removed, same) = diff_lines(&a, &b);
+        assert!(added.is_empty());
+        assert_eq!(removed, vec!["x"]);
+        assert_eq!(same, 1);
+    }
+}
+
+#[cfg(test)]
+mod child_tests {
+    use super::*;
+    use ostler_cdp::Connection;
+    use std::time::Duration;
+
+    type Calls = Arc<Mutex<Vec<String>>>;
+
+    fn restricted() -> Arc<Policy> {
+        Arc::new(Policy {
+            allowed_domains: vec!["example.com".into()],
+            ..Default::default()
+        })
+    }
+
+    fn attached(kind: &str) -> Value {
+        json!({
+            "sessionId": "cs",
+            "targetInfo": { "targetId": "w1", "type": kind },
+            "waitingForDebugger": true,
+        })
+    }
+
+    async fn wait_for(calls: &Calls, what: &str) -> bool {
+        for _ in 0..100 {
+            if calls.lock().unwrap().iter().any(|c| c == what) {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        false
+    }
+
+    #[tokio::test]
+    async fn a_worker_or_frame_that_cannot_be_intercepted_is_never_resumed() {
+        for kind in ["worker", "service_worker", "iframe", "shared_worker"] {
+            for fail in [true, false] {
+                let (conn, mut peer) = Connection::mock(64);
+                let calls: Calls = Arc::default();
+                let c = calls.clone();
+                peer.serve(move |m, _, _| {
+                    c.lock().unwrap().push(m.to_string());
+                    if fail && m == "Fetch.enable" {
+                        Err("no".into())
+                    } else {
+                        Ok(json!({}))
+                    }
+                });
+                let shared: Arc<Shared> = Arc::default();
+                spawn_child(&conn, &attached(kind), shared.clone(), restricted());
+                if fail {
+                    assert!(wait_for(&calls, "Target.closeTarget").await, "{kind}");
+                    assert!(
+                        !calls
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .any(|c| c == "Runtime.runIfWaitingForDebugger"),
+                        "{kind} was resumed without interception"
+                    );
+                    assert!(shared.notices.lock().unwrap()[0].contains("left paused"));
+                } else {
+                    // Control: with interception in place it is released.
+                    assert!(
+                        wait_for(&calls, "Runtime.runIfWaitingForDebugger").await,
+                        "{kind}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn lost_events_on_a_frame_session_are_reported() {
+        let (conn, mut peer) = Connection::mock(4);
+        let calls: Calls = Arc::default();
+        let c = calls.clone();
+        peer.serve(move |m, _, _| {
+            c.lock().unwrap().push(m.to_string());
+            Ok(json!({}))
+        });
+        let shared: Arc<Shared> = Arc::default();
+        spawn_child(&conn, &attached("iframe"), shared.clone(), restricted());
+        assert!(wait_for(&calls, "Runtime.runIfWaitingForDebugger").await);
+        // The mock is sync-emitted, the child task cannot run in between: its buffer of 4 overflows.
+        for i in 0..50 {
+            peer.emit("Network.dataReceived", json!({ "i": i }), Some("cs"));
+        }
+        for _ in 0..100 {
+            if !shared.notices.lock().unwrap().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(shared.notices.lock().unwrap()[0].contains("events were lost"));
+    }
 }

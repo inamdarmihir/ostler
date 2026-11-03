@@ -42,8 +42,15 @@ impl Canary {
 
 /// A page host that serves pages which try to send requests to `canary`.
 fn start_site(canary_origin: String) -> u16 {
+    start_site_with_alt(canary_origin, "localhost")
+}
+
+/// Like `start_site`; `alt_host` addresses this same site under another hostname, which Chrome treats as a
+/// different site (so a frame there lives in its own process).
+fn start_site_with_alt(canary_origin: String, alt_host: &str) -> u16 {
     let server = Server::http("127.0.0.1:0").expect("bind site");
     let port = server.server_addr().to_ip().unwrap().port();
+    let alt = format!("http://{alt_host}:{port}");
     thread::spawn(move || {
         for req in server.incoming_requests() {
             let c = &canary_origin;
@@ -66,6 +73,33 @@ try{{new EventSource('{c}/sse')}}catch(e){{}}
 setTimeout(()=>{{try{{window.open('{c}/popup')}}catch(e){{}}}},300);
 </script>"#,
                     c.replacen("http", "ws", 1)
+                ))),
+                // A form POST that opens in a new window: the popup's very first request carries the body.
+                "/popup_post" => req.respond(html(format!(
+                    r#"<form id=f method=post action="{c}/popup-post" target=_blank><input name=x value=secret></form>
+<script>document.getElementById('f').submit()</script>"#
+                ))),
+                "/popup_get" => req.respond(html(format!(
+                    "<p>opener</p><script>window.open('{c}/popup-get')</script>"
+                ))),
+                // A page that opens popups in a loop (popup blocking is off).
+                "/flood" => req.respond(html(
+                    "<p>flood</p><script>for(let i=0;i<150;i++){try{window.open('/blank?'+i)}catch(e){}}</script>".into(),
+                )),
+                "/blank" => req.respond(html("<p>blank</p>".into())),
+                // A form that opens its POST in a new window, submitted only by a click.
+                "/tb_form" => req.respond(html(format!(
+                    r#"<form id=f method=post action="{c}/tb-post" target=_blank><input name=x value=ok><button id=b>Send</button></form>"#
+                ))),
+                // A cross-site frame (its own process) that sends data out three ways.
+                "/oopif" => req.respond(html(format!(
+                    r#"<p>outer</p><iframe src="{alt}/frame_post" width=300 height=100></iframe>"#
+                ))),
+                "/frame_post" => req.respond(html(format!(
+                    r#"<form id=f method=post action="{c}/iframe-post"><input name=x value=secret></form>
+<img src="{c}/iframe-img">
+<script>fetch('{c}/iframe-fetch',{{method:'POST',body:'x',mode:'no-cors'}});
+document.getElementById('f').submit()</script>"#
                 ))),
                 "/redir" => req.respond(
                     Response::new_empty(StatusCode(302))
@@ -398,4 +432,156 @@ async fn private_networks_are_refused_when_asked_and_open_by_default() {
     let b = launch(Policy::default()).await;
     b.page().navigate(&srv.url("/basic.html")).await.unwrap();
     b.close().await;
+}
+
+/// Load `path` on a site served at 127.0.0.1 under `policy` and return what the canary (also on 127.0.0.1,
+/// another port) saw. `canary_host` is how the page addresses the canary.
+async fn run_one(policy: Policy, gate: bool, path: &str, canary_host: &str) -> BTreeSet<String> {
+    let canary = Canary::start();
+    let site = start_site_with_alt(format!("http://{canary_host}:{}", canary.port), "localhost");
+    let b = launch(policy).await;
+    if gate {
+        b.set_submit_gate(true).await.unwrap();
+    }
+    let _ = b
+        .page()
+        .navigate(&format!("http://127.0.0.1:{site}{path}"))
+        .await;
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let seen = canary.paths();
+    b.close().await;
+    seen
+}
+
+#[tokio::test]
+async fn submit_gate_holds_for_the_first_request_of_a_popup() {
+    if !have_chrome() {
+        return;
+    }
+    // Control: with the gate off the popup's POST does arrive, so the test is not vacuous.
+    let seen = run_one(Policy::default(), false, "/popup_post", "127.0.0.1").await;
+    assert!(seen.contains("/popup-post"), "control: {seen:?}");
+    let seen = run_one(Policy::default(), true, "/popup_post", "127.0.0.1").await;
+    assert!(seen.is_empty(), "popup POST bypassed the gate: {seen:?}");
+}
+
+#[tokio::test]
+async fn submit_gate_holds_for_requests_from_a_cross_site_iframe() {
+    if !have_chrome() {
+        return;
+    }
+    let seen = run_one(Policy::default(), false, "/oopif", "127.0.0.1").await;
+    for p in ["/iframe-post", "/iframe-fetch"] {
+        assert!(seen.contains(p), "control: {p} missing from {seen:?}");
+    }
+    let seen = run_one(Policy::default(), true, "/oopif", "127.0.0.1").await;
+    assert!(
+        !seen.contains("/iframe-post") && !seen.contains("/iframe-fetch"),
+        "cross-site iframe POST bypassed the gate: {seen:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_port_pin_holds_for_a_popup_and_a_cross_site_iframe() {
+    if !have_chrome() {
+        return;
+    }
+    // The site is pinned by port (under both hostnames, so the cross-site frame itself may load); the canary
+    // is the same host on another port and must stay unreachable.
+    for (path, probes) in [
+        ("/popup_get", &["/popup-get"][..]),
+        (
+            "/oopif",
+            &["/iframe-img", "/iframe-fetch", "/iframe-post"][..],
+        ),
+    ] {
+        // Control: no pin, so the canary is reachable by the same page.
+        let seen = run_one(Policy::default(), false, path, "127.0.0.1").await;
+        assert!(
+            probes.iter().any(|p| seen.contains(*p)),
+            "control {path}: {seen:?}"
+        );
+        // The pin needs the site's port, which `run_one` picks; pin through a wildcard-free helper instead.
+        let seen = run_pinned(path).await;
+        assert!(seen.is_empty(), "{path}: pin leaked to {seen:?}");
+    }
+}
+
+async fn run_pinned(path: &str) -> BTreeSet<String> {
+    let canary = Canary::start();
+    let site = start_site_with_alt(format!("http://127.0.0.1:{}", canary.port), "localhost");
+    let b = launch(Policy {
+        allowed_domains: vec![format!("127.0.0.1:{site}"), format!("localhost:{site}")],
+        ..Default::default()
+    })
+    .await;
+    let _ = b
+        .page()
+        .navigate(&format!("http://127.0.0.1:{site}{path}"))
+        .await;
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let seen = canary.paths();
+    b.close().await;
+    seen
+}
+
+#[tokio::test]
+async fn a_popup_flood_is_capped_and_does_not_starve_the_page() {
+    if !have_chrome() {
+        return;
+    }
+    let canary = Canary::start();
+    let site = start_site(format!("http://127.0.0.1:{}", canary.port));
+    let b = launch(Policy::default()).await;
+    let _ = b
+        .page()
+        .navigate(&format!("http://127.0.0.1:{site}/flood"))
+        .await;
+    tokio::time::sleep(Duration::from_millis(4000)).await;
+    let t0 = std::time::Instant::now();
+    let v = b.page().eval("1+1").await.expect("original page answers");
+    assert_eq!(v, json!(2));
+    assert!(
+        t0.elapsed() < Duration::from_secs(2),
+        "eval took {:?}",
+        t0.elapsed()
+    );
+    let n = b.tabs().await.len();
+    assert!(n <= 9, "{n} tabs after a popup flood");
+    b.close().await;
+}
+
+/// Run a form that targets a new window, with the gate on; `confirmed` clicks it through `submit`.
+async fn run_target_blank(confirmed: bool) -> BTreeSet<String> {
+    let canary = Canary::start();
+    let site = start_site(format!("http://127.0.0.1:{}", canary.port));
+    let b = launch(Policy::default()).await;
+    b.set_submit_gate(true).await.unwrap();
+    let _ = b
+        .page()
+        .navigate(&format!("http://127.0.0.1:{site}/tb_form"))
+        .await;
+    if confirmed {
+        let _ = b.page().submit(None, None).await;
+    } else {
+        let _ = b.page().eval("document.getElementById('b').click()").await;
+    }
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let seen = canary.paths();
+    b.close().await;
+    seen
+}
+
+#[tokio::test]
+async fn a_confirmed_target_blank_post_goes_through_and_an_unconfirmed_one_does_not() {
+    if !have_chrome() {
+        return;
+    }
+    let seen = run_target_blank(true).await;
+    assert!(
+        seen.contains("/tb-post"),
+        "confirmed POST blocked: {seen:?}"
+    );
+    let seen = run_target_blank(false).await;
+    assert!(seen.is_empty(), "unconfirmed POST escaped: {seen:?}");
 }

@@ -1,0 +1,29 @@
+<!doctype html><meta charset=utf-8><title>React-select like</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}.ctl{border:1px solid #999;padding:.4rem;position:relative}.menu{border:1px solid #999}.menu div{padding:.3rem}.vc{display:flex}.single-value{margin-right:.5rem}.ph{color:#888}input.inner{border:0;outline:0;width:5em}</style>
+<h1>Student registration</h1>
+<form id="f">
+  <label id="statelabel" for="react-select-3-input">Select State</label>
+  <div class="container" id="ss">
+    <div class="ctl" id="ctl">
+      <div class="vc">
+        <div class="ph" id="ph">Select State</div>
+        <div class="single-value css-singleValue" id="sv" style="display:none"></div>
+        <div class="input-container"><input class="inner" id="react-select-3-input" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="react-select-3-listbox" autocomplete="off" value=""></div>
+      </div>
+    </div>
+    <div class="menu" id="menu" style="display:none" role="listbox"><div role="option" id="o1">NCR</div><div role="option" id="o2">Uttar Pradesh</div><div role="option" id="o3">Haryana</div></div>
+  </div>
+  <button type="submit">Submit</button>
+</form>
+<script>window.BROKEN=true;
+// Control: the pick never takes effect.
+const inp=document.getElementById('react-select-3-input'),menu=document.getElementById('menu'),sv=document.getElementById('sv'),ph=document.getElementById('ph');
+menu.id='react-select-3-listbox';
+let chosen='';
+inp.addEventListener('focus',()=>{menu.style.display='block'});
+inp.addEventListener('input',()=>{menu.style.display='block'});
+menu.addEventListener('mousedown',e=>{const o=e.target.closest('[role=option]');if(!o)return;
+  if(!window.BROKEN){chosen=o.textContent;sv.textContent=chosen;sv.style.display='block';ph.style.display='none'}
+  inp.value='';menu.style.display='none'});
+document.getElementById('f').addEventListener('submit',e=>{e.preventDefault();
+ fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:chosen})}).then(()=>{document.body.innerHTML='<h1>Saved</h1>'})});
+</script>

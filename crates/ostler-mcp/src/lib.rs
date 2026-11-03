@@ -77,11 +77,48 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
     })
 }
 
-/// Serve MCP on stdin/stdout until stdin closes.
+/// Resolves on SIGINT or SIGTERM (Ctrl-C only, off unix).
+async fn termination() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => {
+                tokio::select! {
+                    _ = term.recv() => {}
+                    _ = tokio::signal::ctrl_c() => {}
+                }
+            }
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+/// Serve MCP on stdin/stdout until stdin closes or the process is asked to stop.
 pub async fn serve_stdio(app: App) -> std::io::Result<()> {
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut out = tokio::io::stdout();
-    while let Some(line) = lines.next_line().await? {
+    let mut stop = Box::pin(termination());
+    let mut signalled = false;
+    loop {
+        // SIGINT/SIGTERM take the same exit as a closed stdin, so Chrome is closed and its temporary
+        // profile directory removed instead of being left behind.
+        let line = tokio::select! {
+            l = lines.next_line() => match l? {
+                Some(l) => l,
+                None => break,
+            },
+            () = &mut stop => {
+                signalled = true;
+                break;
+            }
+        };
         if line.trim().is_empty() {
             continue;
         }
@@ -106,6 +143,11 @@ pub async fn serve_stdio(app: App) -> std::io::Result<()> {
         }
     }
     app.shutdown().await;
+    if signalled {
+        // The stdin reader is a blocking thread that only ends when stdin closes; waiting for the runtime
+        // to drain it would hang here. Chrome and its profile are already cleaned up.
+        std::process::exit(0);
+    }
     Ok(())
 }
 

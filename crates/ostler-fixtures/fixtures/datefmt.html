@@ -1,0 +1,14 @@
+<!doctype html><meta charset=utf-8><title>Date format</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}</style>
+<h1>Trip</h1>
+<form id="f">
+  <label for="d">Departure date</label><input id="d" name="d" type="text" placeholder="mm/dd/yyyy">
+  <label for="r">Return date</label><input id="r" name="r" type="text" data-date-format="dd-mm-yyyy">
+  <button type="submit">Go</button>
+</form>
+<script>
+// A widget that rewrites anything not already in its own format when the form is submitted.
+function mangle(v){return /^\d{2}\/\d{2}\/\d{4}$/.test(v)?v:v.replace(/\D/g,'/').slice(0,8)}
+document.getElementById('f').addEventListener('submit',e=>{e.preventDefault();
+ const d=document.getElementById('d'),r=document.getElementById('r');d.value=mangle(d.value);
+ fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({d:d.value,r:r.value})}).then(()=>{document.body.innerHTML='<h1>Saved</h1>'})});
+</script>

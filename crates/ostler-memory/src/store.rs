@@ -26,7 +26,8 @@ impl Kind {
 /// Conjunction of payload conditions. Every query carries the tenant.
 ///
 /// Equality on an array payload matches if any element is equal (Qdrant semantics), so a
-/// playbook's `labels_norm` list can be filtered by a single label.
+/// playbook's `labels_norm` list can be filtered by a single label. A condition whose value is itself an
+/// array means *any of these* (Qdrant `match.any`): `host` in `["a.com", "b.com"]`. An empty list matches nothing.
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
     pub must: Vec<(String, Value)>,
@@ -53,7 +54,10 @@ impl Filter {
         let mut must: Vec<Value> = self
             .must
             .iter()
-            .map(|(k, v)| json!({"key": k, "match": {"value": v}}))
+            .map(|(k, v)| match v {
+                Value::Array(_) => json!({"key": k, "match": {"any": v}}),
+                _ => json!({"key": k, "match": {"value": v}}),
+            })
             .collect();
         must.extend(
             self.below
@@ -62,10 +66,21 @@ impl Filter {
         );
         json!({ "must": must })
     }
+    /// Whether the filter pins a tenant. Bulk deletes require it: an unscoped one would reach every tenant.
+    pub fn is_tenant_scoped(&self) -> bool {
+        self.must.iter().any(|(k, _)| k == "tenant")
+    }
+
     fn matches(&self, payload: &Value) -> bool {
-        self.must.iter().all(|(k, v)| match &payload[k.as_str()] {
-            Value::Array(a) => a.contains(v),
-            other => other == v,
+        fn one(have: &Value, want: &Value) -> bool {
+            match have {
+                Value::Array(a) => a.contains(want),
+                other => other == want,
+            }
+        }
+        self.must.iter().all(|(k, v)| match v {
+            Value::Array(any) => any.iter().any(|w| one(&payload[k.as_str()], w)),
+            _ => one(&payload[k.as_str()], v),
         }) && self
             .below
             .iter()
@@ -107,7 +122,7 @@ impl Rank {
             "prefetch": {
                 "query": vector,
                 "filter": filter.to_qdrant(),
-                "limit": (limit * 4).max(16),
+                "limit": limit.saturating_mul(4).max(16),
                 "score_threshold": self.min_similarity,
             },
             "query": { "formula": {
@@ -138,6 +153,10 @@ pub struct Hit {
 
 #[async_trait]
 pub trait Store: Send + Sync {
+    /// Why the store is currently being skipped, if it is.
+    fn degraded(&self) -> Option<String> {
+        None
+    }
     /// Create collections and indexes if missing.
     async fn ensure(&self) -> Result<()>;
     async fn upsert(&self, kind: Kind, id: &str, text: &str, payload: Value) -> Result<()>;
@@ -177,6 +196,16 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
+    /// Test helper: what a malicious server could do, rewrite a stored payload behind our back.
+    #[cfg(test)]
+    pub(crate) fn replace_payload_for_test(&self, id: &str, payload: Value) {
+        for p in self.points.lock().unwrap().iter_mut() {
+            if p.id == id {
+                p.payload = payload.clone();
+            }
+        }
+    }
+
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
         Self {
             embedder,
@@ -284,6 +313,11 @@ impl Store for InMemoryStore {
     }
 
     async fn delete_matching(&self, kind: Kind, filter: &Filter) -> Result<()> {
+        if !filter.is_tenant_scoped() {
+            return Err(crate::MemoryError::Invalid(
+                "refusing a bulk delete that is not scoped to a tenant".into(),
+            ));
+        }
         self.points
             .lock()
             .unwrap()

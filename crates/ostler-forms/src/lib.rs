@@ -116,16 +116,30 @@ pub struct Field {
     /// Not currently visible/interactable (e.g. collapsed wizard step).
     #[serde(default)]
     pub hidden: bool,
+    /// A radio/checkbox group whose options are separately clickable controls (not a native `<select>`).
+    #[serde(default)]
+    pub grouped: bool,
+    /// For a text input that wants a date in a particular shape: that shape, e.g. `mm/dd/yyyy`.
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 impl Field {
     pub fn display(&self) -> String {
+        let pick = |o: &Option<String>| o.clone().filter(|t| !t.trim().is_empty());
         if !self.label.is_empty() {
             self.label.clone()
-        } else if let Some(n) = &self.name {
-            n.clone()
+        } else if let Some(n) = pick(&self.name).or_else(|| pick(&self.placeholder)) {
+            n
+        } else if let Some(i) = pick(&self.id) {
+            i
         } else {
-            self.r#ref.clone()
+            // Nothing on the page names it: say what it is, not an opaque ref (the ref is shown beside it).
+            let kind = serde_json::to_value(self.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(|s| s.replace('_', " ")))
+                .unwrap_or_default();
+            format!("unlabelled {kind}")
         }
     }
 

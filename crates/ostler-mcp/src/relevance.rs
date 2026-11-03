@@ -130,7 +130,10 @@ mod tests {
             Some("quantum widgets".into())
         );
         assert_eq!(
-            check("https://duckduckgo.com/?q=quantum+widgets", "Quantum widgets inc"),
+            check(
+                "https://duckduckgo.com/?q=quantum+widgets",
+                "Quantum widgets inc"
+            ),
             None
         );
         assert_eq!(check("https://example.com/?q=zzz", "nothing"), None);

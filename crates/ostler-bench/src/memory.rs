@@ -169,6 +169,8 @@ pub async fn run(sizes: &str, queries: usize, on_disk: bool) -> Result<Value> {
             vectors: VectorSource::Client(Arc::new(HashEmbedder::new(256))),
             timeout: Duration::from_secs(30),
             on_disk,
+            allow_insecure: false,
+            collection_prefix: String::new(),
         })?);
         store.ensure().await?;
 

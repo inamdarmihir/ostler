@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Shop</title>
+<style>body{font:15px system-ui;max-width:480px;margin:2rem auto}label{display:block;margin:.6rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:.8rem;padding:.5rem 1rem}</style>
+<header>
+  <form action="/order_done.html" method="get" id="newsletter">
+    <label for="nl">Newsletter email</label><input id="nl" name="nl" type="email">
+    <button type="submit">Subscribe</button>
+  </form>
+</header>
+<h1>Place your order</h1>
+<form action="/order_done.html" method="get" id="order">
+  <label for="item">Item</label><input id="item" name="item" required>
+  <button type="submit">Place order</button>
+</form>

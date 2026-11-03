@@ -506,6 +506,22 @@ impl App {
                 }
             }
         }
+        // Memory lookups are being skipped (Qdrant is failing): say so, so a missing suggestion is not
+        // mistaken for "nothing is known".
+        if name.starts_with("memory_")
+            || matches!(name, "form_inspect" | "form_fill" | "form_submit")
+        {
+            if let Some(why) = self.cfg.memory.as_ref().and_then(|m| m.degraded()) {
+                let line = format!(
+                    "Note: memory is unavailable ({}); continuing without it. Values must come from the request.",
+                    inert(&why)
+                );
+                match out.content.first_mut() {
+                    Some(Content::Text(t)) => *t = format!("{line}\n{t}"),
+                    _ => out.content.insert(0, Content::Text(line)),
+                }
+            }
+        }
         // Things that happened on their own while we worked (a popup opened as a new tab).
         if let Ok(guard) = self.browser.try_lock() {
             if let Some(b) = guard.as_ref() {
@@ -595,7 +611,9 @@ impl App {
 
     fn action_text(&self, what: &str, o: &ostler_browser::ActionOutcome) -> String {
         let http = match o.status {
-            Some(404 | 410) => " (HTTP 404: page not found; check the URL or search for it)".to_string(),
+            Some(404 | 410) => {
+                " (HTTP 404: page not found; check the URL or search for it)".to_string()
+            }
             Some(st) if st >= 400 => format!(" (HTTP {st})"),
             _ => String::new(),
         };
@@ -1334,7 +1352,7 @@ impl App {
             SubmitStatus::Advanced | SubmitStatus::ValidationFailed => {
                 FormTaskResult::input_required(text, data)
             }
-            SubmitStatus::Unchanged => FormTaskResult::failed(text),
+            SubmitStatus::Unchanged | SubmitStatus::ServerError => FormTaskResult::failed(text),
         })
     }
 
@@ -1466,7 +1484,7 @@ impl App {
                             .await;
                     }
                 }
-                SubmitStatus::Unchanged => {}
+                SubmitStatus::Unchanged | SubmitStatus::ServerError => {}
             }
             for (field, problem, detail) in &last.problems {
                 let _ = mem
@@ -1576,5 +1594,96 @@ mod wrapper_tests {
             q.starts_with("<page_content untrusted=\"true\">") && !q.contains('\n'),
             "{q}"
         );
+    }
+}
+
+#[cfg(test)]
+mod degraded_memory_tests {
+    use super::*;
+    use ostler_memory::{Filter, Hit, InMemoryStore, Kind, MemoryError, Rank, Store};
+    use std::sync::Arc;
+
+    /// A store that reports itself as failing, like QdrantStore with its breaker open.
+    struct Down;
+
+    #[async_trait]
+    impl Store for Down {
+        fn degraded(&self) -> Option<String> {
+            Some("HTTP 503".into())
+        }
+        async fn ensure(&self) -> ostler_memory::Result<()> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn upsert(&self, _: Kind, _: &str, _: &str, _: Value) -> ostler_memory::Result<()> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn search(
+            &self,
+            _: Kind,
+            _: &str,
+            _: &Filter,
+            _: usize,
+        ) -> ostler_memory::Result<Vec<Hit>> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn search_ranked(
+            &self,
+            _: Kind,
+            _: &str,
+            _: &Filter,
+            _: usize,
+            _: &Rank,
+        ) -> ostler_memory::Result<Vec<Hit>> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn scroll(&self, _: Kind, _: &Filter, _: usize) -> ostler_memory::Result<Vec<Hit>> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn delete(&self, _: Kind, _: &str) -> ostler_memory::Result<()> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn delete_matching(&self, _: Kind, _: &Filter) -> ostler_memory::Result<()> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+        async fn count(&self, _: Kind, _: &Filter) -> ostler_memory::Result<u64> {
+            Err(MemoryError::Unavailable("HTTP 503".into()))
+        }
+    }
+
+    fn app_with(store: Arc<dyn Store>) -> App {
+        App::new(AppConfig {
+            launch: Default::default(),
+            policy: Default::default(),
+            profile: Default::default(),
+            memory: Some(Memory::new(store, "t")),
+            learn: false,
+            require_confirm_submit: false,
+            verbose: false,
+        })
+    }
+
+    fn first_text(o: &ToolOutput) -> String {
+        match o.content.first() {
+            Some(Content::Text(t)) => t.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failing_memory_is_announced_and_a_healthy_one_is_not() {
+        let down = app_with(Arc::new(Down));
+        let out = down.call("memory_list", &json!({})).await;
+        let t = first_text(&out);
+        assert!(
+            t.starts_with("Note: memory is unavailable (HTTP 503); continuing without it."),
+            "{t}"
+        );
+
+        let healthy = app_with(Arc::new(InMemoryStore::new(Arc::new(
+            ostler_memory::HashEmbedder::default(),
+        ))));
+        let out = healthy.call("memory_list", &json!({})).await;
+        let t = first_text(&out);
+        assert!(!t.contains("memory is unavailable"), "{t}");
     }
 }

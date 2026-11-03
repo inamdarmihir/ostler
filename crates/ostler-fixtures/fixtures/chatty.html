@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>Chatty page</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}#spin{width:20px;height:20px;background:#09f}</style>
+<h1>Registration (a busy page)</h1>
+<div id="ticker"></div><div id="spin"></div><div id="ads"></div>
+<form id="f">
+  <label for="first">First name</label><input id="first" name="first" required>
+  <label for="last">Last name</label><input id="last" name="last" required>
+  <label for="email">Email</label><input id="email" name="email" type="email" required>
+  <label for="plan">Plan</label>
+  <select id="plan" name="plan"><option value="">Choose…</option><option value="free">Free</option><option value="pro">Pro</option></select>
+  <button type="submit">Register</button>
+</form>
+<script>
+// Constant background activity, none of it related to the form.
+setInterval(()=>fetch('/ping?_='+Date.now()).then(r=>r.text()),100);          // analytics-style polling
+setInterval(()=>{const d=document.createElement('div');d.textContent='tick '+Date.now();const t=document.getElementById('ticker');t.appendChild(d);if(t.childNodes.length>5)t.firstChild.remove()},60);
+(function tick(){document.getElementById('ads').textContent='ad '+Date.now();setTimeout(tick,120)})(); // recursive timer
+(function anim(){document.getElementById('spin').style.transform='rotate('+(performance.now()/10)+'deg)';requestAnimationFrame(anim)})();
+(function poll(){fetch('/poll').then(r=>r.text()).then(poll,()=>setTimeout(poll,500))})();    // long poll
+</script>

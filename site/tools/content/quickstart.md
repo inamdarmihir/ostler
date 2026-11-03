@@ -21,7 +21,7 @@ Prebuilt binaries, `npx` and crates.io are described on the [Install](install.ht
 ostler doctor
 ```
 
-`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, checks that it is reachable. When something is wrong it prints the fix. See [Troubleshooting](troubleshooting.html) if it does not pass.
+`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the fix. See [Troubleshooting](troubleshooting.html) if it does not pass.
 
 ## 3. Connect your agent
 
@@ -67,7 +67,7 @@ Still empty and required:
   e3 "Recipient"
 
 > form_submit
-NOT SUBMITTED: the page reported validation problems.
+NOT ACCEPTED: the page reported problems.
   e3 "Recipient": "Please fill in this field."
 ```
 
@@ -85,7 +85,7 @@ A key that matches nothing is reported, not guessed. A rejected submit says why,
 Browsing and form filling need no account and no key. Memory is separate and optional:
 
 ```sh
-ostler init                                   # saves your Qdrant URL and key, tests the connection
+ostler init                                   # saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection
 ostler setup claude --apply -- --learn --lean # re-register with memory flags
 ```
 

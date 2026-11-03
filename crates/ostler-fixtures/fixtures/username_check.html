@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>Username</title><style>body{font:15px system-ui;max-width:520px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}.error{color:#b00020;font-size:13px}</style>
+<h1>Join</h1>
+<form id="f" novalidate>
+  <label for="u">Username</label><input id="u" name="username"><div class="error" id="u-err"></div>
+  <button type="submit">Join</button>
+</form>
+<script>
+// 900 ms debounce, then a 1.2 s uniqueness check.
+let t;
+document.getElementById('u').addEventListener('input', e => {
+  clearTimeout(t);
+  t = setTimeout(() => {
+    fetch('/api/user?name=' + encodeURIComponent(e.target.value)).then(r => r.text()).then(x => {
+      document.getElementById('u-err').textContent = x === 'taken' ? 'Username already taken' : '';
+    });
+  }, 900);
+});
+document.getElementById('f').addEventListener('submit', e => e.preventDefault());
+</script>

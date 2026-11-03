@@ -7,7 +7,7 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 
 ## What these benchmarks do and do not show
 
-- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (10 pages built to reproduce documented form-filling failure modes). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. A real-site evaluation is the next milestone ([roadmap](../README.md#roadmap)).
+- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. A real-site evaluation is the next milestone ([roadmap](../README.md#roadmap)).
 - The "per-field" baseline is **our own engine driven the way snapshot-per-action tools are driven** (one call per field, each returning a full page snapshot). It isolates the effect of the interaction pattern. It is **not** a measurement of Playwright MCP, agent-browser or any other product. Tools that offer batched form fills would sit between the two columns.
 - LLM prices, LLM turn latency and cloud prices are **illustrative parameters** (flags on the harness). Token counts are `bytes / 4`, an estimate.
 
@@ -45,7 +45,7 @@ All 19 rows completed successfully (the server received the expected submission)
 
 1. **The advantage scales with form size.** Small forms (2-4 fields): ~1.3-2x. A 20-field form: **7.3x fewer calls, 13x fewer input tokens, 5.0x cheaper, 5.4x faster end to end.** Per-field cost grows with fields x conversation length (quadratic-ish); the engine path stays at 3 calls.
 2. **End-to-end time is dominated by LLM turns, not the browser.** Tool time is 0.4-1.1 s of a 12-25 s task. Making the browser faster barely moves the total; **removing round-trips does.** This is why the design optimises call count and output size before raw browser speed.
-3. **A fixed floor exists.** Tool schemas (~1,138 tokens at the `all` profile) plus the base prompt are re-read on every turn. That is why 3-field forms look similar across modes; `--tools core|forms` shrinks it.
+3. **A fixed floor exists.** Tool schemas (~1,138 tokens at the `all` profile when this was measured; the 21-tool set is now about 5.9 KB, roughly 1.5k tokens, see the README) plus the base prompt are re-read on every turn. That is why 3-field forms look similar across modes; `--tools core|forms` shrinks it.
 
 ## 2. Browser footprint and startup
 
@@ -78,7 +78,7 @@ Reading: throughput scales near-linearly to 8 sessions on 8 cores with flat late
 
 ## 4. Memory (Qdrant) at scale
 
-Real Qdrant server, multi-tenant (`tenant` keyword payload index with `is_tenant`), 20 facts per tenant, 256-dim client-side vectors (a 384-dim model is ~1.5x the vector bytes). Sequential queries, localhost HTTP. `sem` = `Memory::suggest` semantic path (2 requests). `key` = exact fact lookup (1 filtered scroll, no vector math).
+Real Qdrant server, multi-tenant (`tenant` keyword payload index with `is_tenant`), 20 facts per tenant, 256-dim client-side vectors, no sealing (the harness does not wrap the store in `SealedStore`) (a 384-dim model is ~1.5x the vector bytes). Sequential queries, localhost HTTP. `sem` = `Memory::suggest` semantic path (2 requests). `key` = exact fact lookup (1 filtered scroll, no vector math).
 
 | tenants x facts | points | load s | sem p50 | sem p95 | sem p99 | key p50 | key p95 | QPS (16 clients) | Qdrant RSS MiB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|

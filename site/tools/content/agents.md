@@ -95,7 +95,7 @@ prints the common `mcpServers` shape. The only requirement is that the client st
 1. `navigate` returns the page's interactive elements.
 2. `form_inspect` returns typed fields and shows what memory knows about this form.
 3. `form_fill` with `{label: value}` for what you know; add `auto: "required"` to fill the rest from memory.
-4. `form_submit`, then read the status: *Submitted*, *Advanced* (next step: repeat 2 to 4), or *NOT SUBMITTED* with the page's validation messages.
+4. `form_submit`, then read the status: *Submitted*, *Advanced* (next step: repeat 2 to 4), or *NOT ACCEPTED* with the page's validation messages.
 
 `ostler inspect <url>` prints the form model as JSON for debugging.
 

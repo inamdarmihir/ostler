@@ -35,10 +35,7 @@ pub const PAGES: &[(&str, &str)] = &[
         include_str!("../fixtures/captcha_interstitial.html"),
     ),
     ("article", include_str!("../fixtures/article.html")),
-    (
-        "bigfooter",
-        include_str!("../fixtures/bigfooter.html"),
-    ),
+    ("bigfooter", include_str!("../fixtures/bigfooter.html")),
     ("results", include_str!("../fixtures/results.html")),
     (
         "captcha_search_wall",
@@ -71,6 +68,60 @@ pub const PAGES: &[(&str, &str)] = &[
     ("aria", include_str!("../fixtures/aria.html")),
     ("conditional", include_str!("../fixtures/conditional.html")),
     ("datepicker", include_str!("../fixtures/datepicker.html")),
+    ("formless", include_str!("../fixtures/formless.html")),
+    ("xhr_form", include_str!("../fixtures/xhr_form.html")),
+    ("order", include_str!("../fixtures/order.html")),
+    ("order_done", include_str!("../fixtures/order_done.html")),
+    ("two_forms", include_str!("../fixtures/two_forms.html")),
+    (
+        "server_error",
+        include_str!("../fixtures/server_error.html"),
+    ),
+    (
+        "shared_errors",
+        include_str!("../fixtures/shared_errors.html"),
+    ),
+    ("checks", include_str!("../fixtures/checks.html")),
+    ("choices", include_str!("../fixtures/choices.html")),
+    (
+        "react_select",
+        include_str!("../fixtures/react_select.html"),
+    ),
+    (
+        "react_select_broken",
+        include_str!("../fixtures/react_select_broken.html"),
+    ),
+    ("constraints", include_str!("../fixtures/constraints.html")),
+    ("datefmt", include_str!("../fixtures/datefmt.html")),
+    ("login_flash", include_str!("../fixtures/login_flash.html")),
+    ("lockout", include_str!("../fixtures/lockout.html")),
+    ("unlabelled", include_str!("../fixtures/unlabelled.html")),
+    ("chatty", include_str!("../fixtures/chatty.html")),
+    ("recheck", include_str!("../fixtures/recheck.html")),
+    (
+        "username_check",
+        include_str!("../fixtures/username_check.html"),
+    ),
+    (
+        "search_header",
+        include_str!("../fixtures/search_header.html"),
+    ),
+    (
+        "search_results",
+        include_str!("../fixtures/search_results.html"),
+    ),
+    ("checks_text", include_str!("../fixtures/checks_text.html")),
+    ("contactpref", include_str!("../fixtures/contactpref.html")),
+    ("addresses", include_str!("../fixtures/addresses.html")),
+    (
+        "datepicker_dmy",
+        include_str!("../fixtures/datepicker_dmy.html"),
+    ),
+    (
+        "datepicker_assumed",
+        include_str!("../fixtures/datepicker_assumed.html"),
+    ),
+    ("reorder", include_str!("../fixtures/reorder.html")),
 ];
 
 pub struct FixtureServer {
@@ -117,6 +168,32 @@ impl FixtureServer {
                         Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
                     let jsonh = Header::from_bytes("Content-Type", "application/json").unwrap();
                     match (req.method().clone(), path.as_str()) {
+                        // Background chatter for the "busy page" fixture.
+                        (Method::Get, "/ping") => {
+                            let _ = req.respond(Response::from_string("ok"));
+                        }
+                        // Slow validation endpoints for the "late error" fixtures.
+                        (Method::Get, "/api/check") => {
+                            thread::sleep(Duration::from_millis(400));
+                            let _ = req.respond(Response::from_string("ok"));
+                        }
+                        (Method::Get, "/api/user") => {
+                            thread::sleep(Duration::from_millis(1200));
+                            let name = url
+                                .query_pairs()
+                                .find(|(k, _)| k == "name")
+                                .map(|(_, v)| v.to_string())
+                                .unwrap_or_default();
+                            let _ = req.respond(Response::from_string(if name == "admin" {
+                                "taken"
+                            } else {
+                                "free"
+                            }));
+                        }
+                        (Method::Get, "/poll") => {
+                            thread::sleep(Duration::from_secs(4));
+                            let _ = req.respond(Response::from_string("{}"));
+                        }
                         (Method::Get, "/api/states") => {
                             thread::sleep(api_delay);
                             let c = url
@@ -156,6 +233,48 @@ impl FixtureServer {
                                 let page = "<!doctype html><title>Thanks</title><h1>Thank you</h1><p>Your message was received.</p>";
                                 let _ = req.respond(Response::from_string(page).with_header(html));
                             }
+                        }
+                        // Server-rendered login: a bad login redirects back to the page, which shows a flash.
+                        (Method::Post, "/login_flash") => {
+                            let mut body = String::new();
+                            let _ = req.as_reader().read_to_string(&mut body);
+                            // "plain" users get the unstyled message, everyone else the flash banner.
+                            let which = if body.contains("plain") { 2 } else { 1 };
+                            let loc = Header::from_bytes(
+                                "Location",
+                                format!("/login_flash.html?e={which}"),
+                            )
+                            .unwrap();
+                            let _ = req.respond(
+                                Response::from_string("")
+                                    .with_status_code(302)
+                                    .with_header(loc),
+                            );
+                        }
+                        (Method::Get, "/login_flash.html") => {
+                            let flash = match url.query_pairs().find(|(k, _)| k == "e") {
+                                Some((_, v)) if v == "1" => "<div id=\"flash\" class=\"flash error\">Your username is invalid!<a href=\"#\" class=\"close\">x</a></div>",
+                                _ => "",
+                            };
+                            let plain = match url.query_pairs().find(|(k, _)| k == "e") {
+                                Some((_, v)) if v == "2" => {
+                                    "<p>The password you entered is incorrect.</p>"
+                                }
+                                _ => "",
+                            };
+                            let body = include_str!("../fixtures/login_flash.html")
+                                .replace("<!--FLASH-->", flash)
+                                .replace("<!--MSG-->", plain);
+                            let _ = req.respond(Response::from_string(body).with_header(html));
+                        }
+                        // A form post the server fails: a 500 with an ordinary-looking error page.
+                        (Method::Post, "/fail") => {
+                            let page = "<!doctype html><title>Error</title><h1>Internal Server Error</h1><p>Something went wrong.</p>";
+                            let _ = req.respond(
+                                Response::from_string(page)
+                                    .with_status_code(500)
+                                    .with_header(html),
+                            );
                         }
                         // A normal-looking page served with a 404 status (GitHub style).
                         (Method::Get, "/missing") => {
