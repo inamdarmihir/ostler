@@ -40,7 +40,7 @@ ostler config path                          # ~/.config/ostler/config.toml
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `tools` | `OSTLER_TOOLS` | `core`, `forms` or `all` |
 
-Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_KEY_STORE`, `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are :unreleased:.
+Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_KEY_STORE`, `OSTLER_ALLOW_NEW_KEY` (same as `--allow-new-key`: let a first start create the sealing key while Qdrant cannot be checked), `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are :unreleased:.
 
 ## Commands
 
@@ -64,7 +64,7 @@ ostler <COMMAND>
 
 | flag | default | description |
 |---|---|---|
-| `--tools` | `all` | `core`, `forms` or `all` |
+| `--tools` | `auto` | `auto` lists the core tools and adds forms and memory when a page has form fields; or `core`, `forms`, `all` |
 | `--lean` | off | lean Chrome flags; no image, font or media downloads |
 | `--headed` | off | show the browser window |
 | `--profile-dir DIR` | throwaway | persistent Chrome profile (keeps logins); one profile per server |

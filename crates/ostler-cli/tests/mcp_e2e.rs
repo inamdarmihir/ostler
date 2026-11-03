@@ -65,13 +65,19 @@ impl Client {
         self.next += 1;
         self.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
             .await;
-        let line = tokio::time::timeout(Duration::from_secs(60), self.out.next_line())
-            .await
-            .expect("timeout")
-            .unwrap()
-            .expect("eof");
-        let v: Value = serde_json::from_str(&line)
-            .unwrap_or_else(|e| panic!("non-JSON on stdout: {line:?} ({e})"));
+        // Server notifications (tools/list_changed) may arrive between a request and its reply.
+        let v: Value = loop {
+            let line = tokio::time::timeout(Duration::from_secs(60), self.out.next_line())
+                .await
+                .expect("timeout")
+                .unwrap()
+                .expect("eof");
+            let v: Value = serde_json::from_str(&line)
+                .unwrap_or_else(|e| panic!("non-JSON on stdout: {line:?} ({e})"));
+            if v.get("id").is_some() || v.get("method").is_none() {
+                break v;
+            }
+        };
         assert_eq!(v["id"], id, "{v}");
         v
     }
@@ -434,6 +440,38 @@ async fn confirm_gate_and_domain_policy_over_the_wire() {
     let (err, msg) = c.tool("form_submit", json!({"confirm": true})).await;
     assert!(!err, "{msg}");
     assert!(srv.wait_for(1, Duration::from_secs(3)));
+}
+
+#[tokio::test]
+async fn scroll_and_hover_work_on_a_real_page() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    let (_, nav) = c
+        .tool("navigate", json!({"url": srv.url("/scrollhover.html")}))
+        .await;
+    // Hovering opens the menu.
+    let r = ref_of(&nav, "Menu");
+    let (err, t) = c.tool("hover", json!({"ref": r})).await;
+    assert!(!err && t.contains("Hover menu is open"), "{t}");
+    // Page scrolling reports position, and the far button can be scrolled to and clicked.
+    let (err, t) = c
+        .tool("scroll", json!({"direction": "bottom", "observe": "none"}))
+        .await;
+    assert!(!err && t.contains("Position:"), "{t}");
+    let (_, t) = c
+        .tool("scroll", json!({"direction": "top", "observe": "none"}))
+        .await;
+    assert!(t.contains("Position: 0/"), "{t}");
+    let (_, snap) = c.tool("snapshot", json!({})).await;
+    let far = ref_of(&snap, "Far away button");
+    let (err, t) = c
+        .tool("scroll", json!({"ref": far, "observe": "none"}))
+        .await;
+    assert!(!err && !t.contains("Position: 0/"), "{t}");
+    let (err, t) = c.tool("scroll", json!({"direction": "sideways"})).await;
+    assert!(err && t.contains("unknown direction"), "{t}");
 }
 
 #[tokio::test]

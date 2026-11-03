@@ -17,6 +17,10 @@ pub struct LaunchOptions {
     pub extra_args: Vec<String>,
     /// Trade rarely-needed browser features for a smaller footprint (see [`lean_args`]).
     pub lean: bool,
+    /// Attach to a Chrome you started yourself with `--remote-debugging-port` instead of launching one.
+    /// Loopback only (`http://127.0.0.1:9222` or a `ws://127.0.0.1:...` DevTools URL). Ostler never opens
+    /// the debugging port for you, and never kills a browser it did not start.
+    pub cdp_url: Option<String>,
 }
 
 impl Default for LaunchOptions {
@@ -28,6 +32,7 @@ impl Default for LaunchOptions {
             window_size: (1280, 900),
             extra_args: vec![],
             lean: false,
+            cdp_url: None,
         }
     }
 }
@@ -130,7 +135,8 @@ impl Transport {
 
 /// A running browser process. Killed on drop.
 pub struct Chrome {
-    child: Child,
+    /// `None` when attached to a browser the user started: it is theirs, so we never kill it.
+    child: Option<Child>,
     /// DevTools WebSocket URL; `None` on the default pipe transport (there is no port).
     pub ws_url: Option<String>,
     /// Pipe transport: the connection, opened at launch because the pipe ends can be used once.
@@ -141,6 +147,16 @@ pub struct Chrome {
 
 impl Chrome {
     pub async fn launch(opts: LaunchOptions) -> Result<Self> {
+        if let Some(url) = opts.cdp_url.as_deref() {
+            let ws_url = resolve_cdp_url(url).await?;
+            return Ok(Self {
+                child: None,
+                ws_url: Some(ws_url),
+                #[cfg(unix)]
+                pipe: None,
+                _profile: None,
+            });
+        }
         let transport = Transport::from_env()?;
         let exe = find_chrome(opts.chrome_path.as_deref())?;
         let (profile_dir, temp) = match &opts.user_data_dir {
@@ -270,7 +286,7 @@ impl Chrome {
                 Err(e) => return Err(CdpError::Launch(e.to_string())),
             }
             return Ok(Self {
-                child,
+                child: Some(child),
                 ws_url: None,
                 pipe: Some(conn),
                 _profile: temp,
@@ -302,7 +318,7 @@ impl Chrome {
         tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
 
         Ok(Self {
-            child,
+            child: Some(child),
             ws_url: Some(ws_url),
             #[cfg(unix)]
             pipe: None,
@@ -323,11 +339,18 @@ impl Chrome {
     }
 
     pub fn pid(&self) -> Option<u32> {
-        self.child.id()
+        self.child.as_ref().and_then(|c| c.id())
+    }
+
+    /// True when this is someone else's browser (`cdp_url`): close tabs we made, never the browser.
+    pub fn is_attached(&self) -> bool {
+        self.child.is_none()
     }
 
     pub async fn close(mut self) {
-        let _ = self.child.kill().await;
+        if let Some(c) = self.child.as_mut() {
+            let _ = c.kill().await;
+        }
     }
 }
 
@@ -444,4 +467,212 @@ pub fn process_tree_stats(root: u32) -> Option<(usize, u64)> {
     let procs = descendants(root)?;
     let kb = accurate_kb(&procs).unwrap_or_else(|| procs.iter().map(|(_, r)| r).sum());
     Some((procs.len(), kb))
+}
+
+/// Is `host` a loopback name or address? Attaching is refused for anything else: a debugging port
+/// has no authentication, so reaching one over a network would hand over the whole browser.
+fn is_loopback_host(host: &str) -> bool {
+    let h = host.trim_start_matches('[').trim_end_matches(']');
+    h.eq_ignore_ascii_case("localhost")
+        || h.parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Split `scheme://host:port/path` into (scheme, host, port, path). Minimal on purpose.
+fn split_url(url: &str) -> Option<(&str, &str, u16, &str)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let (auth, path) = match rest.find('/') {
+        Some(i) => (&rest[..i], &rest[i..]),
+        None => (rest, ""),
+    };
+    if auth.contains('@') {
+        return None;
+    }
+    let (host, port) = if let Some(end) = auth.find(']') {
+        let host = &auth[..=end];
+        let port = auth[end + 1..].strip_prefix(':').unwrap_or("");
+        (host, port)
+    } else {
+        auth.rsplit_once(':').unwrap_or((auth, ""))
+    };
+    let default = if scheme == "ws" || scheme == "http" {
+        80
+    } else {
+        0
+    };
+    let port = if port.is_empty() {
+        default
+    } else {
+        port.parse().ok()?
+    };
+    if host.is_empty() || port == 0 {
+        return None;
+    }
+    Some((scheme, host, port, path))
+}
+
+/// Turn the user's `--cdp-url` into a DevTools WebSocket URL, refusing anything not on this machine.
+/// `ws://` URLs pass through; `http://127.0.0.1:9222` is resolved through its `/json/version` page.
+pub async fn resolve_cdp_url(url: &str) -> Result<String> {
+    let bad = |m: String| CdpError::Launch(format!("--cdp-url {url:?}: {m}"));
+    let (scheme, host, port, path) = split_url(url.trim()).ok_or_else(|| {
+        bad("expected http://127.0.0.1:9222 or ws://127.0.0.1:9222/devtools/browser/<id>".into())
+    })?;
+    if scheme != "http" && scheme != "ws" {
+        return Err(bad("only http:// and ws:// are accepted".into()));
+    }
+    if !is_loopback_host(host) {
+        return Err(bad(
+            "refusing a non-loopback host: a DevTools port has no authentication. Use 127.0.0.1 (tunnel with SSH if the browser is remote)".into(),
+        ));
+    }
+    if scheme == "ws" {
+        if !path.starts_with("/devtools/") {
+            return Err(bad("a ws:// URL must be the browser endpoint, /devtools/browser/<id> (or use http://host:port)".into()));
+        }
+        return Ok(url.trim().to_string());
+    }
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let addr = format!("{host}:{port}");
+    let fail = |e: String| {
+        bad(format!(
+            "could not read {addr}/json/version ({e}). Start Chrome yourself with --remote-debugging-port={port} and a separate --user-data-dir, then retry"
+        ))
+    };
+    let work = async {
+        let mut s = tokio::net::TcpStream::connect(&addr)
+            .await
+            .map_err(|e| e.to_string())?;
+        let req =
+            format!("GET /json/version HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+        s.write_all(req.as_bytes())
+            .await
+            .map_err(|e| e.to_string())?;
+        // Chrome may keep the connection open, so stop at Content-Length rather than waiting for EOF.
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            let n = s.read(&mut chunk).await.map_err(|e| e.to_string())?;
+            buf.extend_from_slice(&chunk[..n]);
+            let text = String::from_utf8_lossy(&buf);
+            if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                let want = head.lines().find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                });
+                if want.is_some_and(|w| body.len() >= w) {
+                    break;
+                }
+            }
+            if n == 0 || buf.len() > (1 << 20) {
+                break;
+            }
+        }
+        Ok::<_, String>(String::from_utf8_lossy(&buf).into_owned())
+    };
+    let resp = tokio::time::timeout(Duration::from_secs(5), work)
+        .await
+        .map_err(|_| fail("timed out".into()))?
+        .map_err(fail)?;
+    let body = resp.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+    let v: serde_json::Value = serde_json::from_str(body.trim())
+        .map_err(|_| fail("the reply was not DevTools JSON".into()))?;
+    let ws = v["webSocketDebuggerUrl"]
+        .as_str()
+        .ok_or_else(|| fail("no webSocketDebuggerUrl in the reply".into()))?;
+    // The reply is data from a local port; re-check it before trusting it.
+    match split_url(ws) {
+        Some(("ws", h, _, p)) if is_loopback_host(h) && p.starts_with("/devtools/") => {
+            Ok(ws.to_string())
+        }
+        _ => Err(bad(
+            "the browser advertised a non-loopback DevTools URL; refusing".into(),
+        )),
+    }
+}
+
+#[cfg(test)]
+mod attach_tests {
+    use super::*;
+
+    #[test]
+    fn loopback_only() {
+        assert!(is_loopback_host("127.0.0.1"));
+        assert!(is_loopback_host("localhost"));
+        assert!(is_loopback_host("[::1]"));
+        assert!(!is_loopback_host("10.0.0.5"));
+        assert!(!is_loopback_host("example.com"));
+        assert!(!is_loopback_host("0.0.0.0"));
+    }
+
+    #[test]
+    fn splits_urls() {
+        assert_eq!(
+            split_url("http://127.0.0.1:9222"),
+            Some(("http", "127.0.0.1", 9222, ""))
+        );
+        assert_eq!(
+            split_url("ws://[::1]:9222/devtools/browser/x"),
+            Some(("ws", "[::1]", 9222, "/devtools/browser/x"))
+        );
+        assert!(split_url("http://u:p@127.0.0.1:9222").is_none());
+        assert!(split_url("nonsense").is_none());
+    }
+
+    #[tokio::test]
+    async fn refuses_remote_and_odd_urls() {
+        for u in [
+            "http://example.com:9222",
+            "ws://192.168.1.2:9222/devtools/browser/a",
+            "ftp://127.0.0.1:1",
+            "ws://127.0.0.1:9222/other",
+        ] {
+            let e = resolve_cdp_url(u).await.unwrap_err().to_string();
+            assert!(e.contains("--cdp-url"), "{e}");
+        }
+        assert_eq!(
+            resolve_cdp_url("ws://127.0.0.1:9222/devtools/browser/abc")
+                .await
+                .unwrap(),
+            "ws://127.0.0.1:9222/devtools/browser/abc"
+        );
+    }
+
+    #[tokio::test]
+    async fn resolves_http_and_rejects_a_remote_advertised_url() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for (ws, ok) in [
+            ("ws://127.0.0.1:1/devtools/browser/zz", true),
+            ("ws://evil.example:1/devtools/browser/zz", false),
+        ] {
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = l.local_addr().unwrap().port();
+            let body = format!("{{\"webSocketDebuggerUrl\":\"{ws}\"}}");
+            tokio::spawn(async move {
+                let (mut s, _) = l.accept().await.unwrap();
+                let mut b = [0u8; 512];
+                let _ = s.read(&mut b).await;
+                let r = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+                    body.len()
+                );
+                s.write_all(r.as_bytes()).await.unwrap();
+            });
+            let r = resolve_cdp_url(&format!("http://127.0.0.1:{port}")).await;
+            assert_eq!(r.is_ok(), ok, "{r:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn nothing_listening_gives_a_fix() {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        let e = resolve_cdp_url(&format!("http://127.0.0.1:{port}"))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("--remote-debugging-port"), "{e}");
+    }
 }

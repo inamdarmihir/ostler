@@ -27,7 +27,7 @@ With memory in Qdrant, payloads are **sealed on your machine by default** (`--se
 - Fact values, descriptions, playbooks and episodes are encrypted with **AES-256-GCM**, with the point id bound in as associated data.
 - Site names, field labels, profile keys and fingerprints are replaced by **keyed hashes (HMAC-SHA-256)**, and point ids are keyed too, so filters still work but the server cannot test guesses ("passport number") against what it stores.
 - Episodes are **redacted before** they are embedded or stored: emails, runs of four or more digits (phones, PIN codes, card numbers) and URL query strings are masked, in addition to the values the agent typed.
-- The key lives in `OSTLER_MEMORY_KEY` or an owner-only `memory.key` next to the config file, created atomically on first use. **Back it up: there is no recovery.** If you lose it, sealed memory is unreadable.
+- The key lives in `OSTLER_MEMORY_KEY` or an owner-only `memory.key` next to the config file, created atomically on the first start. That start only creates a key after Qdrant was reached and holds no sealed memory for your tenant; with Qdrant down it refuses (start Qdrant, restore a backup with `ostler memory key import`, or pass `--allow-new-key` for a genuine first-time setup). **Back it up: there is no recovery.** If you lose it, sealed memory is unreadable.
 - `--seal on` forces it; `--seal off` opts out (and `ostler doctor` and `serve` warn that anyone who can read your Qdrant can then read your saved facts and the sites you use).
 
 ### What is hidden, and what is not
@@ -152,3 +152,13 @@ Try it without Qdrant: `ostler memory --memory ephemeral list` keeps memory in-p
 | memory on self-hosted Qdrant | URL (plus key if you set one) and `--embeddings dev-hash`, or `--embeddings ollama` for semantic search |
 
 See [Security model](security.html) for the threat-model rows on secrets, cross-user exposure and anyone who can read your Qdrant.
+
+### Upgrading older memory
+
+Two kinds of older sealed points need one command, `ostler memory seal`, which is safe to repeat and copies before it deletes:
+
+- **`v1` blobs** (written by early builds) are no longer read: they did not authenticate the clear fields. `serve`, `memory list` and the other commands stop with the command to run; the upgrade opens them once with your key and saves them as `v2`.
+- **Keys saved under an older normalisation** (emoji-only keys, decomposed accents) sit at a different point than today's lookup asks for. The same command re-files them under the current key and removes the stray copy, without overwriting a newer fact.
+
+On Linux, `key_store = keychain` needs a running Secret Service (gnome-keyring, KWallet). Without one Ostler stops with the reason and `ostler config set key_store file`; it never falls back by itself, so the key is never half in a keyring and half on disk.
+

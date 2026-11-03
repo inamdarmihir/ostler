@@ -1,0 +1,23 @@
+<!doctype html><meta charset=utf-8><title>Apply: Platform Engineer</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Apply: Platform Engineer</h1>
+<form id="f">
+ <label for="fn">First name *</label><input id="fn" name="first_name" required autocomplete="given-name">
+ <label for="ln">Last name *</label><input id="ln" name="last_name" required autocomplete="family-name">
+ <label for="em">Email *</label><input id="em" name="email" type="email" required>
+ <label for="ph">Phone</label><input id="ph" name="phone" type="tel">
+ <label for="cv">Resume/CV *</label><input id="cv" name="resume" type="file" required accept=".pdf,.doc,.docx">
+ <label for="li">LinkedIn URL</label><input id="li" name="linkedin" type="url">
+ <label for="cl">Cover letter</label><textarea id="cl" name="cover"></textarea>
+ <fieldset><legend>Are you legally authorized to work in the United States? *</legend>
+  <label><input type="radio" name="authorized" value="yes"> Yes</label><label><input type="radio" name="authorized" value="no"> No</label></fieldset>
+ <fieldset><legend>Will you now or in the future require sponsorship? *</legend>
+  <label><input type="radio" name="sponsor" value="yes"> Yes</label><label><input type="radio" name="sponsor" value="no"> No</label></fieldset>
+ <h2>Voluntary self-identification (EEO)</h2>
+ <label for="g">Gender</label><select id="g" name="eeo_gender"><option value="">Select...</option><option value="m">Male</option><option value="f">Female</option><option value="nb">Non-binary</option><option value="d">Decline to self-identify</option></select>
+ <label for="r">Race/Ethnicity</label><select id="r" name="eeo_race"><option value="">Select...</option><option value="a">Asian</option><option value="b">Black or African American</option><option value="h">Hispanic or Latino</option><option value="w">White</option><option value="two">Two or more races</option><option value="d">Decline to self-identify</option></select>
+ <label for="v">Veteran status</label><select id="v" name="eeo_veteran"><option value="">Select...</option><option value="no">I am not a protected veteran</option><option value="yes">I identify as a protected veteran</option><option value="d">Decline to self-identify</option></select>
+ <label for="d">Disability status</label><select id="d" name="eeo_disability"><option value="">Select...</option><option value="yes">Yes, I have a disability</option><option value="no">No, I do not have a disability</option><option value="d">I do not want to answer</option></select>
+ <button type="submit">Submit application</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();await send(fdo(e.target));document.body.innerHTML='<h1>Application submitted</h1>'});</script>

@@ -115,3 +115,40 @@ async fn sealed_memory_roundtrips_and_the_server_sees_no_plaintext() {
     m.wipe().await.unwrap();
     assert!(m.facts(10).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn v1_points_on_a_real_qdrant_are_refused_then_migrated_to_v2() {
+    let Some(srv) = start().await else { return };
+    let raw = store(&srv.url, 256);
+    let sealed: Arc<dyn Store> = Arc::new(SealedStore::new(raw.clone(), [4; 32]));
+    let m = Memory::new(sealed, "mig");
+    m.init().await.unwrap();
+    // A fact written by an older build (`v1`), saved under the id that build derived.
+    write_v1_point_for_tests(
+        raw.clone(),
+        [4; 32],
+        Kind::Profile,
+        &Memory::fact_id_for_tests("mig", "email"),
+        "email",
+        json!({"tenant": "mig", "key": "email", "key_norm": "email", "value": "old@example.com",
+               "description": null, "autocomplete": "email", "source": "user", "updated_at": 11}),
+    )
+    .await
+    .unwrap();
+    assert!(
+        m.fact("email").await.unwrap().is_none(),
+        "a v1 point was read"
+    );
+    assert_eq!(
+        probe_key(raw.clone(), [4; 32], "mig").await.unwrap(),
+        KeyProbe::NeedsUpgrade {
+            v1: 1,
+            stale_keys: 0
+        }
+    );
+    let rep = migrate_sealed(raw.clone(), [4; 32], "mig").await.unwrap();
+    assert_eq!(rep.v1_upgraded, 1);
+    let f = m.fact("email").await.unwrap().unwrap();
+    assert_eq!((f.value, f.updated_at), (json!("old@example.com"), 11));
+    assert_eq!(probe_key(raw, [4; 32], "mig").await.unwrap(), KeyProbe::Ok);
+}

@@ -229,6 +229,10 @@ pub struct Form {
     /// Page-level validation/alert messages near this form.
     #[serde(default)]
     pub errors: Vec<String>,
+    /// Labels of controls that exist but are not showing right now (a collapsed step, a branch another
+    /// answer reveals). Lets a miss say "hidden" instead of "not found".
+    #[serde(default)]
+    pub concealed: Vec<String>,
 }
 
 impl Form {
@@ -296,6 +300,7 @@ mod tests {
             submit: vec![],
             step: None,
             errors: vec![],
+            concealed: vec![],
         };
         let a = mk(&["Name", "Email"]);
         let b = mk(&["Email", "Name"]);

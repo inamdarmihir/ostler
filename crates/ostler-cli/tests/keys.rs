@@ -415,14 +415,30 @@ fn a_replaced_key_is_refused_with_recovery_commands_and_wipe_or_import_fixes_it(
     );
     assert!(!o.stderr.contains("unencrypted"), "{}", o.stderr);
 
-    // 2. The key file is lost: a new one gets generated. The data must not be shadowed.
+    // 2a. The key file is lost. Starting must NOT mint a new key over data it cannot open.
     std::fs::remove_file(&keyfile).unwrap();
+    let o = run(mem(&cfg, &q, "kt").arg("list"));
+    assert!(!o.ok, "list must refuse; got {}", o.stdout);
+    for want in [
+        "refusing to create a new memory key",
+        "1 sealed point(s)",
+        "ostler memory key import",
+        "ostler memory wipe --yes --tenant kt",
+    ] {
+        assert!(o.stderr.contains(want), "missing {want:?} in {}", o.stderr);
+    }
+    assert!(!keyfile.exists(), "a key was created over sealed memory");
+    // --allow-new-key does not override "sealed memory is there".
+    let o = run(mem(&cfg, &q, "kt").args(["--allow-new-key", "list"]));
+    assert!(!o.ok && !keyfile.exists(), "{}", o.stderr);
+
+    // 2b. A different key is in place (replaced, restored from the wrong backup): refused, with recovery.
+    std::fs::write(&keyfile, KEY_B).unwrap();
     let o = run(mem(&cfg, &q, "kt").arg("list"));
     assert!(!o.ok, "list must refuse; got {}", o.stdout);
     for want in [
         "refusing to start",
         "1 sealed point(s)",
-        "just created",
         "ostler memory key import --force",
         "ostler memory wipe --yes --tenant kt",
     ] {
@@ -451,9 +467,8 @@ fn a_replaced_key_is_refused_with_recovery_commands_and_wipe_or_import_fixes_it(
         o.stderr
     );
     assert!(!o.stderr.contains("MCP over stdio"), "{}", o.stderr);
-    // The key that now exists is not "just created" on the next run, but still refused.
     let o = run(mem(&cfg, &q, "kt").arg("list"));
-    assert!(!o.ok && !o.stderr.contains("just created"), "{}", o.stderr);
+    assert!(!o.ok, "{}", o.stderr);
 
     // Another tenant is unaffected.
     let o = run(mem(&cfg, &q, "other").arg("list"));
@@ -550,4 +565,170 @@ fn legacy_plaintext_is_warned_about_on_list_and_serve_until_sealed() {
     );
     let o = run(&mut serve());
     assert!(!o.stderr.contains("unencrypted"), "{}", o.stderr);
+}
+
+// ---------- first start: no key is created blind ----------
+
+#[test]
+fn first_start_with_qdrant_down_refuses_to_create_a_key_until_told_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let keyfile = dir.path().join("memory.key");
+    let dead = format!("http://127.0.0.1:{}", free_port());
+    let args = |extra: &[&str]| {
+        let mut c = ostler(&cfg);
+        c.args(["memory", "--qdrant-url", &dead, "--embeddings", "dev-hash"]);
+        c.args(extra);
+        c
+    };
+
+    let o = run(&mut args(&["remember", "email", "a@b.co"]));
+    assert!(!o.ok);
+    for want in [
+        "refusing to create a new memory key",
+        "could not be checked",
+        "--allow-new-key",
+        "ostler memory key import",
+    ] {
+        assert!(o.stderr.contains(want), "missing {want:?} in {}", o.stderr);
+    }
+    assert!(
+        !keyfile.exists(),
+        "a key was created with Qdrant unreachable"
+    );
+    // serve and doctor take the same road.
+    for sub in [vec!["serve"], vec!["doctor"]] {
+        let mut c = ostler(&cfg);
+        c.args(&sub)
+            .args(["--qdrant-url", &dead, "--embeddings", "dev-hash"]);
+        let o = run(&mut c);
+        assert!(
+            !o.ok && !keyfile.exists(),
+            "{sub:?}: {}{}",
+            o.stdout,
+            o.stderr
+        );
+    }
+
+    // The explicit flag is the way through for a genuine first-time setup (the command then fails on Qdrant itself).
+    let o = run(&mut args(&["--allow-new-key", "list"]));
+    assert!(o.stderr.contains("--allow-new-key"), "{}", o.stderr);
+    assert!(keyfile.exists(), "{}", o.stderr);
+    assert!(!o.stderr.contains("refusing to create"), "{}", o.stderr);
+}
+
+#[test]
+fn first_start_creates_the_key_once_qdrant_is_seen_empty() {
+    let Some(q) = qdrant() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let keyfile = dir.path().join("memory.key");
+    let o = run(mem(&cfg, &q, "fresh").args(["remember", "city", "Pune"]));
+    assert!(o.ok, "{}", o.stderr);
+    assert!(keyfile.exists());
+    assert!(o.stderr.contains("created the key"), "{}", o.stderr);
+    let o = run(mem(&cfg, &q, "fresh").arg("list"));
+    assert!(
+        o.ok && o.stdout.contains("Pune"),
+        "{}{}",
+        o.stdout,
+        o.stderr
+    );
+}
+
+// ---------- retired v1 blobs ----------
+
+fn raw_store(url: &str) -> std::sync::Arc<dyn ostler_memory::Store> {
+    use ostler_memory::{HashEmbedder, QdrantConfig, QdrantStore, VectorSource};
+    std::sync::Arc::new(
+        QdrantStore::new(QdrantConfig {
+            url: url.into(),
+            api_key: None,
+            vectors: VectorSource::Client(std::sync::Arc::new(HashEmbedder::new(384))),
+            timeout: Duration::from_secs(10),
+            on_disk: false,
+            allow_insecure: false,
+            collection_prefix: String::new(),
+        })
+        .unwrap(),
+    )
+}
+
+#[test]
+fn v1_points_are_refused_with_the_fix_and_memory_seal_upgrades_them() {
+    let Some(q) = qdrant() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    std::fs::write(dir.path().join("memory.key"), KEY_A).unwrap();
+    let key = ostler_memory::SealKey::decode(KEY_A).unwrap();
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let raw = raw_store(&q.url);
+    rt.block_on(async {
+        use ostler_memory::{Kind, Memory};
+        // Make sure the collections exist, then plant a point as an older build wrote it.
+        Memory::new(raw.clone(), "old").init().await.unwrap();
+        ostler_memory::write_v1_point_for_tests(
+            raw.clone(),
+            key,
+            Kind::Profile,
+            &Memory::fact_id_for_tests("old", "city"),
+            "city",
+            serde_json::json!({"tenant": "old", "key": "city", "key_norm": "city", "value": "Pune",
+                "description": null, "autocomplete": null, "source": "user", "updated_at": 5}),
+        )
+        .await
+        .unwrap();
+    });
+
+    // Nothing reads or writes until it is upgraded, and the error names the fix.
+    for args in [vec!["list"], vec!["remember", "x", "y"]] {
+        let o = run(mem(&cfg, &q, "old").args(&args));
+        assert!(!o.ok, "{args:?} should refuse: {}", o.stdout);
+        assert!(
+            o.stderr.contains("retired sealed format `v1`")
+                && o.stderr.contains("ostler memory seal --tenant old"),
+            "{}",
+            o.stderr
+        );
+    }
+    let o = run(ostler(&cfg).args([
+        "serve",
+        "--qdrant-url",
+        &q.url,
+        "--embeddings",
+        "dev-hash",
+        "--tenant",
+        "old",
+    ]));
+    assert!(
+        !o.ok && o.stderr.contains("ostler memory seal"),
+        "{}",
+        o.stderr
+    );
+
+    // `memory seal` upgrades; the fact survives with its original timestamp semantics.
+    let o = run(mem(&cfg, &q, "old").arg("seal"));
+    assert!(o.ok, "{}{}", o.stdout, o.stderr);
+    assert!(
+        o.stdout
+            .contains("Upgraded 1 point(s) from sealed format v1 to v2"),
+        "{}",
+        o.stdout
+    );
+    let o = run(mem(&cfg, &q, "old").arg("list"));
+    assert!(
+        o.ok && o.stdout.contains("Pune"),
+        "{}{}",
+        o.stdout,
+        o.stderr
+    );
+    // Running it again has nothing to do.
+    let o = run(mem(&cfg, &q, "old").arg("seal"));
+    assert!(
+        o.ok && !o.stdout.contains("Upgraded"),
+        "{}{}",
+        o.stdout,
+        o.stderr
+    );
 }

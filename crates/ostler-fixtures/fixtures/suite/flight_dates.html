@@ -1,0 +1,22 @@
+<!doctype html><meta charset=utf-8><title>Search flights</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>.cal{border:1px solid #888;padding:.5rem;width:270px;margin-top:.3rem;background:#fff}.cal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.cal .g button{margin:0;padding:.2rem;width:100%}</style>
+<h1>Search flights</h1>
+<form id="f" onsubmit="return false">
+ <label for="from">From</label><input id="from" name="from" value="SFO" readonly>
+ <label for="dep">Departure date</label><input id="dep" name="depart" readonly placeholder="Select date">
+ <label for="ret">Return date</label><input id="ret" name="return" readonly placeholder="Select date">
+ <div class="cal" id="cal" role="dialog" aria-label="Calendar" hidden>
+  <div><button type="button" id="pv" aria-label="Previous month">&lt;</button> <strong id="ti" aria-live="polite"></strong> <button type="button" id="nx" aria-label="Next month">&gt;</button></div>
+  <div class="g" id="g"></div></div>
+ <button type="button" id="go">Search</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);const M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+let y=2026,m=10,tgt=null;const iso=(y,m,d)=>y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+const fmt=s=>{const [a,b,c]=s.split('-');return c+' '+M[+b-1].slice(0,3)+' '+a};
+function draw(){$('ti').textContent=M[m]+' '+y;const g=$('g');g.innerHTML='';const n=new Date(y,m+1,0).getDate();
+ for(let i=1;i<=n;i++){const b=document.createElement('button');b.type='button';b.textContent=i;b.setAttribute('aria-label',M[m]+' '+i+', '+y);
+  b.onclick=()=>{tgt.dataset.iso=iso(y,m,i);tgt.value=fmt(iso(y,m,i));$('cal').hidden=true};g.appendChild(b)}}
+for(const el of [$('dep'),$('ret')])el.addEventListener('click',()=>{tgt=el;$('cal').hidden=false;draw()});
+$('pv').onclick=()=>{m--;if(m<0){m=11;y--}draw()};$('nx').onclick=()=>{m++;if(m>11){m=0;y++}draw()};
+$('go').addEventListener('click',async()=>{await send({from:$('from').value,depart:$('dep').dataset.iso||'',return:$('ret').dataset.iso||''});document.body.innerHTML='<h1>Searching...</h1>'});</script>

@@ -1,0 +1,23 @@
+<!doctype html><meta charset=utf-8><title>Create account</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Create your account</h1>
+<form id="f" novalidate>
+ <label for="u">Username</label><input id="u" name="username" required minlength="3" autocomplete="username">
+ <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
+ <label for="pw">Password</label><input id="pw" name="password" type="password" required autocomplete="new-password" aria-describedby="rules">
+ <ul id="rules"><li data-r="len">At least 12 characters</li><li data-r="up">An uppercase letter</li><li data-r="dg">A number</li><li data-r="sy">A symbol</li></ul>
+ <label for="pw2">Confirm password</label><input id="pw2" name="confirm" type="password" required autocomplete="new-password">
+ <div class="error" id="m" role="alert" hidden>Passwords do not match.</div>
+ <label><input type="checkbox" name="tos" value="1" id="tos"> I agree to the Terms of Service *</label>
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Create account</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);
+const R={len:v=>v.length>=12,up:v=>/[A-Z]/.test(v),dg:v=>/\d/.test(v),sy:v=>/[^A-Za-z0-9]/.test(v)};
+const chk=()=>{document.querySelectorAll('#rules li').forEach(li=>li.style.color=R[li.dataset.r]($('pw').value)?'green':'#b00020');$('m').hidden=!$('pw2').value||$('pw').value===$('pw2').value};
+$('pw').addEventListener('input',chk);$('pw2').addEventListener('input',chk);
+$('f').addEventListener('submit',async e=>{e.preventDefault();const o=fdo(e.target),er=$('err');er.hidden=true;
+ if(!Object.values(R).every(f=>f(o.password||''))){er.textContent='Password does not meet the rules.';er.hidden=false;return}
+ if(o.password!==o.confirm){er.textContent='Passwords do not match.';er.hidden=false;return}
+ if(!$('tos').checked){er.textContent='You must accept the terms.';er.hidden=false;return}
+ await send(o);document.body.innerHTML='<h1>Welcome</h1>'});</script>

@@ -88,6 +88,18 @@ A CAPTCHA, hCaptcha, Turnstile or "verify you are human" wall is reported with a
 - Fill on very large forms (thousands of fields) is slow, because every key re-reads the form.
 - It has been evaluated on local fixtures, not on the open web. See [Benchmarks](benchmarks.html).
 
+## When not to use Ostler
+
+Ostler is a form-filling browser for an agent working on your behalf, on one machine. It is the wrong tool when:
+
+- **The site walls off automation.** CAPTCHA, Cloudflare/Turnstile, "verify you are human" pages and search-engine bot checks are reported with a `CHALLENGE:` line and handed to a person. Ostler never solves or bypasses them, and it is not built to avoid detection: there is no stealth patching, fingerprint spoofing, residential proxy or IP rotation. A site that blocks headless or datacenter Chrome will block Ostler. `--headed` plus a persistent `--profile-dir` lets *you* pass a check once; it does not make a bot wall go away.
+- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](benchmarks.html)).
+- **The flow needs an identity Ostler does not have.** There is no mailbox, phone number, SMS/OTP receiver or authenticator: one-time codes, email-link verification, passkeys, hardware keys and 2FA prompts need a person. Passwords and card numbers are never read back or remembered; sensitive fields are refused and the agent is told to ask you. It does not create accounts on your behalf out of thin air.
+- **The page is outside what the injected runtime can see.** Cross-origin iframes (many hosted card fields), closed shadow roots, canvas-drawn UIs, native OS dialogs and file pickers, and desktop apps are not reachable. A control that stays disabled until a person scrolls or hovers is reported as disabled rather than worked around.
+- **A wrong submit is expensive and nobody is checking.** Ostler verifies every value by reading it back and refuses to call a submit a success without evidence, but it cannot know whether a form means what it says. For payments, legal acceptance and anything irreversible, run with `--require-confirm-submit` and review the result yourself.
+
+When Ostler cannot finish, it says which field and why (rejected value with the page's own message, hidden or disabled control, key not found) and points at `screenshot` for the element; it does not report a partial fill as done.
+
 ## Design records
 
 The reasoning, with the alternatives that were rejected, is in [ADR-0004](repo:docs/adr/0004-injected-runtime.md) (injected runtime) and [ADR-0005](repo:docs/adr/0005-form-ir-and-verification.md) (form model and verification). A summary is on the [Architecture](architecture.html) page.

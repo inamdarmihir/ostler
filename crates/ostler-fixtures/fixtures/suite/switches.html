@@ -1,0 +1,14 @@
+<!doctype html><meta charset=utf-8><title>Notification settings</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>[role=switch]{display:inline-block;width:auto;margin:0 .5rem 0 0;padding:.3rem .8rem;border:1px solid #888;border-radius:1rem;background:#eee}[role=switch][aria-checked=true]{background:#2a7;color:#fff}</style>
+<h1>Notification settings</h1>
+<form id="f">
+ <div><button type="button" role="switch" aria-checked="false" id="s1" aria-labelledby="l1"></button><span id="l1">Email alerts</span></div>
+ <div><button type="button" role="switch" aria-checked="true" id="s2" aria-labelledby="l2"></button><span id="l2">Push notifications</span></div>
+ <div><button type="button" role="switch" aria-checked="false" id="s3" aria-labelledby="l3"></button><span id="l3">Weekly digest</span></div>
+ <label for="fq">Digest frequency</label><select id="fq" name="freq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+ <button type="submit">Save settings</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.querySelectorAll('[role=switch]').forEach(b=>b.addEventListener('click',()=>b.setAttribute('aria-checked',b.getAttribute('aria-checked')!=='true')));
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const g=i=>document.getElementById(i).getAttribute('aria-checked');
+ await send({email:g('s1'),push:g('s2'),digest:g('s3'),freq:document.getElementById('fq').value});document.body.innerHTML='<h1>Saved</h1>'});</script>

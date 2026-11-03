@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Pick a username</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Pick a username</h1>
+<form id="f" novalidate>
+ <label for="u">Username</label><input id="u" name="username" autocomplete="off">
+ <div id="msg" class="error" role="alert" hidden></div>
+ <label for="e">Email</label><input id="e" name="email" type="email">
+ <button type="submit" id="b">Create</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);let ok=true,tm;
+$('u').addEventListener('input',()=>{ok=false;$('b').disabled=true;clearTimeout(tm);tm=setTimeout(async()=>{const r=await fetch('/api/user?name='+encodeURIComponent($('u').value));const t=await r.text();
+ ok=t==='free';$('msg').hidden=ok;$('msg').textContent=ok?'':'That username is already taken.';$('b').disabled=!ok},150)});
+$('f').addEventListener('submit',async e=>{e.preventDefault();if(!ok)return;await send(fdo(e.target));document.body.innerHTML='<h1>Created</h1>'});</script>

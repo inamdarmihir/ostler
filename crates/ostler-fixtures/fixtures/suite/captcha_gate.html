@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Contact us</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>Contact us</h1>
+<form id="f" novalidate>
+ <label for="n">Name</label><input id="n" name="name">
+ <label for="m">Message</label><textarea id="m" name="message"></textarea>
+ <div class="g-recaptcha" data-sitekey="test" id="cap" style="width:304px;height:78px;border:1px solid #ccc;margin-top:1rem"><label><input type="checkbox" id="rb"> I'm not a robot</label></div>
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Send message</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ document.getElementById('err').textContent='Please complete the CAPTCHA challenge to continue.';document.getElementById('err').hidden=false;});
+document.getElementById('rb').addEventListener('click',e=>{e.preventDefault();document.getElementById('err').textContent='Verification failed: unusual traffic detected.';document.getElementById('err').hidden=false});</script>

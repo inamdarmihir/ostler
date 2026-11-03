@@ -1,0 +1,30 @@
+<!doctype html><meta charset=utf-8><title>Income tax e-filing: registration</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<h1>e-Filing registration</h1>
+<form id="f" novalidate>
+ <label for="nm">Name as per PAN *</label><input id="nm" name="name" required>
+ <label for="pan">PAN</label><input id="pan" name="pan" maxlength="10" placeholder="ABCDE1234F" autocomplete="off">
+ <label for="aad">Aadhaar number</label><input id="aad" name="aadhaar" placeholder="1234 5678 9012" inputmode="numeric" autocomplete="off">
+ <fieldset><legend>Date of birth</legend>
+  <label for="dd">Day</label><select id="dd" name="dob_day"><option value="">DD</option></select>
+  <label for="mm">Month</label><select id="mm" name="dob_month"><option value="">MM</option><option value="01">January</option><option value="02">February</option><option value="03">March</option><option value="04">April</option><option value="05">May</option><option value="06">June</option><option value="07">July</option><option value="08">August</option><option value="09">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
+  <label for="yy">Year</label><select id="yy" name="dob_year"><option value="">YYYY</option></select></fieldset>
+ <label for="st">State</label><select id="st" name="state"><option value="">Select state</option><option value="KA">Karnataka</option><option value="MH">Maharashtra</option><option value="TN">Tamil Nadu</option></select>
+ <label for="di">District</label><select id="di" name="district" disabled><option value="">Select state first</option></select>
+ <label for="mo">Mobile number</label><input id="mo" name="mobile" type="tel" maxlength="10">
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Register</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+const $=id=>document.getElementById(id);
+for(let i=1;i<=31;i++)$('dd').add(new Option(String(i).padStart(2,'0'),String(i).padStart(2,'0')));
+for(let y=2008;y>=1930;y--)$('yy').add(new Option(y,y));
+const D={KA:['Bengaluru Urban','Mysuru','Dharwad'],MH:['Mumbai','Pune','Nagpur'],TN:['Chennai','Coimbatore','Madurai']};
+$('st').addEventListener('change',()=>{const d=$('di');d.disabled=true;d.innerHTML='<option value="">Loading...</option>';
+ setTimeout(()=>{d.innerHTML='<option value="">Select district</option>'+(D[$('st').value]||[]).map(x=>'<option>'+x+'</option>').join('');d.disabled=!$('st').value},300)});
+$('pan').addEventListener('input',()=>{$('pan').value=$('pan').value.toUpperCase().replace(/[^A-Z0-9]/g,'')});
+$('aad').addEventListener('input',()=>{const d=$('aad').value.replace(/\D/g,'').slice(0,12);$('aad').value=d.replace(/(\d{4})(?=\d)/g,'$1 ')});
+$('f').addEventListener('submit',async e=>{e.preventDefault();const o=fdo(e.target);const er=$('err');er.hidden=true;
+ if(!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(o.pan||'')){er.textContent='Invalid PAN format.';er.hidden=false;return}
+ if(!/^\d{4} \d{4} \d{4}$/.test(o.aadhaar||'')){er.textContent='Aadhaar must be 12 digits.';er.hidden=false;return}
+ if(!o.dob_day||!o.dob_month||!o.dob_year){er.textContent='Enter your complete date of birth.';er.hidden=false;return}
+ o.aadhaar=o.aadhaar.replace(/ /g,'');await send(o);document.body.innerHTML='<h1>Registration received</h1>'});</script>

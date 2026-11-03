@@ -21,15 +21,15 @@ Prebuilt binaries, `npx` and crates.io are described on the [Install](install.ht
 ostler doctor
 ```
 
-`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the fix. See [Troubleshooting](troubleshooting.html) if it does not pass.
+`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the command that fixes it; `ostler doctor --fix` applies the safe ones (creating the config directory). With no config at all, memory is in-process for the session and nothing needs Qdrant or a key. See [Troubleshooting](troubleshooting.html) if it does not pass.
 
 ## 3. Connect your agent
 
 ```sh
-ostler setup claude --apply
+ostler install --client claude-code      # or claude-desktop | cursor | vscode | windsurf | codex
 ```
 
-That runs `claude mcp add` with the binary's absolute path. For the others, replace `claude --apply` with `codex`, `cursor` or `vscode`: each prints the config for you to place. Details for every client are in [Use with your agent](agents.html).
+That writes the entry into the client's config file with the binary's absolute path: it backs the file up first, keeps your other servers, refuses a malformed file and prints what changed (`--dry-run` previews, `--uninstall` removes). `ostler install --list` shows every client. To only print a snippet instead, use `ostler setup <client>`. Prefer your own Chrome window? See "Use your own Chrome" on the [Install](install.html) page. Details for every client are in [Use with your agent](agents.html).
 
 After installing or rebuilding `ostler`, reconnect the MCP client (Claude Code: `/mcp`; others: restart it) so it starts the new binary.
 
@@ -86,7 +86,7 @@ Browsing and form filling need no account and no key. Memory is separate and opt
 
 ```sh
 ostler init                                   # saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection
-ostler setup claude --apply -- --learn --lean # re-register with memory flags
+ostler install --client claude-code -- --learn --lean # re-register with memory flags
 ```
 
 See [Memory and privacy](memory.html) for exactly what is stored and what is hidden.
@@ -94,5 +94,5 @@ See [Memory and privacy](memory.html) for exactly what is stored and what is hid
 ## Next steps
 
 - [Use with your agent](agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
-- [Tools reference](tools.html): all 21 tools and their parameters.
+- [Tools reference](tools.html): all 23 tools and their parameters.
 - [Security model](security.html): the allowlist, uploads, dialogs, CAPTCHAs.

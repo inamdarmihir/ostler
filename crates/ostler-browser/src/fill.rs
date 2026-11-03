@@ -376,6 +376,21 @@ fn text_of(v: &Value) -> String {
     }
 }
 
+/// The hidden control a key names, by label (normalised equality, or one containing the other).
+fn concealed_match<'a>(key: &str, labels: &'a [String]) -> Option<&'a str> {
+    let k = alnum(key);
+    if k.len() < 3 {
+        return None;
+    }
+    labels
+        .iter()
+        .find(|l| {
+            let n = alnum(l);
+            n == k || (n.len() >= 3 && (n.contains(&k) || k.contains(&n)))
+        })
+        .map(String::as_str)
+}
+
 fn alnum(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric())
@@ -560,6 +575,18 @@ impl Page {
                         label: f.display(),
                         message,
                     });
+                }
+            }
+            // A key that names a control which exists but is not showing is "hidden", not "not found".
+            for u in &mut unmatched {
+                if u.reason.starts_with("no field on the page")
+                    || u.reason.starts_with("no confident match")
+                {
+                    if let Some(name) = concealed_match(&u.key, &form.concealed) {
+                        u.reason = format!(
+                            "field {name:?} exists but is hidden right now (a collapsed step, or revealed by another answer); fill or select what reveals it first, then retry"
+                        );
+                    }
                 }
             }
             page_errors = form.errors.clone();
@@ -761,6 +788,42 @@ impl Page {
             .field(r)
             .await
             .map_err(|e| (e.to_string(), Value::Null))?;
+
+        // Several values for a chip / tag style combobox: pick them one by one. The control does not show
+        // what it holds in any readable place, so the result is "applied", never "verified".
+        if let (FieldKind::Combobox, Value::Array(items)) = (live.kind, value) {
+            let mut picked: Vec<String> = vec![];
+            for item in items {
+                let want = text_of(item);
+                match self.fill_combobox(&live, &want).await {
+                    Ok(Some(n)) if n.starts_with("no suggestion") => {
+                        return Err((
+                            format!(
+                                "{want:?} was typed but no suggestion list appeared, so it was not added (picked {} of {})",
+                                picked.len(),
+                                items.len()
+                            ),
+                            json!(picked),
+                        ))
+                    }
+                    Ok(_) => picked.push(want),
+                    Err(e) => {
+                        return Err((
+                            format!("{e} (picked {} of {})", picked.len(), items.len()),
+                            json!(picked),
+                        ))
+                    }
+                }
+            }
+            return Ok((
+                FillStatus::Unverified,
+                json!(picked),
+                Some(format!(
+                    "picked {} options one by one; the page does not expose the selection, so it was not read back",
+                    picked.len()
+                )),
+            ));
+        }
 
         let outcome: std::result::Result<Option<String>, BrowserError> = async {
             match live.kind {

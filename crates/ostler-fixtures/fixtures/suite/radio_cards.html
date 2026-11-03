@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><title>Delivery method</title><style>body{font:15px system-ui;max-width:540px;margin:2rem auto}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}fieldset input[type=radio],label input[type=checkbox]{width:auto}[hidden]{display:none!important}</style>
+<style>.card{display:block;border:2px solid #ccc;border-radius:8px;padding:.8rem;margin:.5rem 0;cursor:pointer}.card input{position:absolute;opacity:0;width:1px;height:1px}.card:has(input:checked){border-color:#27a;background:#eef}</style>
+<h1>Delivery method</h1>
+<form id="f">
+ <fieldset><legend>Shipping speed</legend>
+  <label class="card"><input type="radio" name="speed" value="standard"><strong>Standard</strong><br>5-7 business days, free</label>
+  <label class="card"><input type="radio" name="speed" value="express"><strong>Express</strong><br>2 business days, $9.99</label>
+  <label class="card"><input type="radio" name="speed" value="overnight"><strong>Overnight</strong><br>Next day, $24.99</label></fieldset>
+ <label for="g">Gift message</label><textarea id="g" name="gift"></textarea>
+ <button type="submit">Continue</button>
+</form>
+<script>const send=o=>fetch('/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});const fdo=f=>{const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}return o};
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();await send(fdo(e.target));document.body.innerHTML='<h1>Saved</h1>'});</script>

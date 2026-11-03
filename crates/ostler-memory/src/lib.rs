@@ -31,7 +31,10 @@ mod token;
 
 pub use embed::{Embedder, HashEmbedder, OllamaEmbedder};
 pub use qdrant::{QdrantConfig, QdrantStore, VectorSource};
-pub use sealed::{probe_key, seal_legacy, KeyProbe, SealKey, SealReport, SealedStore};
+pub use sealed::{
+    migrate_sealed, probe_key, seal_legacy, write_v1_point_for_tests, KeyProbe, MigrateReport,
+    SealKey, SealReport, SealedStore,
+};
 pub use store::{Filter, Hit, InMemoryStore, Kind, Rank, Store};
 pub use token::{mint_tenant_token, tenant_prefix};
 
@@ -612,6 +615,12 @@ impl Memory {
             .await
     }
 
+    /// The id `remember(key)` stores a fact under for `tenant` (before sealing keys it). Tests only.
+    #[doc(hidden)]
+    pub fn fact_id_for_tests(tenant: &str, key: &str) -> String {
+        point_id(&[tenant, "profile", &norm(key)])
+    }
+
     fn fact_id(&self, key: &str) -> String {
         point_id(&[&self.tenant, "profile", &norm(key)])
     }
@@ -955,15 +964,67 @@ impl Memory {
             count: prior + 1,
             last_seen: now(),
         };
+        self.save_episode(&id, &ep).await
+    }
+
+    async fn save_episode(&self, id: &str, ep: &Episode) -> Result<()> {
         self.store
             .upsert(
                 Kind::Episode,
-                &id,
-                &format!("{host} {field} {problem} {}", ep.detail),
-                json!({"tenant": self.tenant, "host": host, "fingerprint": fingerprint, "id_hint": id,
+                id,
+                &format!("{} {} {} {}", ep.host, ep.field, ep.problem, ep.detail),
+                json!({"tenant": self.tenant, "host": ep.host, "fingerprint": ep.fingerprint, "id_hint": id,
                        "verified_ts": ep.last_seen, "episode": ep}),
             )
             .await
+    }
+
+    /// Write a point read back from the store (already opened) again under the current format and
+    /// normalisation, for `migrate_sealed`. Returns the id it was saved under, or `None` when the payload
+    /// is not one this build understands. A fact never replaces a newer one that already sits at its
+    /// current id.
+    pub(crate) async fn resave(&self, kind: Kind, payload: &Value) -> Result<Option<String>> {
+        Ok(match kind {
+            Kind::Profile => {
+                let Some(f) = Fact::from_payload(payload) else {
+                    return Ok(None);
+                };
+                let id = self.fact_id(&f.key);
+                let newer = self
+                    .fact(&f.key)
+                    .await?
+                    .is_some_and(|e| e.updated_at >= f.updated_at);
+                if !newer {
+                    self.put_fact(
+                        &f.key,
+                        f.value,
+                        f.description.as_deref(),
+                        f.autocomplete.as_deref(),
+                        &f.source,
+                        Some(f.updated_at),
+                    )
+                    .await?;
+                }
+                Some(id)
+            }
+            Kind::Playbook => {
+                let Ok(pb) = serde_json::from_value::<Playbook>(payload["playbook"].clone()) else {
+                    return Ok(None);
+                };
+                self.save_playbook(&pb).await?;
+                Some(self.playbook_id(&pb.fingerprint))
+            }
+            Kind::Episode => {
+                let (Some(id), Ok(ep)) = (
+                    payload["id_hint"].as_str(),
+                    serde_json::from_value::<Episode>(payload["episode"].clone()),
+                ) else {
+                    return Ok(None);
+                };
+                self.save_episode(id, &ep).await?;
+                Some(id.to_string())
+            }
+        })
     }
 
     pub async fn episodes(&self, fingerprint: &str, limit: usize) -> Result<Vec<Episode>> {

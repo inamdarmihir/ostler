@@ -12,10 +12,13 @@ Memory: on, Qdrant at https://… (tenant "default")
   qdrant:     reachable, collections ready. OK
 ```
 
-With memory off it prints `Memory: off` and the rest still works. It never creates the sealing key.
+With nothing configured it prints `Memory: in-process, this session only` and the rest still works. It never creates the sealing key. Every failing check prints a `fix:` line with a concrete command. `ostler doctor --fix` applies only the safe ones: it creates the config directory and tightens an over-open key file to owner-only. It never creates keys, installs software, edits client configs or touches the network. `ostler doctor --cdp-url http://127.0.0.1:9222` also tests attaching to a Chrome you started yourself.
 
 | symptom | likely cause | fix |
 |---|---|---|
+| `serve --cdp-url` says it could not read `/json/version` | no Chrome is listening on that port, or it was started without a dedicated `--user-data-dir` (Chrome ignores the debug flag on its default profile) | start it as in [CLIENTS.md](CLIENTS.md#use-the-chrome-you-already-have), then `ostler doctor --cdp-url ...` |
+| `--cdp-url ... refusing a non-loopback host` | the URL points off this machine | use 127.0.0.1; for a remote browser tunnel the port with SSH |
+| `ostler install` says the file is not valid JSON/TOML | the client's config has a typo or comments | nothing was written; fix the file, or add the snippet from `ostler setup <client>` by hand |
 | Client says it can't start `ostler` / command not found | the client has a different `PATH` than your shell | use `ostler setup <client>`, which writes the binary's **absolute path** |
 | `Chrome: could not find Chrome or Chromium` | none on the usual paths | install one (the message has the command for your OS), or set `OSTLER_CHROME=/path/to/chrome` |
 | `the Chrome path "…" does not exist` | `OSTLER_CHROME` or `--chrome-path` points at a missing file | fix the path, or unset it to auto-detect (a wrong explicit path is an error on purpose, never silently replaced) |
@@ -28,6 +31,8 @@ With memory off it prints `Memory: off` and the rest still works. It never creat
 | `sealing: OFF. warning: anyone who can read your Qdrant ...` | `--seal off` (or `seal = off` in the config) | `ostler config set seal on`, then `ostler memory seal` to protect facts saved earlier (learned skills and episodes from before are dropped and relearned) |
 | `warning: other users on this machine can read the key` | `memory.key` is not owner-only | `chmod 600` on the path doctor prints |
 | the sealing key is unreadable or malformed, or sealed memory returns nothing | `memory.key` / `OSTLER_MEMORY_KEY` is missing, damaged or a different key than the one that sealed it | restore your backup to the path doctor names. **There is no recovery without the key**: delete the key file and run `ostler memory wipe --yes` to start over. Points that fail to open are skipped, never returned |
+| `refusing to create a new memory key` | no key exists yet and Qdrant could not be checked (or holds sealed memory this machine has no key for) | start Qdrant and retry; restore a backup with `ostler memory key import`; for a genuine first-time setup with Qdrant down pass `--allow-new-key`. If sealed memory is there and the key is gone, `ostler memory wipe --yes` starts over |
+| `retired sealed format v1` or `older key normalisation` | sealed points from an early build, or keys saved before `norm()` changed | `ostler memory seal --tenant T` (the key is right; this brings the data up to date) |
 | `refusing plain http` / `transport: http to a remote host: REFUSED` | the Qdrant URL is plain `http://` to a non-loopback host, so the API key and any unsealed data would cross the network in clear text | use an `https://` URL; if a VPN or SSH tunnel protects the link, pass `--allow-insecure-qdrant` (`ostler config set allow_insecure_qdrant true`) |
 | `warning: Cloud Inference only exists on Qdrant Cloud, and this URL is not one` | `--embeddings cloud` (the default) with a self-hosted URL | `--embeddings ollama` (semantic, local) or `dev-hash` (local, not semantic) |
 | `cannot reach the local embedder` / embedding model not found | `--embeddings ollama` but Ollama is not running, or the model is not pulled | `ollama serve`, `ollama pull all-minilm` (the Ollama default), or `ostler config set embedding_model <name>` and `embedding_dim` to match |
@@ -48,6 +53,18 @@ With memory off it prints `Memory: off` and the rest still works. It never creat
 | Google, DuckDuckGo or Bing return a wall or no results | search engines challenge headless browsers; Ostler is built for forms and does not evade these | use your agent's own search tool for search and Ostler for the target site. If you must search through Ostler, run one `--headed` server with its own `--profile-dir` and solve the check yourself |
 | A site blocks the browser or shows a CAPTCHA | automation detection | Ostler does not evade it; see [Searching the web](#searching-the-web) |
 | Rebuilt `ostler` but the agent still behaves as before | the client keeps the old server process | reconnect the MCP client (Claude Code: `/mcp`; others: restart it) |
+
+## When not to use Ostler
+
+Ostler is a form-filling browser for an agent working on your behalf, on one machine. It is the wrong tool when:
+
+- **The site walls off automation.** CAPTCHA, Cloudflare/Turnstile, "verify you are human" pages and search-engine bot checks are reported with a `CHALLENGE:` line and handed to a person. Ostler never solves or bypasses them, and it is not built to avoid detection: there is no stealth patching, fingerprint spoofing, residential proxy or IP rotation. A site that blocks headless or datacenter Chrome will block Ostler. `--headed` plus a persistent `--profile-dir` lets *you* pass a check once; it does not make a bot wall go away.
+- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](BENCHMARKS.md)).
+- **The flow needs an identity Ostler does not have.** There is no mailbox, phone number, SMS/OTP receiver or authenticator: one-time codes, email-link verification, passkeys, hardware keys and 2FA prompts need a person. Passwords and card numbers are never read back or remembered; sensitive fields are refused and the agent is told to ask you. It does not create accounts on your behalf out of thin air.
+- **The page is outside what the injected runtime can see.** Cross-origin iframes (many hosted card fields), closed shadow roots, canvas-drawn UIs, native OS dialogs and file pickers, and desktop apps are not reachable. A control that stays disabled until a person scrolls or hovers is reported as disabled rather than worked around.
+- **A wrong submit is expensive and nobody is checking.** Ostler verifies every value by reading it back and refuses to call a submit a success without evidence, but it cannot know whether a form means what it says. For payments, legal acceptance and anything irreversible, run with `--require-confirm-submit` and review the result yourself.
+
+When Ostler cannot finish, it says which field and why (rejected value with the page's own message, hidden or disabled control, key not found) and points at `screenshot` for the element; it does not report a partial fill as done.
 
 ## Searching the web
 
