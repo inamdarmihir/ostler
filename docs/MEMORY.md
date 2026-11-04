@@ -30,7 +30,7 @@ Playbooks work like skills that improve with use. Ostler doesn't need a model to
 
 ### Privacy and security model of memory
 
-**Qdrant version:** use 1.14 or newer (CI runs v1.20.0). Ranked suggestions use a server-side scoring formula that Qdrant added in 1.14. On an older server Ostler detects the version when it connects and ranks the same candidates itself instead of failing; a parity test against a real older server has not been run yet, so treat 1.14+ as the supported floor.
+**Qdrant version:** use 1.14 or newer (CI runs v1.20.0). Ranked suggestions use a server-side scoring formula that Qdrant added in 1.14. On an older server Ostler detects the version when it connects and ranks the same candidates itself instead of failing; a test checks that the fallback ranks the same as the server formula on Qdrant 1.19, but it has not been run against a real pre-1.14 server, so treat 1.14+ as the supported floor.
 
 Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). This summary matches [SECURITY.md](../SECURITY.md), which has the full threat model.
 
