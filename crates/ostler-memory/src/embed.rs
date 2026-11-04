@@ -11,6 +11,11 @@ use crate::{MemoryError, Result};
 #[async_trait]
 pub trait Embedder: Send + Sync {
     fn dim(&self) -> usize;
+    /// Names the model that produces the vectors. Stores record it so that switching to a different
+    /// model of the same dimension (whose vectors are not comparable) is detected on open.
+    fn model_id(&self) -> String {
+        format!("custom-{}d", self.dim())
+    }
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
 }
 
@@ -73,6 +78,9 @@ impl Embedder for HashEmbedder {
     fn dim(&self) -> usize {
         self.dim
     }
+    fn model_id(&self) -> String {
+        format!("hash-{}d", self.dim)
+    }
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
         Ok(texts.iter().map(|t| self.embed_one(t)).collect())
     }
@@ -111,6 +119,9 @@ impl OllamaEmbedder {
 impl Embedder for OllamaEmbedder {
     fn dim(&self) -> usize {
         self.dim
+    }
+    fn model_id(&self) -> String {
+        format!("ollama:{}", self.model)
     }
 
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {

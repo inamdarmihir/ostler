@@ -7,6 +7,7 @@
 mod cost;
 mod forms;
 mod memory;
+mod real;
 mod scale;
 mod suite;
 
@@ -48,6 +49,13 @@ enum Cmd {
         #[arg(long)]
         only: Option<String>,
     },
+    /// Real-site evaluation: fills live public practice forms (nothing is submitted) and judges each field by
+    /// reading the page back with our own JavaScript. Exits non-zero on any false claim.
+    Real {
+        /// Run only sites whose id contains this text.
+        #[arg(long)]
+        only: Option<String>,
+    },
     /// Browser footprint: default vs lean Chrome (processes, memory, startup, task time).
     Footprint {
         #[arg(long, default_value_t = 3)]
@@ -84,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
             on_disk,
         } => memory::run(&sizes, queries, on_disk).await?,
         Cmd::Suite { only } => suite::run(only).await?,
+        Cmd::Real { only } => real::run(only).await?,
         Cmd::ServeFixtures { port } => {
             let srv = ostler_fixtures::FixtureServer::start_on(
                 &format!("127.0.0.1:{port}"),

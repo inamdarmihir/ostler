@@ -179,6 +179,34 @@ fn key_export_needs_confirmation_and_import_round_trips_and_protects_the_old_key
     );
 }
 
+/// Replacing the key twice in one second (a recovery attempt after a wrong import) must keep every
+/// replaced key, not fail on the earlier backup's name.
+#[test]
+fn replacing_the_key_repeatedly_keeps_every_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    let third = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    for k in [KEY_A, KEY_B, third, KEY_A] {
+        let o = run_with_stdin(ostler(&cfg).args(["memory", "key", "import", "--force"]), k);
+        assert!(o.ok, "{}", o.stderr);
+    }
+    let mut kept: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("memory.key.old-")
+        })
+        .map(|p| std::fs::read_to_string(p).unwrap().trim().to_string())
+        .collect();
+    kept.sort();
+    let mut want = vec![KEY_A.to_string(), KEY_B.to_string(), third.to_string()];
+    want.sort();
+    assert_eq!(kept, want);
+}
+
 // ---------- OS keychain store, against fake tools ----------
 
 fn fake_tools(dir: &Path) -> (PathBuf, PathBuf) {

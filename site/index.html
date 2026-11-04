@@ -14,7 +14,8 @@
 <meta property="og:title" content="Ostler: a browser for AI agents that fills forms and remembers">
 <meta property="og:description" content="Fills a whole form in one call, reads every value back, shows the agent where to click, and remembers with Qdrant. MCP and A2A. Rust.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:alt" content="Ostler: a browser for AI agents that fills forms and remembers"><meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler: a browser for AI agents that fills forms and remembers"><meta name="twitter:description" content="Fills a whole form in one call, reads every value back, and remembers with Qdrant. MCP and A2A. Rust. Early (v0.2): measured on scripted fixtures, model-free."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta name="twitter:image:alt" content="Ostler: a browser for AI agents that fills forms and remembers">
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="assets/site.css">
 <script defer src="assets/site.js"></script>
@@ -29,6 +30,7 @@
 <a href="#memory">Memory</a>
 <a href="#numbers">Numbers</a>
 <a href="#integrations">Integrations</a>
+<a href="#faq">FAQ</a>
 <a class="keep" href="docs/index.html">Docs</a>
 </nav>
 <div class="topbar-actions">
@@ -311,12 +313,38 @@ ostler setup vscode</code></pre></div>
 </tbody></table></div></div>
 </div></section>
 
+<section class="section" id="not"><div class="wrap">
+<p class="kicker">Scope</p>
+<h2>What Ostler is not</h2>
+<div class="grid g2" style="margin-top:20px">
+<div class="card"><h3>Not proven on the open web</h3><p>v0.2 is early. It is evaluated on local fixtures built to reproduce known form-filling failures. A real-site success rate has not been published, so read "reliable" as "reliable on the failure modes in our fixtures".</p></div>
+<div class="card"><h3>Not a general-purpose test framework</h3><p>It is a browser for agents that fill forms, driven over MCP and A2A. It runs Chrome only; Windows is not built or tested.</p></div>
+<div class="card"><h3>Not a CAPTCHA, 2FA or anti-bot tool</h3><p>It never solves CAPTCHAs (it hands them to you) and does not handle 2FA. Cross-origin iframes and closed shadow roots are not supported.</p></div>
+<div class="card"><h3>Not a benchmark winner on real tasks</h3><p>Our numbers are <b>scripted fixtures, model-free</b>: call counts and bytes, not whether a model succeeds. No head-to-head on identical real-site tasks has been run. It is also not an externally audited security product.</p></div>
+</div>
+</div></section>
+
 <section class="section" id="limits"><div class="wrap">
 <p class="kicker">Limits and roadmap</p>
 <h2>What it does not do yet</h2>
 <div class="grid g2" style="margin-top:20px">
 <div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. It runs Chrome only, and is tested on macOS locally and Linux in CI. Windows is not built or tested.</p></div>
 <div class="card"><h3>Next</h3><p>Real-site form evaluation with published failures &middot; head-to-head benchmark &middot; live Qdrant Cloud Inference validation &middot; Qdrant sizing study &middot; per-site click paths remembered in Qdrant &middot; cross-origin frames &middot; an optional Lightpanda backend if it earns its keep.</p><a class="more" href="docs/review.html">The design review, with its findings &rarr;</a></div>
+</div>
+</div></section>
+
+<section class="section" id="faq"><div class="wrap">
+<p class="kicker">FAQ</p>
+<h2>Questions people ask first</h2>
+<div class="faq" style="margin-top:20px;max-width:820px">
+<details id="faq-playwright"><summary><b>Why not Playwright MCP?</b></summary>
+<p>You may well want it: it is mature and broad, and it already has a batched <code>browser_fill_form</code>, so it is closer to Ostler than a one-field-at-a-time baseline suggests. Ostler adds form-specific behaviour: verified fills that read each value back, dependent fields and wizards, and optional memory in Qdrant. In our scripted-fixtures, model-free run (5 tasks, same fixtures for each server) Ostler took 19 steps against 27 for Playwright MCP, and all three finished every task correctly. That shows step counts and bytes, not whether a real model succeeds, and the step sequences are our best attempt per server. No head-to-head on real sites has been run. <a href="docs/benchmarks.html">Benchmarks</a> &middot; <a href="#compare">comparison</a></p></details>
+<details id="faq-safe"><summary><b>Is my data safe?</b></summary>
+<p>Memory is optional and off until you give Ostler a Qdrant URL; it stores structure, never passwords, card numbers or other secrets, and playbooks keep field labels, not values. Secret detection is heuristic, so a secret saved under an innocuous key would not be caught. Page text is marked untrusted in tool output, and a domain allowlist holds every request the browser makes. Sealing memory with AES-256-GCM before it reaches Qdrant is marked unreleased above; if you lose the key, sealed memory is unrecoverable. There has been no external security audit. <a href="docs/security.html">Security model</a></p></details>
+<details id="faq-rust"><summary><b>Why Rust?</b></summary>
+<p>One native binary that serves MCP and A2A, with a hand-written CDP client and an in-page runtime, and no Node hop. We do not claim the language is the moat: agent-browser is already a native Rust CLI with MCP, and our own measurements say the browser is not where the time goes. Fewer turns and fewer tokens are the point. <a href="docs/economics.html">Economics</a></p></details>
+<details id="faq-ui"><summary><b>Does it work with MUI / Ant Design?</b></summary>
+<p>Not verified yet. The fixtures cover a react-select style combobox, a deliberately broken variant, and a generic combobox, but there is no MUI or Ant Design fixture. Our own design review lists the MUI select and the read-only Ant select as open widget gaps, and real-site evaluation is in progress and unpublished. If you try it on one, <a href="https://github.com/inamdarmihir/ostler/issues" rel="noopener">tell us what happens</a>. <a href="docs/review.html">Design review</a></p></details>
 </div>
 </div></section>
 

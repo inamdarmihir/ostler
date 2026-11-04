@@ -175,7 +175,7 @@ Set one field by ref (any kind, including custom widgets).
 
 ## Memory (profile: all)
 
-These need memory enabled (a Qdrant URL, or `--memory ephemeral`). See [Memory and privacy](memory.html).
+These need memory enabled (`--memory local`, a Qdrant URL, or `--memory ephemeral`). See [Memory and privacy](memory.html).
 
 ### `memory_remember`
 

@@ -173,6 +173,7 @@ impl Field {
             "social security",
             "pin code",
             "secret",
+            "passport",
             "iban",
             "routing number",
             "account number",
@@ -284,6 +285,7 @@ mod tests {
         assert!(field("Password", FieldKind::Password).is_sensitive());
         assert!(field("Card number", FieldKind::Text).is_sensitive());
         assert!(field("CVV", FieldKind::Text).is_sensitive());
+        assert!(field("Passport number", FieldKind::Text).is_sensitive());
         assert!(!field("Email", FieldKind::Email).is_sensitive());
         assert!(!field("First name", FieldKind::Text).is_sensitive());
     }
@@ -312,3 +314,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod prop_tests;

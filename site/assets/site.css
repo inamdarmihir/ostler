@@ -326,3 +326,9 @@ figure.chart svg text { fill: var(--fg); font: 13px var(--sans); } figure.chart 
   .doc-layout { display: block; }
 }
 .tabwrap .code::before { display: none; }
+
+/* FAQ (native <details>, works without JavaScript) */
+.faq details { border: 1px solid var(--line, rgba(128,128,128,.3)); border-radius: 10px; margin-bottom: 10px; padding: 0 16px; }
+.faq summary { cursor: pointer; padding: 14px 0; font-size: 16px; }
+.faq details[open] summary { margin-bottom: 4px; }
+.faq details p { margin: 0 0 14px; }

@@ -76,6 +76,8 @@ pub const PAGES: &[(&str, &str)] = &[
     ("order", include_str!("../fixtures/order.html")),
     ("order_done", include_str!("../fixtures/order_done.html")),
     ("two_forms", include_str!("../fixtures/two_forms.html")),
+    ("twin_forms", include_str!("../fixtures/twin_forms.html")),
+    ("slow_load", include_str!("../fixtures/slow_load.html")),
     (
         "server_error",
         include_str!("../fixtures/server_error.html"),
@@ -299,6 +301,12 @@ impl FixtureServer {
                         (Method::Get, "/poll") => {
                             thread::sleep(Duration::from_secs(4));
                             let _ = req.respond(Response::from_string("{}"));
+                        }
+                        // A subresource that never arrives in useful time (an ad, a tracker): holds the
+                        // `load` event open while the document itself is long since usable.
+                        (Method::Get, "/hang.png") => {
+                            thread::sleep(Duration::from_secs(25));
+                            let _ = req.respond(Response::from_string("").with_status_code(404));
                         }
                         (Method::Get, "/api/states") => {
                             thread::sleep(api_delay);

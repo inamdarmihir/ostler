@@ -51,7 +51,7 @@ What can erode it: competitors adding memory (it is not hard in principle), and 
 
 | risk | status |
 |---|---|
-| Real-site success rate unknown (we test fixtures only) | **Biggest gap.** Next milestone: a real-site form eval with published results, including failures. |
+| Real-site success rate unknown (we test fixtures only) | **Biggest gap, partly addressed.** `ostler-bench real` fills 7 live practice pages and checks every field against the DOM: 44 of 45 correct, 0 false claims after two fixes ([BENCHMARKS §7](BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm)). Small and friendly; a wider real-model evaluation is still the next milestone. |
 | Computer-use models make DOM tooling less necessary | Real. Forms with consent/legal gates still want structured, verifiable filling; unproven. |
 | Anti-bot, CAPTCHA, SSO/2FA, cross-origin iframes | Not handled (documented limitations). |
 | Memory leaks PII or is poisoned by a malicious page | Mitigated: secrets refused at write, sensitive fields never auto-filled or stored, values not stored in playbooks, tenant isolation tested, page content marked untrusted. Not a security audit. |

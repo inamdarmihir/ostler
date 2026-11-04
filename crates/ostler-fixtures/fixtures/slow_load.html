@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Slow subresource</title>
+<style>body{font:15px system-ui;max-width:480px;margin:2rem auto}label{display:block;margin:.6rem 0 .2rem}input{padding:.4rem;width:100%;box-sizing:border-box}button{margin-top:.8rem;padding:.5rem 1rem}</style>
+<h1>Sign up</h1>
+<form action="/order_done.html" method="get">
+  <label for="email">Email</label><input id="email" name="email" type="email">
+  <button type="submit">Join</button>
+</form>
+<!-- Holds the load event open for 25 s, like a stalled ad or tracker. -->
+<img src="/hang.png" width="1" height="1" alt="">

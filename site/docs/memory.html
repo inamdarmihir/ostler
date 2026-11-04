@@ -12,7 +12,8 @@
 <meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
 <meta property="og:title" content="Memory and privacy - Ostler docs"><meta property="og:description" content="What is stored, what sealing hides and does not, local embeddings, per-tenant tokens.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/memory.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image:alt" content="Ostler">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Memory and privacy - Ostler docs"><meta name="twitter:description" content="What is stored, what sealing hides and does not, local embeddings, per-tenant tokens."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -133,9 +134,10 @@ ostler memory seal                      <span class="tok-c"># re-save pre-sealin
 ostler memory key export --yes-print    <span class="tok-c"># back up the sealing key</span>
 ostler memory token                     <span class="tok-c"># per-tenant JWT (see above)</span>
 ostler memory wipe --yes                <span class="tok-c"># delete everything for this tenant</span></code></pre></div>
-<p>Try it without Qdrant: <code>ostler memory --memory ephemeral list</code> keeps memory in-process and loses it on exit.</p>
+<p>No Qdrant? <code>ostler init --local</code> (or <code>ostler config set memory local</code>) keeps memory in one file, <code>memory.local</code>, next to your config. It survives restarts, needs no server, and the whole file is encrypted with the same memory key as sealed Qdrant memory (AES-256-GCM, written atomically, safe to use from <code>serve</code> and <code>ostler memory</code> at once). Embeddings stay on your machine: local word hashing by default (finds shared words, not meaning), or <code>--embeddings ollama</code> for semantic search. Back up the key; lost, the file cannot be read. <code>--seal off</code> stores plain JSON instead.</p>
+<p>Just trying things out: <code>ostler memory --memory ephemeral list</code> keeps memory in-process and loses it on exit.</p>
 <h2 id="which-keys-do-i-need">Which keys do I need?<a class="anchor" href="#which-keys-do-i-need" aria-label="Link to this section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>you want</th><th>you need</th></tr></thead><tbody><tr><td>browsing and form filling only</td><td>nothing</td></tr><tr><td>memory, trying it out</td><td><code>--memory ephemeral</code> (in-process, lost on exit), no keys</td></tr><tr><td>memory on <strong>Qdrant Cloud</strong></td><td>cluster URL and API key, with <strong>Inference enabled</strong> on the cluster</td></tr><tr><td>memory on self-hosted Qdrant</td><td>URL (plus key if you set one) and <code>--embeddings dev-hash</code>, or <code>--embeddings ollama</code> for semantic search</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>you want</th><th>you need</th></tr></thead><tbody><tr><td>browsing and form filling only</td><td>nothing</td></tr><tr><td>memory, no server, kept across sessions</td><td><code>ostler init --local</code> (encrypted file on this machine), no keys</td></tr><tr><td>memory, trying it out</td><td><code>--memory ephemeral</code> (in-process, lost on exit), no keys</td></tr><tr><td>memory on <strong>Qdrant Cloud</strong></td><td>cluster URL and API key, with <strong>Inference enabled</strong> on the cluster</td></tr><tr><td>memory on self-hosted Qdrant</td><td>URL (plus key if you set one) and <code>--embeddings dev-hash</code>, or <code>--embeddings ollama</code> for semantic search</td></tr></tbody></table></div>
 <p>See <a href="security.html">Security model</a> for the threat-model rows on secrets, cross-user exposure and anyone who can read your Qdrant.</p>
 <h3 id="upgrading-older-memory">Upgrading older memory<a class="anchor" href="#upgrading-older-memory" aria-label="Link to this section">#</a></h3>
 <p>Two kinds of older sealed points need one command, <code>ostler memory seal</code>, which is safe to repeat and copies before it deletes:</p>

@@ -114,6 +114,10 @@ pub struct FillReport {
     pub page_errors: Vec<String>,
     pub submit: Vec<SubmitControl>,
     pub step: Option<StepInfo>,
+    /// Other forms on the page that matched the agent's keys exactly as well as `form` did, when the agent
+    /// did not choose one. The fill went to the first of them in document order; the agent should say which.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rival_forms: Vec<String>,
     /// Times the page was still busy (network/timers) when we gave up waiting. Non-zero means
     /// verdicts may reflect a page that had not finished updating.
     #[serde(skip_serializing_if = "is_zero")]
@@ -180,6 +184,9 @@ pub struct SubmitOutcome {
     pub drift: Vec<FieldDrift>,
 }
 
+/// How long an identical repeat of a submit that may have gone through is refused.
+const RESUBMIT_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FieldDrift {
     pub r#ref: String,
@@ -201,6 +208,13 @@ fn host_of(url: &str) -> String {
         .unwrap_or_default()
 }
 
+/// How many of the agent's keys resolve to a field of this form.
+fn matched_count(f: &Form, values: &BTreeMap<String, Value>) -> usize {
+    resolve_values(&with_options(&f.fields), values)
+        .matched
+        .len()
+}
+
 fn pick_form<'a>(
     forms: &'a [Form],
     want: Option<&str>,
@@ -212,13 +226,28 @@ fn pick_form<'a>(
     if values.is_empty() {
         return forms.first();
     }
+    // The best match wins; a tie goes to the earlier form in the document, never to the later one.
+    let mut best: Option<(&Form, usize)> = None;
+    for f in forms {
+        let n = matched_count(f, values);
+        if best.is_none_or(|(_, b)| n > b) {
+            best = Some((f, n));
+        }
+    }
+    best.map(|(f, _)| f)
+}
+
+/// The refs of the other forms that match `values` as well as `chosen` does (and at least once).
+fn rival_forms(forms: &[Form], chosen: &Form, values: &BTreeMap<String, Value>) -> Vec<String> {
+    let n = matched_count(chosen, values);
+    if n == 0 {
+        return vec![];
+    }
     forms
         .iter()
-        .max_by_key(|f| {
-            let vis = with_options(&f.fields);
-            resolve_values(&vis, values).matched.len()
-        })
-        .or(forms.first())
+        .filter(|f| f.r#ref != chosen.r#ref && matched_count(f, values) == n)
+        .map(|f| f.r#ref.clone())
+        .collect()
 }
 
 /// The form to work on. If the page re-rendered and our form's ref is gone (React/Vue re-mounts),
@@ -423,6 +452,8 @@ impl Page {
         let max_rounds = req.values.len() + 60;
         // Errors the page was already showing before we touched anything, by ref.
         let mut prior_errors: BTreeMap<String, String> = BTreeMap::new();
+        let mut rivals: Vec<String> = vec![];
+        let mut first_round = true;
 
         for _ in 0..max_rounds {
             let ir = self.forms().await?;
@@ -439,6 +470,9 @@ impl Page {
             let doc = self.current_doc().await;
             self.state.lock().unwrap().last_form = Some(format!("{doc}\u{1f}{}", form.r#ref));
             form_ref = Some(form.r#ref.clone());
+            if std::mem::take(&mut first_round) && req.form.is_none() {
+                rivals = rival_forms(&ir.forms, form, &pending);
+            }
             if results.is_empty() {
                 for f in &form.fields {
                     if let Some(e) = &f.error {
@@ -616,6 +650,7 @@ impl Page {
             fields: results,
             unmatched,
             missing_required: missing,
+            rival_forms: rivals,
             field_errors: errors,
             page_errors,
             submit,
@@ -671,7 +706,7 @@ impl Page {
             };
             let opt = &live.options[idx];
             if opt.disabled {
-                return Err(BrowserError::Other("that option is disabled".into()));
+                return Err(BrowserError::NotActionable("that option is disabled".into()));
             }
             if live.kind == FieldKind::Radio {
                 if !want {
@@ -1133,10 +1168,21 @@ impl Page {
 
     /// Click a submit/next control and classify what happened.
     pub async fn submit(&self, form: Option<&str>, control: Option<&str>) -> Result<SubmitOutcome> {
+        self.submit_with(form, control, true).await
+    }
+
+    /// Like `submit`, but with `repeat == false` refuses an identical submit of the same form within a short
+    /// window after one that was accepted, advanced, errored on the server, or whose outcome is unknown.
+    pub async fn submit_with(
+        &self,
+        form: Option<&str>,
+        control: Option<&str>,
+        repeat: bool,
+    ) -> Result<SubmitOutcome> {
         // The caller has already obtained confirmation (if required); only this window may send data.
         self.arm_submit(true);
         let _gate = Disarm(self);
-        let out = self.submit_inner(form, control).await;
+        let out = self.submit_inner(form, control, repeat).await;
         self.state.lock().unwrap().last_form = None;
         out
     }
@@ -1145,6 +1191,7 @@ impl Page {
         &self,
         form: Option<&str>,
         control: Option<&str>,
+        repeat: bool,
     ) -> Result<SubmitOutcome> {
         self.guard().await?;
         let before = self.forms().await?;
@@ -1186,10 +1233,36 @@ impl Page {
                     })?
             }
         };
+        let key = before_fp
+            .clone()
+            .unwrap_or_else(|| format!("control {ctl}"));
+        if !repeat {
+            let recent = self.state.lock().unwrap().last_submit.clone();
+            if let Some((k, at)) = recent {
+                if k == key && at.elapsed() < RESUBMIT_WINDOW {
+                    return Err(BrowserError::NotActionable(format!(
+                        "this form was submitted {}s ago and the outcome may already have gone through; \
+                         submitting it again could duplicate it. Check the page first; if you really want to \
+                         submit again, call form_submit with again=true",
+                        at.elapsed().as_secs()
+                    )));
+                }
+            }
+        }
+        self.state.lock().unwrap().last_submit = Some((key, std::time::Instant::now()));
         let drift = self.drifted_fields().await;
         let confirm_before = self.confirmations().await;
         let (doc_before, strong_before, weak_before) = self.problem_texts().await;
-        let action = self.click(&ctl).await?;
+        let action = match self.click(&ctl).await {
+            Ok(a) => a,
+            Err(e) => {
+                // Only an unknown outcome keeps the guard armed; a refusal to click sent nothing.
+                if !matches!(e, BrowserError::Uncertain(_) | BrowserError::Cdp(_)) {
+                    self.state.lock().unwrap().last_submit = None;
+                }
+                return Err(e);
+            }
+        };
         let after = self.forms().await.ok();
         let host = host_of(&action.url);
         let same_form = after.as_ref().and_then(|ir| {
@@ -1293,6 +1366,12 @@ impl Page {
                     excerpt.insert(0, format!("text {t:?}"));
                 }
             }
+        }
+        if matches!(
+            status,
+            SubmitStatus::ValidationFailed | SubmitStatus::Unchanged
+        ) {
+            self.state.lock().unwrap().last_submit = None;
         }
         Ok(SubmitOutcome {
             status,

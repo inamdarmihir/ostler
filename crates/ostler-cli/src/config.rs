@@ -58,6 +58,11 @@ pub fn memory_key_path() -> PathBuf {
     path().with_file_name("memory.key")
 }
 
+/// Where `--memory local` keeps its encrypted file: next to the config, like `memory.key`.
+pub fn local_memory_path() -> PathBuf {
+    path().with_file_name("memory.local")
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum KeyStore {
     File,
@@ -98,7 +103,7 @@ pub fn key_location() -> String {
 /// (`security -i`, commands on stdin) and Linux `secret-tool store` reads the secret from stdin. Reading
 /// uses `-w` / `lookup`, which print to stdout.
 ///
-/// Every call goes through a [`Runner`], so the Linux behaviour (which cannot run on a Mac) is tested with a
+/// Every call goes through a `Runner`, so the Linux behaviour (which cannot run on a Mac) is tested with a
 /// scripted fake, on any host.
 pub mod keychain {
     use std::io::Write;
@@ -746,13 +751,18 @@ pub fn import_memory_key(key: [u8; 32], force: bool) -> Result<String> {
             "a different key already exists in {}. Replacing it makes anything sealed with it unreadable unless you have a backup. If you are sure, re-run with --force (the old key is saved next to the config file first)",
             key_location()
         );
-        let backup = path().with_file_name(format!(
-            "memory.key.old-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0)
-        ));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        // Two replacements in one second must not clobber (or fail on) the earlier backup.
+        let mut backup = path().with_file_name(format!("memory.key.old-{stamp}"));
+        for n in 1.. {
+            if !backup.exists() {
+                break;
+            }
+            backup = path().with_file_name(format!("memory.key.old-{stamp}-{n}"));
+        }
         if let Some(dir) = backup.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -927,7 +937,7 @@ pub fn validate(key: &str, value: &str) -> Result<String> {
         "seal" => choice(&["auto", "on", "off"]),
         "isolation" => choice(&["shared", "collection"]),
         "embeddings" => choice(&["cloud", "ollama", "dev-hash"]),
-        "memory" => choice(&["auto", "qdrant", "ephemeral", "off"]),
+        "memory" => choice(&["auto", "qdrant", "local", "ephemeral", "off"]),
         "key_store" => choice(&["file", "keychain"]),
         "tools" => choice(&["core", "forms", "all"]),
         "retain_days" => value.parse::<u64>().map(|n| n.to_string()).map_err(|_| {

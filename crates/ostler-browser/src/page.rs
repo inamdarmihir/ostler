@@ -13,6 +13,10 @@ use crate::policy::Policy;
 
 pub const RUNTIME_JS: &str = include_str!("runtime.js");
 
+/// How long a navigation waits for the `load` event once the new document is interactive. `load` waits for
+/// every image, ad and tracker, which on some real pages is tens of seconds; the document is usable long before.
+const LOAD_GRACE: Duration = Duration::from_secs(5);
+
 #[derive(Debug, thiserror::Error)]
 pub enum BrowserError {
     #[error(transparent)]
@@ -23,6 +27,15 @@ pub enum BrowserError {
     Policy(String),
     #[error("navigation failed: {0}")]
     Navigation(String),
+    /// A ref that no longer resolves: re-snapshot, then retry.
+    #[error("{0}")]
+    StaleRef(String),
+    /// The page changed while an action ran: it may or may not have completed.
+    #[error("{0}")]
+    Uncertain(String),
+    /// The target exists but cannot take this action now (disabled, read-only).
+    #[error("{0}")]
+    NotActionable(String),
     #[error("{0}")]
     Other(String),
 }
@@ -252,6 +265,9 @@ pub(crate) struct PageState {
     /// Ref of the form the last `fill_form` worked on, so a bare `form_submit` sends that form and not
     /// whichever form comes first on the page (a header newsletter box, a search form).
     pub(crate) last_form: Option<String>,
+    /// Form key and time of the last submit whose outcome may have been "accepted" (or is unknown), for the
+    /// double-submit guard.
+    pub(crate) last_submit: Option<(String, std::time::Instant)>,
 }
 
 #[derive(Clone)]
@@ -621,14 +637,19 @@ impl Page {
                     .trim_start_matches("Error: ")
                     .to_string();
                 if first.starts_with("unknown ref") {
-                    return Err(BrowserError::Other(first));
+                    return Err(BrowserError::StaleRef(first));
+                }
+                if first.contains("is stale") {
+                    return Err(BrowserError::StaleRef(format!(
+                        "page script error: {first}"
+                    )));
                 }
                 return Err(BrowserError::Js(first));
             }
             return Ok(res["result"].get("value").cloned().unwrap_or(Value::Null));
         }
         if attempts == 1 {
-            return Err(BrowserError::Navigation(format!(
+            return Err(BrowserError::Uncertain(format!(
                 "the page changed while the action was running ({last}); it may or may not have completed"
             )));
         }
@@ -713,6 +734,7 @@ impl Page {
             .await
             .map_err(BrowserError::Policy)?;
         let loaded_before = self.shared.loaded.load(Ordering::SeqCst);
+        let committed_before = self.shared.committed.load(Ordering::SeqCst);
         *self.shared.doc.lock().unwrap() = None;
         let res = self
             .session
@@ -731,12 +753,15 @@ impl Page {
             )));
         }
         // Same-document navigations (hash changes) never fire a load event.
+        let mut warnings = vec![];
         if res.get("loaderId").is_some() {
-            self.wait_loaded(loaded_before, Duration::from_secs(30))
-                .await;
+            warnings.extend(
+                self.wait_page_ready(loaded_before, committed_before, Duration::from_secs(30))
+                    .await,
+            );
         }
         self.settle(3000, 150).await;
-        let mut out = self.finish_outcome(true, vec![]).await?;
+        let mut out = self.finish_outcome(true, warnings).await?;
         let strip = |u: &str| {
             u.split('#')
                 .next()
@@ -753,15 +778,52 @@ impl Page {
         Ok(out)
     }
 
-    async fn wait_loaded(&self, loaded_before: u64, timeout: Duration) -> bool {
+    /// Wait for the load event of a navigation, but not for as long as a page's slowest ad, tracker or image.
+    /// `load` waits for every subresource, and some pages never finish one; the agent needs the document,
+    /// not the pixels. Once the new document is interactive, `load` gets [`LOAD_GRACE`] more and we carry on.
+    /// Returns a warning when the wait ended without the load event, so the agent knows the page was cut short.
+    async fn wait_page_ready(
+        &self,
+        loaded_before: u64,
+        committed_before: u64,
+        timeout: Duration,
+    ) -> Option<String> {
         let deadline = Instant::now() + timeout;
+        let mut interactive_since: Option<Instant> = None;
+        let mut last_probe: Option<Instant> = None;
         while Instant::now() < deadline {
             if self.shared.loaded.load(Ordering::SeqCst) > loaded_before {
-                return true;
+                return None;
+            }
+            if let Some(t) = interactive_since {
+                if t.elapsed() >= LOAD_GRACE {
+                    return Some(format!(
+                        "page was still loading images or scripts {}s after it became usable; continuing",
+                        LOAD_GRACE.as_secs()
+                    ));
+                }
+            } else if last_probe.is_none_or(|t| t.elapsed() >= Duration::from_millis(250))
+                && self.shared.committed.load(Ordering::SeqCst) > committed_before
+            {
+                // Only the new document counts: before the commit, readyState describes the old page.
+                last_probe = Some(Instant::now());
+                let probe = tokio::time::timeout(
+                    Duration::from_secs(1),
+                    self.eval_once("document.readyState"),
+                )
+                .await;
+                if let Ok(Ok(state)) = probe {
+                    if matches!(state.as_str(), Some("interactive" | "complete")) {
+                        interactive_since = Some(Instant::now());
+                    }
+                }
             }
             sleep(Duration::from_millis(15)).await;
         }
-        false
+        Some(format!(
+            "page did not finish loading within {}s; continuing",
+            timeout.as_secs()
+        ))
     }
 
     pub async fn settle(&self, max_ms: u64, quiet_ms: u64) -> Value {
@@ -826,10 +888,14 @@ impl Page {
             }
             sleep(Duration::from_millis(15)).await;
         }
-        let mut warnings = vec![];
-        if nav && !self.wait_loaded(loaded, Duration::from_secs(20)).await {
-            warnings.push("page did not finish loading within 20s; continuing".into());
-        }
+        let warnings: Vec<String> = if nav {
+            self.wait_page_ready(loaded, committed, Duration::from_secs(20))
+                .await
+                .into_iter()
+                .collect()
+        } else {
+            vec![]
+        };
         self.settle(3000, 150).await;
         let spa = self.shared.same_doc.load(Ordering::SeqCst) > same_doc;
         let outcome = self.finish_outcome(nav || spa, warnings).await?;
@@ -1097,7 +1163,7 @@ impl Page {
                 let info = self.rt("clickInfo", &[json!(r)]).await?;
                 let mut warn = None;
                 if info["disabled"].as_bool() == Some(true) {
-                    return Err(BrowserError::Other(format!("{r} is disabled")));
+                    return Err(BrowserError::NotActionable(format!("{r} is disabled")));
                 }
                 if info["zero"].as_bool() == Some(true) || info["covered"].as_bool() == Some(true) {
                     if info["covered"].as_bool() == Some(true) {
@@ -1108,7 +1174,7 @@ impl Page {
                     }
                     match self.rt_effect("jsClick", &[json!(r)]).await {
                         // The click replaced the page it was running in: that is the click working.
-                        Ok(_) | Err(BrowserError::Navigation(_)) => {}
+                        Ok(_) | Err(BrowserError::Navigation(_) | BrowserError::Uncertain(_)) => {}
                         Err(e) => return Err(e),
                     }
                 } else {
@@ -1220,10 +1286,10 @@ impl Page {
     pub async fn type_into(&self, r: &str, text: &str) -> Result<()> {
         let p = self.rt("prepare", &[json!(r)]).await?;
         if p["disabled"].as_bool() == Some(true) {
-            return Err(BrowserError::Other(format!("{r} is disabled")));
+            return Err(BrowserError::NotActionable(format!("{r} is disabled")));
         }
         if p["readonly"].as_bool() == Some(true) {
-            return Err(BrowserError::Other(format!("{r} is read-only")));
+            return Err(BrowserError::NotActionable(format!("{r} is read-only")));
         }
         if text.is_empty() {
             self.rt_effect("setNative", &[json!(r), json!("")]).await?;

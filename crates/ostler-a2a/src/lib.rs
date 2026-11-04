@@ -11,4 +11,4 @@ mod proto;
 mod server;
 mod store;
 
-pub use server::{router, serve, A2aConfig, AppFactory};
+pub use server::{router, serve, serve_on, A2aConfig, AppFactory};

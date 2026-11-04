@@ -1,0 +1,36 @@
+[package]
+name = "ostler-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+url = "2"
+ostler-browser = { path = "../crates/ostler-browser" }
+ostler-forms = { path = "../crates/ostler-forms" }
+
+# Not a member of the root workspace.
+[workspace]
+
+[[bin]]
+name = "policy_check"
+path = "fuzz_targets/policy_check.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "forms_match"
+path = "fuzz_targets/forms_match.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "formir_json"
+path = "fuzz_targets/formir_json.rs"
+test = false
+doc = false

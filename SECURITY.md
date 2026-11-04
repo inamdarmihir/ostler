@@ -2,9 +2,30 @@
 
 Ostler lets an AI agent drive a real browser and stores some user data. Treat it like any tool that can act on your behalf.
 
+## Supported versions
+
+Pre-1.0: only the latest released minor version (currently 0.2.x) and `main` receive security fixes.
+
 ## Reporting a vulnerability
 
-Please use GitHub's private vulnerability reporting for this repository ("Security" tab → "Report a vulnerability"). Do not open a public issue for something exploitable. There is no bounty. This is a pre-1.0 project maintained by individuals; we will acknowledge reports as quickly as we can.
+Please use GitHub's private vulnerability reporting for this repository ("Security" tab → "Report a vulnerability"). Do not open a public issue for something exploitable. There is no bounty. This is a pre-1.0 project maintained by individuals.
+
+Include the version, how you ran it (flags, transport), and a minimal reproduction. What to expect, on a best-effort basis:
+
+1. We acknowledge the report as quickly as we can.
+2. We confirm and assess the impact, and tell you if we disagree it is a vulnerability.
+3. We prepare a fix privately, release it, and publish an advisory crediting you unless you prefer otherwise.
+4. Please keep the details private until a fix is released; we ask for coordinated disclosure and will not rush you if you need time either.
+
+## Automated supply-chain checks
+
+The `Security` workflow (`.github/workflows/security.yml`) runs on every push to `main`, every pull request and weekly:
+
+- `cargo deny` with [deny.toml](deny.toml): RustSec advisories and yanked crates, an allow-list of licenses, wildcard version requirements, and sources (crates.io only; no git dependencies). Duplicate versions of a crate are reported as warnings, not failures.
+- `cargo audit --deny warnings`: `Cargo.lock` against the RustSec database, including unmaintained and unsound warnings.
+- Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for Cargo dependencies and GitHub Actions.
+
+These cover known-vulnerable and disallowed dependencies. They do not detect unknown vulnerabilities, malicious but unreported crates, or flaws in Ostler's own code. Workflows use read-only tokens, do not use `pull_request_target`, and pin actions by tag, not by commit SHA.
 
 ## Threat model
 

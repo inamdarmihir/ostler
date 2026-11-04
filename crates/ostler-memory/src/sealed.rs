@@ -163,7 +163,7 @@ impl SealKey {
     }
 
     /// Encrypt with the current format (`v2`). `aad` is bound but not stored.
-    fn seal(&self, aad: &str, plaintext: &[u8]) -> Result<String> {
+    pub(crate) fn seal(&self, aad: &str, plaintext: &[u8]) -> Result<String> {
         let mut nonce = [0u8; 12];
         getrandom::fill(&mut nonce)
             .map_err(|e| MemoryError::Invalid(format!("no randomness: {e}")))?;
@@ -196,7 +196,13 @@ impl SealKey {
 
     /// Decrypt. `aad_v1` is used for a `v1` blob (only when `allow_v1`), `aad_v2` for a `v2` one; any other
     /// version, a malformed blob, or trailing parts yield `None`.
-    fn open(&self, aad_v1: &str, aad_v2: &str, sealed: &str, allow_v1: bool) -> Option<Vec<u8>> {
+    pub(crate) fn open(
+        &self,
+        aad_v1: &str,
+        aad_v2: &str,
+        sealed: &str,
+        allow_v1: bool,
+    ) -> Option<Vec<u8>> {
         let mut parts = sealed.split('.');
         let aad = match parts.next()? {
             VERSION => aad_v2,

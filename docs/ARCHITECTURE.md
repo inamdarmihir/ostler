@@ -64,3 +64,7 @@ Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
 - Calendar pickers on read-only inputs are handled heuristically (month header, prev/next, day cells); dropdown-only and year-only pickers are not.
 - MCP runs over stdio only; `ostler a2a` is the HTTP surface.
 - Linux and Windows are untested locally; CI covers Linux.
+
+## Related
+
+[SYSTEM-DESIGN.md](SYSTEM-DESIGN.md) (context, constraints, capacity, trade-offs) · [THREAT-MODEL.md](THREAT-MODEL.md) · [FAILURE-MODES.md](FAILURE-MODES.md) · [SLOS.md](SLOS.md) · [COMPATIBILITY.md](COMPATIBILITY.md) · [OPERATIONS.md](OPERATIONS.md) · [ADR-0011](adr/0011-reliability-principles.md)

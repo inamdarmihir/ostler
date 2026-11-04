@@ -54,6 +54,35 @@ Each conversation is a Chrome process (about 400-650 MiB), so it is capped: `--m
 
 `A2A-Version` must be `1.x` if sent. A missing header is accepted (the spec says to assume 0.3, which this server does not implement, so being lenient here is a deliberate choice).
 
+## Limits, timeouts and shutdown
+
+The HTTP front door is bounded so a slow, greedy or abusive client cannot exhaust the machine. These are fields of `A2aConfig` (defaults shown). Only those with a flag shown have one today; the rest are library defaults until `ostler a2a` exposes them.
+
+| Setting (`A2aConfig`) | Default | Behaviour |
+| --- | --- | --- |
+| `max_body_bytes` | 1 MiB | Larger request bodies get HTTP **413** (checked against `Content-Length`, and while reading chunked bodies). |
+| `header_read_timeout` | 10 s | Time to send a request's headers; also the idle limit on a kept-alive connection. The connection is closed on expiry (slowloris). |
+| `body_timeout` | 15 s | Time to send the body once headers are in. HTTP **408** on expiry. |
+| `request_timeout` | 150 s | Ceiling on handling a request until its response starts (SSE streams continue afterwards). Raised to `task_timeout + 15 s` if lower, so a blocking `SendMessage` is never cut short. HTTP **408**. |
+| `max_concurrent_tasks` | 8 | Tasks running, or queued behind their conversation's turn. Over the limit: HTTP **429**, `Retry-After: 5`, error reason `TOO_MANY_TASKS_IN_FLIGHT`. Nothing is queued without bound. |
+| `max_contexts` (`--max-contexts`) | 4 | Concurrent conversations (one Chrome each). Over the limit: HTTP **503**, `Retry-After: 15`, reason `TOO_MANY_CONTEXTS`. |
+| `task_timeout` (`--task-timeout-secs`) | 120 s | One task; it then fails with "The task timed out." |
+| `idle` (`--idle-secs`) | 300 s | Idle conversations are closed. |
+| `drain_timeout` | 30 s | See shutdown below. |
+
+429/503 responses are JSON-RPC errors (code `-32603`) with `error.data[0].metadata.retryAfterSeconds`, plus the `Retry-After` header. Clients should back off and retry.
+
+**Probes** (no auth, no `Host` check, body is only a status word; nothing about the host, paths or versions):
+
+- `GET /healthz`: `200 {"status":"ok"}` while the process is serving.
+- `GET /readyz`: `200 {"status":"ready"}` when the server is not shutting down and a Chrome binary can be found (`chrome_path`, else the usual discovery order); otherwise `503 {"status":"not_ready"}`. It checks that a browser can be located, not that a launch succeeds.
+
+**Request ids.** Every response has an `X-Request-Id` header. A client-supplied `X-Request-Id` (up to 64 characters of `A-Za-z0-9-_.`) is echoed; otherwise a UUID is generated. Error bodies repeat it: `requestId` in the plain-JSON auth/host/timeout errors and `error.data[0].metadata.requestId` in JSON-RPC errors. Quote it when reporting a problem.
+
+**Graceful shutdown.** On SIGTERM or SIGINT the server stops accepting connections, `/readyz` turns 503, new tasks are refused with 503 (`SHUTTING_DOWN`), and in-flight requests and tasks get up to `drain_timeout` to finish. Anything still running is then aborted, every browser is closed, and the process exits. Set your orchestrator's termination grace period above `drain_timeout`.
+
+Not limited here: the number of open connections. Put a reverse proxy or firewall in front for connection-level limits.
+
 ## Securing it
 
 An A2A endpoint lets a network client steer a browser that can log in to things. Defaults are conservative:

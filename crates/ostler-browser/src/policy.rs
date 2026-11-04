@@ -87,7 +87,8 @@ fn private_v4(a: Ipv4Addr) -> bool {
 }
 
 fn private_v6(a: Ipv6Addr) -> bool {
-    if let Some(v4) = a.to_ipv4_mapped() {
+    // `to_ipv4` unwraps both ::ffff:a.b.c.d (mapped) and the deprecated ::a.b.c.d (compatible) forms.
+    if let Some(v4) = a.to_ipv4() {
         return private_v4(v4);
     }
     let s = a.segments();
@@ -133,7 +134,7 @@ fn is_metadata_host(url: &Url) -> bool {
     match url.host() {
         Some(Host::Ipv4(a)) => a.is_link_local(),
         Some(Host::Ipv6(a)) => {
-            if let Some(v4) = a.to_ipv4_mapped() {
+            if let Some(v4) = a.to_ipv4() {
                 return v4.is_link_local();
             }
             let s = a.segments();

@@ -165,6 +165,15 @@ struct A2aArgs {
     idle_secs: u64,
     #[arg(long, default_value_t = 120)]
     task_timeout_secs: u64,
+    /// Most tasks running or queued per conversation before HTTP 429 (default: the server's built-in limit).
+    #[arg(long)]
+    max_concurrent_tasks: Option<usize>,
+    /// Seconds in-flight work gets to finish after SIGTERM/SIGINT before exit.
+    #[arg(long)]
+    drain_secs: Option<u64>,
+    /// Largest accepted request body in bytes (HTTP 413 beyond it).
+    #[arg(long)]
+    max_body_bytes: Option<usize>,
     /// Treat `submit: true` as already confirmed (skips the input-required confirmation step).
     #[arg(long)]
     a2a_auto_submit: bool,
@@ -236,15 +245,28 @@ async fn run_a2a(a: A2aArgs) -> Result<()> {
     cfg.idle = Duration::from_secs(a.idle_secs);
     cfg.task_timeout = Duration::from_secs(a.task_timeout_secs);
     cfg.auto_submit = a.a2a_auto_submit;
+    cfg.chrome_path = s.chrome_path.clone();
+    if let Some(n) = a.max_concurrent_tasks {
+        cfg.max_concurrent_tasks = n.max(1);
+    }
+    if let Some(n) = a.drain_secs {
+        cfg.drain_timeout = Duration::from_secs(n);
+    }
+    if let Some(n) = a.max_body_bytes {
+        cfg.max_body_bytes = n.max(1024);
+    }
     ostler_a2a::serve(cfg, factory).await?;
     Ok(())
 }
 
 #[derive(Args)]
 struct InitArgs {
-    /// Qdrant URL, e.g. https://<cluster>.cloud.qdrant.io:6333 (the :6333 is added for Qdrant Cloud if missing).
+    /// Qdrant URL, e.g. `https://<cluster>.cloud.qdrant.io:6333` (the :6333 is added for Qdrant Cloud if missing).
     #[arg(long)]
     qdrant_url: Option<String>,
+    /// No Qdrant: keep memory in one encrypted file on this machine (`--memory local`).
+    #[arg(long, conflicts_with = "qdrant_url")]
+    local: bool,
     /// Qdrant API key. Prefer the interactive prompt or the QDRANT_API_KEY variable: flags show up in `ps`.
     #[arg(long, env = "QDRANT_API_KEY", hide_env_values = true)]
     qdrant_api_key: Option<String>,
@@ -316,6 +338,7 @@ async fn init(a: InitArgs) -> Result<()> {
     use std::io::IsTerminal;
     let mut cfg = config::read()?;
     let any_flag = a.qdrant_url.is_some()
+        || a.local
         || a.tenant.is_some()
         || a.learn
         || a.lean
@@ -330,8 +353,25 @@ async fn init(a: InitArgs) -> Result<()> {
         eprintln!("Ostler setup. Press Enter to keep the value shown in [brackets].\n");
         eprintln!("Memory is optional. Without a Qdrant URL everything except memory still works.");
         let cur = cfg.get("qdrant_url").cloned().unwrap_or_default();
-        let u = prompt("Qdrant URL (blank = no memory)", &cur)?;
+        let u = prompt("Qdrant URL (blank = no server)", &cur)?;
+        if u.is_empty() {
+            let local = yes_no(
+                "Save memory on this machine instead (one encrypted file, no server)?",
+                true,
+            )?;
+            cfg.insert("memory".into(), if local { "local" } else { "auto" }.into());
+            if local {
+                eprintln!(
+                    "  Saved to {}, encrypted with a key created for you next to it.",
+                    config::local_memory_path().display()
+                );
+                eprintln!("  Back up the key: if it is lost, the file can NEVER be read again.");
+            }
+        }
         if !u.is_empty() {
+            if cfg.get("memory").map(String::as_str) == Some("local") {
+                cfg.remove("memory");
+            }
             url = Some(u);
             eprintln!("API key: input is visible; leave blank for a local Qdrant without auth.");
             let has = cfg.contains_key("qdrant_api_key");
@@ -414,6 +454,11 @@ async fn init(a: InitArgs) -> Result<()> {
     if let Some(d) = a.retain_days {
         cfg.insert("retain_days".into(), d.to_string());
     }
+    if a.local {
+        cfg.insert("memory".into(), "local".into());
+    } else if a.qdrant_url.is_some() && cfg.get("memory").map(String::as_str) == Some("local") {
+        cfg.remove("memory");
+    }
     if cfg.is_empty() {
         eprintln!(
             "Nothing to save. Run `ostler init` in a terminal, or pass flags such as --qdrant-url."
@@ -424,7 +469,8 @@ async fn init(a: InitArgs) -> Result<()> {
     let path = config::write(&cfg)?;
     println!("Saved {} (owner-only permissions).", path.display());
 
-    if cfg.contains_key("qdrant_url") && !a.no_check {
+    let local = cfg.get("memory").map(String::as_str) == Some("local");
+    if (cfg.contains_key("qdrant_url") || local) && !a.no_check {
         // Re-read through the same path `serve` uses so the check tests exactly what will run.
         for (k, env) in config::KEYS {
             if let Some(v) = cfg.get(*k) {
@@ -444,13 +490,17 @@ async fn init(a: InitArgs) -> Result<()> {
                 Err(e) => Err(e),
             };
             match checked {
+                Ok(t) if !t.is_empty() && local => {
+                    println!("Local memory: file opens, key ready (tenant {t:?}). OK")
+                }
                 Ok(t) if !t.is_empty() => {
                     println!("Qdrant: reachable, collections ready (tenant {t:?}). OK")
                 }
                 Ok(_) => println!("Memory is off."),
                 Err(e) => {
                     println!(
-                        "Qdrant: FAILED: {}\nThe settings were saved anyway. Fix them (`ostler config set <key> <value>`, or re-run `ostler init`), then run `ostler doctor`.",
+                        "{}: FAILED: {}\nThe settings were saved anyway. Fix them (`ostler config set <key> <value>`, or re-run `ostler init`), then run `ostler doctor`.",
+                        if local { "Local memory" } else { "Qdrant" },
                         explain(&e.to_string())
                     );
                     std::process::exit(1);
@@ -534,6 +584,18 @@ fn memory_report(m: &MemoryArgs) {
         .filter(|_| mode == MemoryMode::Qdrant)
     else {
         match mode {
+            MemoryMode::Local => {
+                println!("Memory: on, saved on this machine at {} (tenant {:?}); no server.", config::local_memory_path().display(), m.tenant);
+                if m.seal == SealMode::Off {
+                    println!("  sealing:    OFF. warning: anyone who can read that file can read your saved facts and the sites you use.\n              Turn on with `ostler config set seal on`.");
+                } else {
+                    println!("  sealing:    ON. The whole file is encrypted (AES-256-GCM) with the memory key in {}.\n              Back the key up: if it is lost, the file is unrecoverable (`ostler memory wipe --yes` starts over).", config::key_location());
+                }
+                match m.embeddings {
+                    Embeddings::Ollama => println!("  embeddings: Ollama at {}; text stays on this machine.", m.embedding_url),
+                    _ => println!("  embeddings: local word hashing (finds shared words, not meaning). `ostler config set embeddings ollama` for semantic search; nothing leaves this machine either way."),
+                }
+            }
             MemoryMode::Ephemeral => println!("Memory: in-process only (--memory ephemeral); lost when the server exits."),
             _ if m.memory == MemoryMode::Auto => println!("Memory: in-process, this session only (the zero-config default; nothing is written to disk).\n  Optional: `ostler init` saves a Qdrant URL so the agent can reuse your details and past fills across sessions."),
             _ => println!("Memory: off (--memory off). Fix: remove that flag/setting (`ostler config unset memory`) for in-process memory, or `ostler init` for saved memory."),
@@ -826,6 +888,8 @@ enum MemoryMode {
     /// Qdrant if QDRANT_URL is set, otherwise memory is off.
     Auto,
     Qdrant,
+    /// An encrypted file on this machine; no server. Persists across sessions.
+    Local,
     /// In-process, lost on exit. For demos and tests.
     Ephemeral,
     Off,
@@ -862,6 +926,7 @@ enum SealMode {
 #[derive(Args, Clone)]
 struct MemoryArgs {
     /// Where memory lives. `auto` uses Qdrant when a URL is saved (`ostler init`), otherwise memory is off.
+    /// `local` is an encrypted file on this machine (no server); `ephemeral` is in-process and lost on exit.
     #[arg(
         long,
         global = true,
@@ -870,7 +935,7 @@ struct MemoryArgs {
         env = "OSTLER_MEMORY"
     )]
     memory: MemoryMode,
-    /// Qdrant REST URL, e.g. https://<cluster>.cloud.qdrant.io:6333 (or http://localhost:6333).
+    /// Qdrant REST URL, e.g. `https://<cluster>.cloud.qdrant.io:6333` (or http://localhost:6333).
     #[arg(long, global = true, env = "QDRANT_URL")]
     qdrant_url: Option<String>,
     /// Qdrant API key. Prefer `ostler init` or the environment variable: flags show up in `ps`.
@@ -1033,6 +1098,18 @@ fn startup_block(version: &str, mem: &MemoryArgs, attached: Option<&str>, headed
             ),
             "",
         ),
+        MemoryMode::Local => (
+            format!(
+                "saved on this machine, {} ({})",
+                config::local_memory_path().display(),
+                if mem.seal == SealMode::Off {
+                    "NOT encrypted"
+                } else {
+                    "encrypted"
+                }
+            ),
+            "",
+        ),
         MemoryMode::Ephemeral => (
             "in-process, this session only (nothing written to disk)".to_string(),
             "off: Qdrant, sealed storage, learning from forms. Opt in with `ostler init`.",
@@ -1081,7 +1158,24 @@ async fn store_state(a: &MemoryArgs) -> config::StoreState {
 /// was seen to hold no sealed memory for the tenant (or `--allow-new-key` says to go ahead blind), so a
 /// first start with Qdrant down cannot mint a key that silently orphans data saved under an earlier one.
 async fn ensure_key(a: &MemoryArgs) -> Result<()> {
-    if resolved_mode(a) != MemoryMode::Qdrant || a.seal == SealMode::Off {
+    if a.seal == SealMode::Off
+        || !matches!(resolved_mode(a), MemoryMode::Qdrant | MemoryMode::Local)
+    {
+        return Ok(());
+    }
+    if resolved_mode(a) == MemoryMode::Local {
+        if config::existing_memory_key()?.is_some() {
+            return Ok(());
+        }
+        // A new key over an existing file would lock the person out of what is already saved.
+        let file = config::local_memory_path();
+        anyhow::ensure!(
+            !file.exists(),
+            "{} exists but there is no memory key (looked in {}). Restore it with `ostler memory key import`, or delete the file to start over",
+            file.display(),
+            config::key_location()
+        );
+        config::create_memory_key()?;
         return Ok(());
     }
     if config::existing_memory_key()?.is_some() {
@@ -1131,6 +1225,29 @@ fn build_memory_inner(a: &MemoryArgs) -> Result<Option<Memory>> {
     let mode = resolved_mode(a);
     Ok(match mode {
         MemoryMode::Off | MemoryMode::Auto => None,
+        MemoryMode::Local => {
+            // No server to embed for us: Cloud Inference is not available, so unless Ollama is chosen the
+            // vectors are the local hashing ones (found by shared words, not by meaning).
+            let embedder: Arc<dyn ostler_memory::Embedder> = match a.embeddings {
+                Embeddings::Ollama => Arc::new(OllamaEmbedder::new(
+                    &a.embedding_url,
+                    &a.embedding_model,
+                    a.embedding_dim,
+                    a.allow_insecure_qdrant,
+                )?),
+                Embeddings::DevHash => Arc::new(HashEmbedder::new(a.embedding_dim)),
+                Embeddings::Cloud => Arc::new(HashEmbedder::default()),
+            };
+            let key = if a.seal == SealMode::Off {
+                eprintln!("ostler: warning: --seal off. Anyone who can read {} can read your saved facts and the sites you use.", config::local_memory_path().display());
+                None
+            } else {
+                Some(config::memory_key()?)
+            };
+            let store =
+                ostler_memory::LocalStore::open(config::local_memory_path(), embedder, key)?;
+            Some(Memory::new(Arc::new(store), a.tenant.clone()))
+        }
         MemoryMode::Ephemeral => {
             let store: Arc<dyn Store> =
                 Arc::new(InMemoryStore::new(Arc::new(HashEmbedder::default())));
@@ -1661,8 +1778,15 @@ async fn doctor(d: DoctorArgs) -> Result<()> {
         Ok(None) => {}
         Ok(Some(mem)) => match mem.init().await {
             Ok(()) => {
-                if resolved_mode(&m) == MemoryMode::Qdrant {
-                    println!("  qdrant:     reachable, collections ready. OK");
+                match resolved_mode(&m) {
+                    MemoryMode::Qdrant => {
+                        println!("  qdrant:     reachable, collections ready. OK")
+                    }
+                    MemoryMode::Local => println!(
+                        "  local:      {} opens with the current key. OK",
+                        config::local_memory_path().display()
+                    ),
+                    _ => {}
                 }
                 if let Err(e) = key_preflight(&m, Preflight::Strict).await {
                     ok = false;
@@ -1671,14 +1795,36 @@ async fn doctor(d: DoctorArgs) -> Result<()> {
             }
             Err(e) => {
                 ok = false;
-                println!("  qdrant:     FAILED: {}", explain(&e.to_string()));
-                println!("  fix:        to run without Qdrant:  ostler config unset qdrant_url");
+                let (what, fix) = if resolved_mode(&m) == MemoryMode::Local {
+                    (
+                        "local",
+                        "to use in-process memory instead:  ostler config set memory ephemeral",
+                    )
+                } else {
+                    (
+                        "qdrant",
+                        "to run without Qdrant:  ostler config unset qdrant_url",
+                    )
+                };
+                println!("  {what}:     FAILED: {}", explain(&e.to_string()));
+                println!("  fix:        {fix}");
             }
         },
         Err(e) => {
             ok = false;
-            println!("  qdrant:     FAILED: {e}");
-            println!("  fix:        to run without Qdrant:  ostler config unset qdrant_url");
+            let (what, fix) = if resolved_mode(&m) == MemoryMode::Local {
+                (
+                    "local",
+                    "to use in-process memory instead:  ostler config set memory ephemeral",
+                )
+            } else {
+                (
+                    "qdrant",
+                    "to run without Qdrant:  ostler config unset qdrant_url",
+                )
+            };
+            println!("  {what}:     FAILED: {e}");
+            println!("  fix:        {fix}");
         }
     }
     if ok {

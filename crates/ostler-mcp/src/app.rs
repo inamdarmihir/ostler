@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use base64::Engine as _;
 use ostler_browser::{
-    AutoMode, Browser, FillReport, FillRequest, FillStatus, LaunchOptions, Policy, SnapshotMode,
-    SnapshotOpts, SubmitStatus, Suggester, Suggestion,
+    AutoMode, Browser, BrowserError, FillReport, FillRequest, FillStatus, LaunchOptions, Policy,
+    SnapshotMode, SnapshotOpts, SubmitStatus, Suggester, Suggestion,
 };
 use ostler_forms::Field;
 use ostler_memory::{FieldOutcome, FieldQuery, Memory};
@@ -98,6 +98,123 @@ impl FormTaskResult {
 pub enum Content {
     Text(String),
     Image { png: Vec<u8> },
+}
+
+/// A failed tool call: the message plus, when the cause is known, a stable code and retry rule so an agent
+/// can tell "re-snapshot and try again" from "do not repeat this".
+#[derive(Debug)]
+pub struct ToolError {
+    kind: Option<ErrKind>,
+    msg: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrKind {
+    StaleRef,
+    Uncertain,
+    Blocked,
+    NotActionable,
+    Navigation,
+}
+
+impl ToolError {
+    fn typed(kind: ErrKind, msg: impl Into<String>) -> Self {
+        Self {
+            kind: Some(kind),
+            msg: msg.into(),
+        }
+    }
+
+    /// The message with its code and retry rule, if the cause is known.
+    fn tagged(self) -> String {
+        let (code, retry) = match self.kind {
+            Some(ErrKind::StaleRef) => ("STALE_REF", "safe after a fresh snapshot"),
+            Some(ErrKind::Uncertain) => (
+                "ACTION_UNCERTAIN",
+                "unsafe: it may have completed; check the page first",
+            ),
+            Some(ErrKind::Blocked) => ("BLOCKED", "never"),
+            Some(ErrKind::NotActionable) => {
+                ("NOT_ACTIONABLE", "never until the page state changes")
+            }
+            Some(ErrKind::Navigation) => ("NAVIGATION_FAILED", "safe"),
+            None => return self.msg,
+        };
+        format!("ERROR {code} (retry: {retry}): {}", self.msg)
+    }
+}
+
+impl From<String> for ToolError {
+    fn from(msg: String) -> Self {
+        Self { kind: None, msg }
+    }
+}
+
+impl From<&str> for ToolError {
+    fn from(msg: &str) -> Self {
+        msg.to_string().into()
+    }
+}
+
+impl From<ToolError> for String {
+    fn from(e: ToolError) -> Self {
+        e.msg
+    }
+}
+
+impl From<ostler_memory::MemoryError> for ToolError {
+    fn from(e: ostler_memory::MemoryError) -> Self {
+        e.to_string().into()
+    }
+}
+
+impl From<BrowserError> for ToolError {
+    fn from(e: BrowserError) -> Self {
+        let kind = match &e {
+            BrowserError::StaleRef(_) => Some(ErrKind::StaleRef),
+            BrowserError::Uncertain(_) => Some(ErrKind::Uncertain),
+            BrowserError::Policy(_) => Some(ErrKind::Blocked),
+            BrowserError::NotActionable(_) => Some(ErrKind::NotActionable),
+            BrowserError::Navigation(_) => Some(ErrKind::Navigation),
+            _ => None,
+        };
+        Self {
+            kind,
+            msg: e.to_string(),
+        }
+    }
+}
+
+/// Hard limit on one tool call, so a wedged page can never hang the agent. `OSTLER_TOOL_TIMEOUT_SECS`
+/// overrides the 120s default; 0 turns it off.
+fn tool_timeout() -> Option<Duration> {
+    let secs = std::env::var("OSTLER_TOOL_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(120);
+    (secs > 0).then(|| Duration::from_secs(secs))
+}
+
+/// Run a tool future under the deadline. The waiting tools take their own timeout argument and are exempt.
+async fn with_deadline<T>(
+    name: &str,
+    limit: Option<Duration>,
+    fut: impl std::future::Future<Output = Result<T, ToolError>>,
+) -> Result<T, ToolError> {
+    let Some(limit) = limit.filter(|_| !matches!(name, "wait_for" | "wait_for_human")) else {
+        return fut.await;
+    };
+    match tokio::time::timeout(limit, fut).await {
+        Ok(r) => r,
+        Err(_) => Err(ToolError::typed(
+            ErrKind::Uncertain,
+            format!(
+                "{name} did not finish within {}s and was abandoned; it may or may not have completed. \
+                 Check the page (snapshot) before repeating it.",
+                limit.as_secs()
+            ),
+        )),
+    }
 }
 
 pub struct ToolOutput {
@@ -389,6 +506,13 @@ impl App {
         self.browser.lock().await.as_ref().and_then(|b| b.pid())
     }
 
+    /// Evaluate JavaScript in the active tab and return its value, for evaluations that must read the page
+    /// independently of what the tools report. `None` until the browser has started, or if the script fails.
+    pub async fn page_eval(&self, expression: &str) -> Option<Value> {
+        let page = self.browser.lock().await.as_ref()?.page();
+        page.eval(expression).await.ok()
+    }
+
     /// Approximate size of the tool schemas the agent must carry in context.
     pub fn schema_bytes(&self) -> usize {
         serde_json::to_string(&tools::list(self.cfg.profile))
@@ -492,7 +616,7 @@ impl App {
     }
 
     /// The shared browser, launched on first use (so the server starts instantly and idles for free).
-    async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, String> {
+    async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, ToolError> {
         let mut guard = self.browser.lock().await;
         if guard.as_ref().is_some_and(|b| !b.is_alive()) {
             // Chrome died (crash, OOM kill). Reap it and start fresh rather than failing every call forever.
@@ -505,11 +629,9 @@ impl App {
             );
         }
         if guard.is_none() {
-            let b = Browser::launch(self.cfg.launch.clone(), self.cfg.policy.clone())
-                .await
-                .map_err(|e| e.to_string())?;
+            let b = Browser::launch(self.cfg.launch.clone(), self.cfg.policy.clone()).await?;
             if self.cfg.require_confirm_submit {
-                b.set_submit_gate(true).await.map_err(|e| e.to_string())?;
+                b.set_submit_gate(true).await?;
             }
             *guard = Some(b);
         }
@@ -523,10 +645,12 @@ impl App {
             Some(false) => ToolOutput::err(format!(
                 "tool {name:?} is disabled by the server's tool profile"
             )),
-            Some(true) => match self.dispatch(name, args).await {
-                Ok(o) => o,
-                Err(e) => ToolOutput::err(e),
-            },
+            Some(true) => {
+                match with_deadline(name, tool_timeout(), self.dispatch(name, args)).await {
+                    Ok(o) => o,
+                    Err(e) => ToolOutput::err(e.tagged()),
+                }
+            }
         };
         let mut out = out;
         self.reveal_on_forms(name, &mut out);
@@ -629,7 +753,7 @@ impl App {
         b: &Browser,
         mode: Option<&str>,
         default: SnapshotMode,
-    ) -> Result<String, String> {
+    ) -> Result<String, ToolError> {
         let mode = match mode {
             Some("none") => {
                 // Show nothing, but still remember the page so the next delta is small.
@@ -661,8 +785,7 @@ impl App {
                 }),
                 ..Default::default()
             })
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         let mut t = s.text;
         if s.truncated {
             t.push_str("(truncated; use snapshot with ref to read a part)\n");
@@ -699,13 +822,13 @@ impl App {
         s
     }
 
-    async fn dispatch(&self, name: &str, a: &Value) -> Result<ToolOutput, String> {
+    async fn dispatch(&self, name: &str, a: &Value) -> Result<ToolOutput, ToolError> {
         match name {
             "navigate" => {
                 let url = need_str(a, "url")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page().navigate(&url).await.map_err(|e| e.to_string())?;
+                    let o = b.page().navigate(&url).await?;
                     let mut t = self.action_text("Navigated", &o);
                     t.push_str(&relevance_warning(b, &o.url).await);
                     t.push_str(
@@ -717,7 +840,7 @@ impl App {
                 })
             }
             "tabs" => self.tabs_tool(a).await,
-            "context" => self.context_tool(a),
+            "context" => self.context_tool(a).map_err(ToolError::from),
             "snapshot" => {
                 let mode = match arg_str(a, "mode") {
                     Some("delta") => SnapshotMode::Delta,
@@ -737,8 +860,7 @@ impl App {
                             scope,
                             max_chars: max,
                         })
-                        .await
-                        .map_err(|e| e.to_string())?;
+                        .await?;
                     let mut t =
                         format!("Page: {} — {}\n", quarantine(&s.title), quarantine(&s.url));
                     t.push_str(&wrap(&s.text));
@@ -754,7 +876,7 @@ impl App {
                 let r = need_str(a, "ref")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page().click(&r).await.map_err(|e| e.to_string())?;
+                    let o = b.page().click(&r).await?;
                     let mut t = self.action_text(&format!("Clicked {r}"), &o);
                     if o.navigated {
                         t.push_str(&format!("Result: navigated to {}\n", inert(&o.url)));
@@ -787,7 +909,7 @@ impl App {
                 let r = need_str(a, "ref")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page().hover_action(&r).await.map_err(|e| e.to_string())?;
+                    let o = b.page().hover_action(&r).await?;
                     let mut t = self.action_text(&format!("Hovered {r}"), &o);
                     t.push_str(&self.observe(b, obs.as_deref(), SnapshotMode::Delta).await?);
                     Ok(ToolOutput::text(t))
@@ -799,11 +921,7 @@ impl App {
                 let amount = a.get("amount").and_then(Value::as_i64);
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let (pos, o) = b
-                        .page()
-                        .scroll(r.as_deref(), &dir, amount)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let (pos, o) = b.page().scroll(r.as_deref(), &dir, amount).await?;
                     let what = match &r {
                         Some(r) => format!("Scrolled {r} into view"),
                         None => format!("Scrolled {dir}"),
@@ -820,11 +938,7 @@ impl App {
                 let submit = a.get("submit").and_then(Value::as_bool).unwrap_or(false);
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b
-                        .page()
-                        .type_text(&r, &text, submit)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let o = b.page().type_text(&r, &text, submit).await?;
                     let mut t = self.action_text(&format!("Typed into {r}"), &o);
                     let default = if o.navigated && !b.page().baseline_matches(&o.url) {
                         SnapshotMode::Interactive
@@ -839,7 +953,7 @@ impl App {
                 let key = need_str(a, "key")?.to_string();
                 let obs = arg_str(a, "observe").map(String::from);
                 br!(self, b, {
-                    let o = b.page().press(&key).await.map_err(|e| e.to_string())?;
+                    let o = b.page().press(&key).await?;
                     let mut t = self.action_text(&format!("Pressed {key}"), &o);
                     let default = if o.navigated && !b.page().baseline_matches(&o.url) {
                         SnapshotMode::Interactive
@@ -852,7 +966,7 @@ impl App {
             }
             "back" => {
                 br!(self, b, {
-                    let o = b.page().back().await.map_err(|e| e.to_string())?;
+                    let o = b.page().back().await?;
                     if !o.changed {
                         // Nothing to go back to: say so and skip the page dump.
                         return Ok(ToolOutput::text(self.action_text("Could not go back", &o)));
@@ -885,8 +999,7 @@ impl App {
                     let ok = b
                         .page()
                         .wait_for(text.as_deref(), gone.as_deref(), sel.as_deref(), timeout)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                        .await?;
                     Ok(if ok {
                         ToolOutput::text("Condition met.")
                     } else {
@@ -903,7 +1016,7 @@ impl App {
                 );
                 let headless = self.cfg.launch.headless;
                 br!(self, b, {
-                    let Some(first) = b.page().challenge().await.map_err(|e| e.to_string())? else {
+                    let Some(first) = b.page().challenge().await? else {
                         return Ok(ToolOutput::text(
                             "No verification challenge is blocking this page.",
                         ));
@@ -940,7 +1053,7 @@ impl App {
             "look" => {
                 let max = a.get("max").and_then(Value::as_u64).unwrap_or(40) as usize;
                 br!(self, b, {
-                    let (png, list) = b.page().look(max).await.map_err(|e| e.to_string())?;
+                    let (png, list) = b.page().look(max).await?;
                     Ok(ToolOutput {
                         content: vec![
                             Content::Text(wrap_detail(&crate::render::targets(&list))),
@@ -954,11 +1067,7 @@ impl App {
                 let r = arg_str(a, "ref").map(String::from);
                 let full = a.get("full_page").and_then(Value::as_bool).unwrap_or(false);
                 br!(self, b, {
-                    let png = b
-                        .page()
-                        .screenshot(r.as_deref(), full, false)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let png = b.page().screenshot(r.as_deref(), full, false).await?;
                     Ok(ToolOutput {
                         content: vec![Content::Image { png }],
                         is_error: false,
@@ -968,8 +1077,8 @@ impl App {
             "form_inspect" => {
                 let want = arg_str(a, "form").map(String::from);
                 br!(self, b, {
-                    b.page().guard().await.map_err(|e| e.to_string())?;
-                    let mut ir = b.page().forms().await.map_err(|e| e.to_string())?;
+                    b.page().guard().await?;
+                    let mut ir = b.page().forms().await?;
                     if let Some(w) = &want {
                         ir.forms.retain(|f| f.r#ref == w.trim_start_matches('@'));
                     }
@@ -1051,8 +1160,7 @@ impl App {
                             },
                             None,
                         )
-                        .await
-                        .map_err(|e| e.to_string())?;
+                        .await?;
                     Ok(ToolOutput::text(wrap_detail(&render::fill_shots(
                         &rep,
                         self.cfg.verbose,
@@ -1076,8 +1184,7 @@ impl App {
                         arg_str(a, "autocomplete"),
                         "user",
                     )
-                    .await
-                    .map_err(|e| e.to_string())?;
+                    .await?;
                 Ok(ToolOutput::text(format!(
                     "Saved {:?}{}.",
                     f.key,
@@ -1089,10 +1196,7 @@ impl App {
             "memory_recall" => {
                 let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
                 let limit = a.get("limit").and_then(Value::as_u64).unwrap_or(5) as usize;
-                let hits = mem
-                    .recall(need_str(a, "query")?, limit)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let hits = mem.recall(need_str(a, "query")?, limit).await?;
                 if hits.is_empty() {
                     return Ok(ToolOutput::text("Nothing relevant saved."));
                 }
@@ -1105,7 +1209,7 @@ impl App {
             }
             "memory_list" => {
                 let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
-                let facts = mem.facts(200).await.map_err(|e| e.to_string())?;
+                let facts = mem.facts(200).await?;
                 if facts.is_empty() {
                     return Ok(ToolOutput::text("No facts saved."));
                 }
@@ -1119,10 +1223,7 @@ impl App {
             }
             "memory_forget" => {
                 let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
-                let existed = mem
-                    .forget(need_str(a, "key")?)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let existed = mem.forget(need_str(a, "key")?).await?;
                 Ok(ToolOutput::text(if existed {
                     "Forgotten."
                 } else {
@@ -1130,11 +1231,11 @@ impl App {
                 }))
             }
             "stats" => Ok(ToolOutput::text(self.stats().await)),
-            other => Err(format!("unknown tool {other:?}")),
+            other => Err(format!("unknown tool {other:?}").into()),
         }
     }
 
-    async fn form_fill(&self, a: &Value) -> Result<ToolOutput, String> {
+    async fn form_fill(&self, a: &Value) -> Result<ToolOutput, ToolError> {
         let rep = self.fill_report(a).await?;
         Ok(ToolOutput::text(wrap_detail(&render::fill_shots(
             &rep,
@@ -1144,7 +1245,7 @@ impl App {
     }
 
     /// Fill a form from tool-style arguments and return the structured report (shared by MCP and A2A).
-    async fn fill_report(&self, a: &Value) -> Result<FillReport, String> {
+    async fn fill_report(&self, a: &Value) -> Result<FillReport, ToolError> {
         let values: BTreeMap<String, Value> = match a.get("values") {
             Some(Value::Object(m)) => m.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             Some(_) => return Err("\"values\" must be an object of {label or ref: value}".into()),
@@ -1160,7 +1261,7 @@ impl App {
                     AutoMode::Off
                 }
             }
-            Some(o) => return Err(format!("auto must be off|required|all, got {o:?}")),
+            Some(o) => return Err(format!("auto must be off|required|all, got {o:?}").into()),
         };
         if values.is_empty() && auto == AutoMode::Off {
             return Err("provide values, or set auto=required|all with memory enabled".into());
@@ -1179,7 +1280,6 @@ impl App {
             b.page()
                 .fill_form(req, suggester.as_ref().map(|s| s as &dyn Suggester))
                 .await
-                .map_err(|e| e.to_string())
         })?;
         self.remember_fill(&rep, &values);
         Ok(rep)
@@ -1240,7 +1340,7 @@ impl App {
         });
     }
 
-    async fn tabs_tool(&self, a: &Value) -> Result<ToolOutput, String> {
+    async fn tabs_tool(&self, a: &Value) -> Result<ToolOutput, ToolError> {
         let action = need_str(a, "action")?.to_string();
         let tab = arg_str(a, "tab").map(String::from);
         let url = arg_str(a, "url").map(String::from);
@@ -1265,7 +1365,7 @@ impl App {
                     Ok(ToolOutput::text(wrap(&t)))
                 }
                 "new" => {
-                    let id = b.new_tab(url.as_deref()).await.map_err(|e| e.to_string())?;
+                    let id = b.new_tab(url.as_deref()).await?;
                     let mut t = format!("Opened tab {id}.\n");
                     if url.is_some() {
                         t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
@@ -1274,7 +1374,7 @@ impl App {
                 }
                 "switch" => {
                     let id = tab.ok_or("missing required argument \"tab\"")?;
-                    b.switch_tab(&id).await.map_err(|e| e.to_string())?;
+                    b.switch_tab(&id).await?;
                     // Show the tab we landed on; switching blind would force an extra snapshot call.
                     let mut t = format!("Active tab {id}.\n");
                     t.push_str(&self.observe(b, None, SnapshotMode::Interactive).await?);
@@ -1282,13 +1382,13 @@ impl App {
                 }
                 "close" => {
                     let id = tab.ok_or("missing required argument \"tab\"")?;
-                    b.close_tab(&id).await.map_err(|e| e.to_string())?;
+                    b.close_tab(&id).await?;
                     Ok(ToolOutput::text(format!(
                         "Closed {id}. Active tab: {}.",
                         b.active_tab()
                     )))
                 }
-                other => Err(format!("unknown action {other:?} (list|new|switch|close)")),
+                other => Err(format!("unknown action {other:?} (list|new|switch|close)").into()),
             }
         })
     }
@@ -1454,7 +1554,7 @@ impl App {
         })
     }
 
-    async fn form_submit(&self, a: &Value) -> Result<ToolOutput, String> {
+    async fn form_submit(&self, a: &Value) -> Result<ToolOutput, ToolError> {
         if self.cfg.require_confirm_submit
             && a.get("confirm").and_then(Value::as_bool) != Some(true)
         {
@@ -1466,10 +1566,7 @@ impl App {
         let form = arg_str(a, "form").map(String::from);
         let ctl = arg_str(a, "control").map(String::from);
         let out = br!(self, b, {
-            b.page()
-                .submit(form.as_deref(), ctl.as_deref())
-                .await
-                .map_err(|e| e.to_string())
+            b.page().submit(form.as_deref(), ctl.as_deref()).await
         })?;
         self.learn_from_submit(&out);
         Ok(ToolOutput::text(wrap_detail(&render::submit_shots(
@@ -1650,7 +1747,7 @@ impl App {
     }
 }
 
-const NO_MEMORY: &str = "memory is not configured. Start the server with --memory ephemeral, or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
+const NO_MEMORY: &str = "memory is not configured. Start the server with --memory local (an encrypted file on this machine) or --memory ephemeral (this session only), or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
 
 #[cfg(test)]
 mod scrub_tests {
@@ -1784,5 +1881,83 @@ mod degraded_memory_tests {
         let out = healthy.call("memory_list", &json!({})).await;
         let t = first_text(&out);
         assert!(!t.contains("memory is unavailable"), "{t}");
+    }
+}
+
+#[cfg(test)]
+mod tag_error_tests {
+    use super::*;
+
+    fn tag(e: BrowserError) -> String {
+        ToolError::from(e).tagged()
+    }
+
+    #[test]
+    fn stale_and_unknown_refs_are_retryable_after_snapshot() {
+        for m in [
+            "unknown ref e9: page changed",
+            "ref e3 is stale (element left the page)",
+        ] {
+            let t = tag(BrowserError::StaleRef(m.into()));
+            assert!(t.starts_with("ERROR STALE_REF (retry: safe after"), "{t}");
+            assert!(t.ends_with(m));
+        }
+    }
+
+    #[test]
+    fn uncertain_actions_are_not_safe_to_retry() {
+        let t = tag(BrowserError::Navigation("x".into()));
+        assert_eq!(
+            t,
+            "ERROR NAVIGATION_FAILED (retry: safe): navigation failed: x"
+        );
+        let t = tag(BrowserError::Uncertain("the page changed".into()));
+        assert!(t.contains("ACTION_UNCERTAIN") && t.contains("unsafe"));
+    }
+
+    #[test]
+    fn blocked_and_not_actionable_keep_their_text() {
+        assert_eq!(
+            tag(BrowserError::Policy("host x".into())),
+            "ERROR BLOCKED (retry: never): blocked by policy: host x"
+        );
+        let t = tag(BrowserError::NotActionable("e3 is disabled".into()));
+        assert!(t.starts_with("ERROR NOT_ACTIONABLE (retry: never until"));
+        assert!(t.ends_with(": e3 is disabled"));
+    }
+
+    #[tokio::test]
+    async fn a_wedged_call_hits_the_deadline_and_says_it_may_have_run() {
+        let slow = async {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok::<(), ToolError>(())
+        };
+        let e = with_deadline("click", Some(Duration::from_millis(50)), slow)
+            .await
+            .unwrap_err()
+            .tagged();
+        assert!(e.starts_with("ERROR ACTION_UNCERTAIN"), "{e}");
+        assert!(e.contains("may or may not have completed"), "{e}");
+        // The waiting tools and a disabled limit are not cut off.
+        for (name, limit) in [
+            ("wait_for", Some(Duration::from_millis(10))),
+            ("click", None),
+        ] {
+            let r = with_deadline(name, limit, async {
+                tokio::time::sleep(Duration::from_millis(60)).await;
+                Ok::<_, ToolError>(1)
+            })
+            .await;
+            assert_eq!(r.unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn unrecognised_errors_pass_through() {
+        assert_eq!(
+            tag(BrowserError::Other("something else".into())),
+            "something else"
+        );
+        assert_eq!(ToolError::from("plain").tagged(), "plain");
     }
 }

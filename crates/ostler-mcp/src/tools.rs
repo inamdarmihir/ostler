@@ -87,7 +87,7 @@ fn defs() -> Vec<Def> {
         Def { name: "form_fill", desc: "Fill many fields at once from {label|name|ref: value}. Handles selects, radios, checkbox groups, dates, files, comboboxes, dependent dropdowns; verifies each field. auto=required|all fills the rest from memory.", min: Profile::Forms, required: &[],
             props: json!({"values":{"type":"object","additionalProperties":true},"form":{"type":"string"},"auto":{"type":"string","enum":["off","required","all"]},"min_confidence":{"type":"number"}}) },
         Def { name: "form_submit", desc: "Click the form's submit/next control and report whether it was accepted, advanced to another step, or failed validation.", min: Profile::Forms, required: &[],
-            props: json!({"form":{"type":"string"},"control":{"type":"string","description":"submit button ref"},"confirm":{"type":"boolean","description":"required when the server runs with --require-confirm-submit"}}) },
+            props: json!({"form":{"type":"string"},"control":{"type":"string","description":"submit button ref"},"confirm":{"type":"boolean","description":"required when the server runs with --require-confirm-submit"},"again":{"type":"boolean","description":"resubmit a form submitted moments ago"}}) },
         Def { name: "fill_field", desc: "Set one field by ref (any kind, including custom widgets).", min: Profile::Forms, required: &["ref","value"],
             props: json!({"ref":{"type":"string"},"value":{}}) },
         Def { name: "memory_remember", desc: "Save a fact about the user for future forms (e.g. email, company). Secrets are refused.", min: Profile::All, required: &["key","value"],
