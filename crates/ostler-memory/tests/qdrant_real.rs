@@ -126,6 +126,13 @@ async fn many_tenants_and_concurrent_writers() {
     for t in tasks {
         assert_eq!(t.await.unwrap(), 5);
     }
-    let n = s.count(Kind::Profile, &Filter::default()).await.unwrap();
+    // Per tenant: the collection also holds one embedding-model marker point, so a whole-collection count is 101.
+    let mut n = 0;
+    for t in 0..20 {
+        n += s
+            .count(Kind::Profile, &Filter::tenant(&format!("tenant{t}")))
+            .await
+            .unwrap();
+    }
     assert_eq!(n, 100);
 }

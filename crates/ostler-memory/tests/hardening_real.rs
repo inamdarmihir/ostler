@@ -509,10 +509,15 @@ async fn unscoped_bulk_delete_is_refused_by_the_server_store_too() {
         .delete_matching(Kind::Profile, &Filter::default().and("id_hint", json!("x")))
         .await
         .is_err());
-    assert_eq!(
-        raw.count(Kind::Profile, &Filter::default()).await.unwrap(),
-        2
-    );
+    // Count per tenant: `ensure()` also stores one embedding-model marker point in the collection, so a
+    // count over the whole collection is 3, not 2. Both tenants' rows must still be there.
+    for t in ["a", "b"] {
+        assert_eq!(
+            raw.count(Kind::Profile, &Filter::tenant(t)).await.unwrap(),
+            1,
+            "tenant {t} lost its row to a refused bulk delete"
+        );
+    }
 }
 
 // ------------------------------------------------------------------ tampering on the real server
