@@ -4,6 +4,7 @@
 //!   server-side (no client model, one fewer network hop for us).
 //! * [`VectorSource::Client`]: embed locally and send raw vectors (any Qdrant, incl. OSS).
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -257,6 +258,20 @@ pub struct QdrantStore {
     breaker: Breaker,
     cooldown: Duration,
     retry: Retry,
+    /// Whether the server can score with a formula (Qdrant 1.14+): see [`FORMULA_UNKNOWN`].
+    formula: AtomicU8,
+}
+
+/// Minimum Qdrant server version for server-side ranked search (the Query API `formula`).
+pub const MIN_FORMULA_VERSION: (u32, u32) = (1, 14);
+const FORMULA_UNKNOWN: u8 = 0;
+const FORMULA_YES: u8 = 1;
+const FORMULA_NO: u8 = 2;
+
+/// Parse `major.minor` out of a Qdrant version string such as `1.12.6` or `v1.14.0-rc1`.
+pub fn parse_version(s: &str) -> Option<(u32, u32)> {
+    let mut it = s.trim().trim_start_matches('v').split(['.', '-', '+']);
+    Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?))
 }
 
 /// Bounded retry of transient failures, for idempotent requests only (reads and upserts under a fixed id).
@@ -321,6 +336,7 @@ impl QdrantStore {
             breaker: Breaker::default(),
             cooldown: BREAKER_COOLDOWN,
             retry: Retry::DEFAULT,
+            formula: AtomicU8::new(FORMULA_UNKNOWN),
         })
     }
 
@@ -549,6 +565,27 @@ impl QdrantStore {
 }
 
 impl QdrantStore {
+    /// Learn whether the server can run a ranking formula. A server older than 1.14 rejects the request
+    /// with an opaque format error, so ranked search falls back to plain search plus the same formula
+    /// evaluated here. If the version cannot be read, assume it is supported (the common case).
+    async fn probe_version(&self) {
+        let known = match self.send_with(reqwest::Method::GET, "/", None, true).await {
+            Ok((200, v)) => v["version"].as_str().and_then(parse_version),
+            _ => None,
+        };
+        let state = match known {
+            Some(v) if v < MIN_FORMULA_VERSION => FORMULA_NO,
+            _ => FORMULA_YES,
+        };
+        self.formula.store(state, Ordering::Relaxed);
+    }
+
+    /// Force the pre-1.14 path (client-side scoring) regardless of the server version. For parity tests.
+    #[doc(hidden)]
+    pub fn force_client_side_ranking(&self) {
+        self.formula.store(FORMULA_NO, Ordering::Relaxed);
+    }
+
     /// Refuse to run against vectors built by a different embedding model. Two models can share a
     /// dimension, and then nothing errors: similarity scores are just quietly meaningless. The model name is
     /// stored on first use; collections created before it was recorded adopt the configured model. Problems
@@ -630,6 +667,7 @@ impl Store for QdrantStore {
     }
 
     async fn ensure(&self) -> Result<()> {
+        self.probe_version().await;
         for kind in Kind::ALL {
             let name = &self.coll(kind);
             let (status, info) = self
@@ -716,6 +754,23 @@ impl Store for QdrantStore {
         if limit == 0 {
             return Ok(vec![]);
         }
+        if self.formula.load(Ordering::Relaxed) == FORMULA_NO {
+            // Same candidate pool as the server path (4x, at least 16), the similarity floor, then `Rank::score`.
+            let pool = limit.saturating_mul(4).max(16);
+            let mut hits: Vec<Hit> = self
+                .search(kind, text, filter, pool)
+                .await?
+                .into_iter()
+                .filter(|h| h.score >= rank.min_similarity)
+                .map(|mut h| {
+                    h.score = rank.score(h.score, &h.payload);
+                    h
+                })
+                .collect();
+            hits.sort_by(|a, b| b.score.total_cmp(&a.score));
+            hits.truncate(limit);
+            return Ok(hits);
+        }
         let vector = self.vector_for(text).await?;
         let v = self
             .ok_idem(
@@ -798,6 +853,17 @@ fn parse_hits(points: &Value) -> Vec<Hit> {
 
 #[cfg(test)]
 mod tests {
+    use super::parse_version;
+
+    #[test]
+    fn parses_qdrant_versions() {
+        assert_eq!(parse_version("1.12.6"), Some((1, 12)));
+        assert_eq!(parse_version("v1.14.0-rc1"), Some((1, 14)));
+        assert_eq!(parse_version("1.20.0"), Some((1, 20)));
+        assert_eq!(parse_version("nonsense"), None);
+        assert!((1, 12) < super::MIN_FORMULA_VERSION && (1, 14) >= super::MIN_FORMULA_VERSION);
+    }
+
     use super::*;
     use wiremock::matchers::{body_partial_json, header, method, path, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};

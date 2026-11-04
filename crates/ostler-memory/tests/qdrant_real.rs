@@ -136,3 +136,54 @@ async fn many_tenants_and_concurrent_writers() {
     }
     assert_eq!(n, 100);
 }
+
+/// The pre-1.14 fallback must rank like the server-side formula. Same data, same query, both paths.
+#[tokio::test]
+async fn client_side_ranking_matches_the_server_formula() {
+    let Some(srv) = start().await else { return };
+    let s = store(&srv.url, 128);
+    s.ensure().await.unwrap();
+    let now = 1_800_000_000u64;
+    let day = 86_400u64;
+    for i in 0..12u64 {
+        s.upsert(
+            Kind::Profile,
+            &format!("{:032x}", 0xA000 + i),
+            &format!("field label number {} {}", i % 4, i),
+            json!({"tenant": "rank-parity", "wins": i % 5, "losses": i % 3, "verified_ts": now - i * 9 * day}),
+        )
+        .await
+        .unwrap();
+    }
+    let rank = Rank {
+        now,
+        success_weight: 0.3,
+        recency_weight: 0.15,
+        half_life_secs: 30 * day,
+        min_similarity: 0.0,
+    };
+    let f = Filter::tenant("rank-parity");
+    let server = s
+        .search_ranked(Kind::Profile, "field label number 1", &f, 5, &rank)
+        .await
+        .unwrap();
+    s.force_client_side_ranking();
+    let client = s
+        .search_ranked(Kind::Profile, "field label number 1", &f, 5, &rank)
+        .await
+        .unwrap();
+    let ids = |h: &[Hit]| h.iter().map(|x| x.id.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        ids(&server),
+        ids(&client),
+        "order differs\n{server:?}\n{client:?}"
+    );
+    for (a, b) in server.iter().zip(&client) {
+        assert!(
+            (a.score - b.score).abs() < 0.01,
+            "{} vs {}",
+            a.score,
+            b.score
+        );
+    }
+}
