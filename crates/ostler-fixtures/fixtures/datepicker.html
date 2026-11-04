@@ -4,7 +4,7 @@
   <label for="d">Check-in date</label>
   <input id="d" name="checkin" readonly placeholder="Pick a date" aria-haspopup="dialog">
   <div id="cal" role="dialog" aria-label="Choose date" hidden>
-    <div><button type="button" id="prev" aria-label="Previous month">&lt;</button> <strong id="title" aria-live="polite"></strong> <button type="button" id="next" aria-label="Next month">&gt;</button></div>
+    <div><button type="button" id="decoy" aria-label="Next month" style="display:none" onclick="m+=3;draw()">&gt;</button> <button type="button" id="prev" aria-label="Previous month">&lt;</button> <strong id="title" aria-live="polite"></strong> <button type="button" id="next" aria-label="Next month">&gt;</button></div>
     <div id="grid" role="grid"></div>
   </div>
   <label for="n">Guests</label><input id="n" name="guests" type="number" min="1" max="6">

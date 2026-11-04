@@ -536,7 +536,8 @@ def head(title: str, desc: str, canonical: str, prefix: str) -> str:
 <meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
 <meta property="og:title" content="{attr(title)}"><meta property="og:description" content="{attr(desc)}">
 <meta property="og:url" content="{attr(SITE_URL + canonical)}"><meta property="og:image" content="{SITE_URL}assets/og.png">
-<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image:alt" content="Ostler">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{attr(title)}"><meta name="twitter:description" content="{attr(desc)}"><meta name="twitter:image" content="{SITE_URL}assets/og.png">
 {THEME_BOOT}
 <link rel="stylesheet" href="{prefix}assets/site.css">
 <script defer src="{prefix}assets/site.js"></script>

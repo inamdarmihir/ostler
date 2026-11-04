@@ -307,7 +307,7 @@
   const HEADING = /^H[1-6]$/;
   const LANDMARK = { MAIN: 'main', NAV: 'navigation', HEADER: 'banner', FOOTER: 'contentinfo', ASIDE: 'complementary', DIALOG: 'dialog' };
   // Mirrors Field::is_sensitive in ostler-forms: a typed secret must not come back in a snapshot.
-  const SECRET_RE = /password|passcode|card.?number|cvv|cvc|security code|\bssn\b|social security|pin code|secret|iban|routing number|one-time|\botp\b/i;
+  const SECRET_RE = /password|passcode|card.?number|cvv|cvc|security code|\bssn\b|social security|pin code|secret|passport|iban|routing number|one-time|\botp\b/i;
   function looksSecret(el, label) {
     const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
     if (ac.includes('password') || ac.includes('cc-') || ac.includes('one-time-code')) return true;
@@ -1156,7 +1156,7 @@
     let pop = null;
     for (let i = 0; i < 20 && !(pop = find()); i++) await sleep(50);
     if (!pop) return { ok: false, why: 'no calendar popup appeared' };
-    const btns = () => [...pop.querySelectorAll('button,[role=button],a,span,div')].filter((b) => rendered(b) && b.children.length === 0 || b.tagName === 'BUTTON');
+    const btns = () => [...pop.querySelectorAll('button,[role=button],a,span,div')].filter((b) => rendered(b) && (b.children.length === 0 || b.tagName === 'BUTTON'));
     for (let i = 0; i < 48; i++) {
       const h = header(pop);
       const diff = (Y * 12 + Mo - 1) - (h.y * 12 + h.m);
@@ -1242,7 +1242,7 @@
     const info = { x: c.x, y: c.y, zero: c.w < 1 || c.h < 1, covered: false, tag: el.tagName.toLowerCase(), disabled: !!el.disabled };
     if (info.zero) return info;
     const top = el.ownerDocument === document ? deepElementFromPoint(document, c.x, c.y) : null;
-    if (top && top !== el && !el.contains(top) && !(top.contains && top.contains(el) && false)) {
+    if (top && top !== el && !el.contains(top)) {
       // Different element is on top at the click point (overlay, sticky header, modal).
       const rootHit = top.getRootNode() === el.getRootNode() ? top : null;
       const labelOf = el.labels && [...el.labels].some((l) => l.contains(top));

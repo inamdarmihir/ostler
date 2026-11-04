@@ -932,7 +932,7 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
     let rep = b
         .page()
         .fill_form(
-            req(json!({"Name on card": "Ada Lovelace", "Card number": "4111111111111111", "Account PIN": "9876"})),
+            req(json!({"Name on card": "Ada Lovelace", "Card number": "4111111111111111", "Account PIN": "9876", "Passport no.": "X1234567"})),
             None,
         )
         .await
@@ -940,7 +940,7 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
     // Report: masked, including any note text.
     let dump = format!("{rep:?}");
     assert!(
-        !dump.contains("4111111111111111") && !dump.contains("9876"),
+        !dump.contains("4111111111111111") && !dump.contains("9876") && !dump.contains("X1234567"),
         "{dump}"
     );
     // Snapshot: the same page, read back later, must not echo them either.
@@ -954,7 +954,9 @@ async fn secrets_do_not_come_back_through_reports_or_snapshots() {
         .await
         .unwrap();
     assert!(
-        !snap.text.contains("4111111111111111") && !snap.text.contains("9876"),
+        !snap.text.contains("4111111111111111")
+            && !snap.text.contains("9876")
+            && !snap.text.contains("X1234567"),
         "{}",
         snap.text
     );
