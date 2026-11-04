@@ -580,6 +580,12 @@ impl QdrantStore {
         self.formula.store(state, Ordering::Relaxed);
     }
 
+    /// Force the pre-1.14 path (client-side scoring) regardless of the server version. For parity tests.
+    #[doc(hidden)]
+    pub fn force_client_side_ranking(&self) {
+        self.formula.store(FORMULA_NO, Ordering::Relaxed);
+    }
+
     /// Refuse to run against vectors built by a different embedding model. Two models can share a
     /// dimension, and then nothing errors: similarity scores are just quietly meaningless. The model name is
     /// stored on first use; collections created before it was recorded adopt the configured model. Problems
