@@ -20,12 +20,12 @@ jobs:
       OSTLER_REQUIRE_CHROME: "1"   # fail rather than skip if Chrome is missing
       OSTLER_NO_SANDBOX: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { shared-key: weekly }
-      - uses: browser-actions/setup-chrome@v1
+      - uses: browser-actions/setup-chrome@v2
         id: chrome
         with: { chrome-version: stable }
       - run: echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
@@ -37,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Link checker
         run: python3 site/tools/check_links.py
