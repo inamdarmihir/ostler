@@ -30,6 +30,8 @@ Playbooks work like skills that improve with use. Ostler doesn't need a model to
 
 ### Privacy and security model of memory
 
+**Qdrant version:** use 1.14 or newer (CI runs v1.20.0). Ranked suggestions use a server-side scoring formula that Qdrant added in 1.14. On an older server Ostler detects the version when it connects and ranks the same candidates itself instead of failing; a parity test against a real older server has not been run yet, so treat 1.14+ as the supported floor.
+
 Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). This summary matches [SECURITY.md](../SECURITY.md), which has the full threat model.
 
 - **What someone who can read your Qdrant (operator, leaked key, backup) cannot read:** fact values, descriptions, playbooks and episodes are encrypted on your machine (AES-256-GCM); site names, field labels, keys and point ids are keyed hashes; episodes are redacted of emails and numbers; plain `http://` to a remote Qdrant is refused (`--allow-insecure-qdrant` overrides it for a VPN or tunnel).
