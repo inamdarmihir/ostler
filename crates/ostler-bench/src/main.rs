@@ -5,10 +5,15 @@
 //! Everything here is measured on the machine it runs on and printed with its assumptions.
 
 mod cost;
+mod falsesuccess;
 mod forms;
 mod memory;
+mod packs;
+#[cfg(test)]
+mod packs_tests;
 mod real;
 mod scale;
+mod scripted;
 mod suite;
 
 use clap::{Parser, Subcommand};
@@ -67,6 +72,25 @@ enum Cmd {
         #[arg(long, default_value_t = 8765)]
         port: u16,
     },
+    /// Domain packs (research, gov-forms, jobs, dev-qa, commerce): tasks judged by what the fixture server
+    /// received, scored for false success. The only agent here is a deterministic script, NOT a model.
+    Packs {
+        /// Pack name, or `all`.
+        #[arg(long, default_value = "all")]
+        pack: String,
+        /// Run only tasks whose id contains this text.
+        #[arg(long)]
+        only: Option<String>,
+        /// Use the scripted reference agent (required; model-driven runs live in the Python harness).
+        #[arg(long)]
+        scripted: bool,
+        /// Where to write packs-<pack>-scripted.{json,md}.
+        #[arg(long, default_value = "bench-results")]
+        out_dir: std::path::PathBuf,
+        /// Print the tables only; write no files.
+        #[arg(long)]
+        no_write: bool,
+    },
     /// Parallel browser sessions: throughput, memory per session, CPU per task, cost to serve.
     Concurrency {
         #[arg(long, default_value = "1,2,4,8")]
@@ -103,6 +127,13 @@ async fn main() -> anyhow::Result<()> {
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
             }
         }
+        Cmd::Packs {
+            pack,
+            only,
+            scripted,
+            out_dir,
+            no_write,
+        } => packs::run(Some(pack), only, scripted, out_dir, !no_write).await?,
         Cmd::Footprint { reps } => scale::footprint(reps).await?,
         Cmd::Concurrency {
             sessions,

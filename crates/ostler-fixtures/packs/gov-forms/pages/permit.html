@@ -1,0 +1,56 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Building permit application</title><style>body{font:15px system-ui;max-width:560px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}input[type=radio],input[type=checkbox]{width:auto}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}[hidden]{display:none!important}</style>
+<h1>Building permit application</h1>
+<p id="progress">Step 1 of 3</p>
+<form id="f" method="post" action="/packs/gov-forms/submit" enctype="multipart/form-data" novalidate>
+ <section class="step" data-step="1">
+  <h2>Applicant</h2>
+  <label for="an">Applicant name</label><input id="an" name="applicant_name" autocomplete="name">
+  <label for="em">Email address</label><input id="em" name="email" type="email" autocomplete="email">
+  <label for="ph">Phone</label><input id="ph" name="phone" type="tel">
+  <label for="at">Applicant type</label>
+  <select id="at" name="applicant_type"><option value="">Choose...</option><option value="individual">Individual</option><option value="business">Business</option></select>
+  <div id="biz" hidden><label for="br">Business registration number</label><input id="br" name="business_reg" disabled></div>
+  <div class="error" id="e1" role="alert" hidden></div>
+  <button type="button" class="next">Continue</button>
+ </section>
+ <section class="step" data-step="2" hidden>
+  <h2>Property</h2>
+  <label for="pid">Parcel ID</label><input id="pid" name="parcel_id" placeholder="PX-12345">
+  <label for="st">Street address</label><input id="st" name="street" autocomplete="address-line1">
+  <label for="ci">City</label><input id="ci" name="city" autocomplete="address-level2">
+  <label for="zp">Postal code</label><input id="zp" name="postal_code" autocomplete="postal-code">
+  <label for="sp">Site plan (PDF)</label><input id="sp" name="site_plan" type="file" accept=".pdf">
+  <fieldset><legend>Is the property in a flood zone?</legend>
+   <label><input type="radio" name="flood_zone" value="no"> No</label>
+   <label><input type="radio" name="flood_zone" value="yes"> Yes</label>
+  </fieldset>
+  <div id="flood" hidden><label for="fc">Elevation certificate number</label><input id="fc" name="elevation_cert" disabled></div>
+  <div class="error" id="e2" role="alert" hidden></div>
+  <button type="button" class="back">Back</button> <button type="button" class="next">Continue</button>
+ </section>
+ <section class="step" data-step="3" hidden>
+  <h2>Review and certify</h2>
+  <div id="summary" aria-live="polite"></div>
+  <label><input type="checkbox" name="certify" value="yes" id="cert"> I certify that the information above is correct</label>
+  <div class="error" id="e3" role="alert" hidden></div>
+  <button type="button" class="back">Back</button> <button type="submit">Submit application</button>
+ </section>
+</form>
+<script>
+let cur=1;const steps=[...document.querySelectorAll('.step')],f=document.getElementById('f');
+const $=n=>f.elements[n];
+function show(n){cur=n;steps.forEach(s=>s.hidden=(+s.dataset.step!==n));document.getElementById('progress').textContent='Step '+n+' of 3';if(n===3)summary()}
+function summary(){const v=n=>($(n)&&$(n).value)||'(none)';const file=$('site_plan').files[0];
+ document.getElementById('summary').innerHTML='<p>Applicant: '+esc(v('applicant_name'))+' ('+esc(v('email'))+')</p><p>Parcel: '+esc(v('parcel_id'))+'</p><p>Address: '+esc(v('street'))+', '+esc(v('city'))+' '+esc(v('postal_code'))+'</p><p>Site plan: '+(file?esc(file.name):'(none)')+'</p>'}
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function err(n,msg){const e=document.getElementById('e'+n);e.textContent=msg||'';e.hidden=!msg;return !msg}
+function valid(n){
+ if(n===1){if(!$('applicant_name').value.trim()||!$('email').value.trim())return err(1,'Name and email are required.');if($('applicant_type').value==='business'&&!$('business_reg').value.trim())return err(1,'Enter the business registration number.');return err(1)}
+ if(n===2){if(!$('parcel_id').value.trim()||!$('street').value.trim()||!$('city').value.trim())return err(2,'Parcel ID, street address and city are required.');return err(2)}
+ if(n===3){if(!$('certify').checked)return err(3,'You must certify before submitting.');return err(3)}}
+$('applicant_type').addEventListener('change',e=>{const b=e.target.value==='business';document.getElementById('biz').hidden=!b;$('business_reg').disabled=!b});
+f.querySelectorAll('[name=flood_zone]').forEach(r=>r.addEventListener('change',()=>{const y=f.querySelector('[name=flood_zone]:checked').value==='yes';document.getElementById('flood').hidden=!y;$('elevation_cert').disabled=!y}));
+document.querySelectorAll('.next').forEach(b=>b.onclick=()=>valid(cur)&&show(cur+1));
+document.querySelectorAll('.back').forEach(b=>b.onclick=()=>show(cur-1));
+f.addEventListener('submit',e=>{if(!valid(3))e.preventDefault()});
+</script>

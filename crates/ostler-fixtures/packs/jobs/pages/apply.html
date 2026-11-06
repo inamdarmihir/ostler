@@ -1,0 +1,49 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apply: Field Cartographer</title><style>body{font:15px system-ui;max-width:600px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.7rem 0 .2rem}input,select,textarea{padding:.4rem;width:100%;box-sizing:border-box}input[type=radio],input[type=checkbox]{width:auto}button{margin-top:1rem;padding:.5rem 1rem}.error{color:#b00020;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:block;margin:.2rem 0}.rt{border:1px solid #888;min-height:6rem;padding:.4rem}.emp{border:1px dashed #888;padding:.5rem;margin:.5rem 0}[hidden]{display:none!important}</style>
+<h1>Apply: Field Cartographer</h1>
+<form id="f" novalidate>
+ <input type="hidden" name="posting" value="cartographer">
+ <h2>About you</h2>
+ <label for="fn">Full name</label><input id="fn" name="full_name" autocomplete="name">
+ <label for="em">Email</label><input id="em" name="email" type="email" autocomplete="email">
+ <label for="ph">Phone</label><input id="ph" name="phone" type="tel">
+ <h2>Employment history</h2>
+ <div id="emps">
+  <div class="emp" data-n="1"><h3>Employer 1</h3>
+   <label for="e1">Employer 1 name</label><input id="e1" name="employer_1">
+   <label for="t1">Job title at employer 1</label><input id="t1" name="title_1">
+   <label for="y1">Years at employer 1</label><input id="y1" name="years_1" type="number" min="0">
+  </div>
+ </div>
+ <button type="button" id="add">Add another employer</button>
+ <h2>Documents</h2>
+ <label for="rs">Resume (PDF)</label><input id="rs" name="resume" type="file" accept=".pdf">
+ <label id="cl">Cover letter</label>
+ <div id="cover" class="rt" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="cl"></div>
+ <h2>Screening questions</h2>
+ <fieldset><legend>Are you legally authorized to work in this country?</legend>
+  <label><input type="radio" name="authorized" value="yes"> Yes</label>
+  <label><input type="radio" name="authorized" value="no"> No</label></fieldset>
+ <fieldset><legend>Will you require visa sponsorship?</legend>
+  <label><input type="radio" name="sponsorship" value="yes"> Yes</label>
+  <label><input type="radio" name="sponsorship" value="no"> No</label></fieldset>
+ <fieldset><legend>Which tools have you used? (select all that apply)</legend>
+  <label><input type="checkbox" name="tools" value="gis"> GIS software</label>
+  <label><input type="checkbox" name="tools" value="survey"> Total station</label>
+  <label><input type="checkbox" name="tools" value="python"> Python scripting</label></fieldset>
+ <div class="error" id="err" role="alert" hidden></div>
+ <button type="submit">Submit application</button>
+</form>
+<script>
+const f=document.getElementById('f'),err=document.getElementById('err');let n=1;
+document.getElementById('add').onclick=()=>{n++;const d=document.createElement('div');d.className='emp';d.dataset.n=n;
+ d.innerHTML='<h3>Employer '+n+'</h3><label for="e'+n+'">Employer '+n+' name</label><input id="e'+n+'" name="employer_'+n+'"><label for="t'+n+'">Job title at employer '+n+'</label><input id="t'+n+'" name="title_'+n+'"><label for="y'+n+'">Years at employer '+n+'</label><input id="y'+n+'" name="years_'+n+'" type="number" min="0">';
+ document.getElementById('emps').appendChild(d)};
+f.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;
+ const o={};for(const [k,v] of new FormData(f).entries()){const x=v instanceof File?v.name:v;o[k]=(k in o)?[].concat(o[k],x):x}
+ o.cover_letter=document.getElementById('cover').innerText.trim();
+ if(!o.full_name||!o.email){err.textContent='Name and email are required.';err.hidden=false;return}
+ let r;try{r=await fetch('/packs/jobs/api/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)})}catch(x){err.textContent='Network error.';err.hidden=false;return}
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||!j.ok){err.textContent=j.error||'The application was not accepted.';err.hidden=false;return}
+ document.body.innerHTML='<h1>Application received</h1><p id="receipt">Thank you, '+o.full_name.replace(/[<&]/g,'')+'. Your reference number is <strong>'+j.reference+'</strong>.</p>'});
+</script>

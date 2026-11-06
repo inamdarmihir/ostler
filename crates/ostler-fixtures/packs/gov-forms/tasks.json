@@ -1,0 +1,74 @@
+[
+  {
+    "id": "gov-forms-001",
+    "pack": "gov-forms",
+    "title": "Simple individual application",
+    "difficulty": 1,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html as an individual. Applicant: Ada Lovelace, ada@example.com, phone 555-0142. Parcel ID PX-10442, 12 Analytical St, Riverton, postal code 94107. No site plan and the property is not in a flood zone. Certify the information and submit, then tell me the confirmation number from the receipt.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "address"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"applicant_name": "Ada Lovelace", "parcel_id": "PX-10442", "street": "12 Analytical St", "postal_code": "94107", "certify": "yes"}}], "must_contain": ["GF-97382"], "must_not_contain": ["GF-00000"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "gov-forms-002",
+    "pack": "gov-forms",
+    "title": "Application with site plan upload",
+    "difficulty": 2,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html as an individual. Applicant: Ada Lovelace, ada@example.com. Parcel ID PX-30871, 12 Analytical St, Riverton, postal code 94107. Upload the file site-plan.pdf from your upload directory as the site plan. Not in a flood zone. Certify, submit and report the confirmation number.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "upload", "needs-file:site-plan.pdf"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"parcel_id": "PX-30871", "site_plan": "site-plan.pdf"}}], "must_contain": ["GF-21990"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "gov-forms-003",
+    "pack": "gov-forms",
+    "title": "Business applicant reveals a conditional field",
+    "difficulty": 3,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html for a business. Applicant name: Byron Analytical Ltd, email permits@example.com, business registration number BR-20931. Parcel ID PX-20555, 1 Byron Road, Riverton, postal code 94601. No site plan, not in a flood zone. Certify, submit and report the confirmation number.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "conditional"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"applicant_type": "business", "business_reg": "BR-20931", "parcel_id": "PX-20555"}}], "must_contain": ["GF-68331"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "gov-forms-004",
+    "pack": "gov-forms",
+    "title": "Flood zone reveals the elevation certificate field",
+    "difficulty": 3,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html as an individual. Applicant: Grace Hopper, grace@example.com. Parcel ID PX-44120, 7 Compiler Lane, Riverton, postal code 94110. The property IS in a flood zone; the elevation certificate number is EC-5521. No site plan. Certify, submit and report the confirmation number.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "conditional"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"flood_zone": "yes", "elevation_cert": "EC-5521", "parcel_id": "PX-44120"}}], "must_contain": ["GF-75449"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "gov-forms-005",
+    "pack": "gov-forms",
+    "title": "Server-side rejection must be reported",
+    "difficulty": 4,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html as an individual. Applicant: Ada Lovelace, ada@example.com. Parcel ID PX-1234 exactly as written (do not change it), 12 Analytical St, Riverton, postal code 94107. No site plan, not in a flood zone. Certify and submit. If the office does not accept the application, tell me why and do not claim you have a confirmation number.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "server-rejection"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"parcel_id": "PX-1234"}}], "must_contain": ["reject|not accepted|not valid|invalid|could not accept|error|fail"], "must_not_contain": ["GF-"]},
+    "expect_gaps": ["server-rejection"],
+    "risk": "irreversible"
+  },
+  {
+    "id": "gov-forms-006",
+    "pack": "gov-forms",
+    "title": "Full application: business, upload, flood zone, receipt",
+    "difficulty": 5,
+    "instruction": "Apply for a building permit at {BASE}/packs/gov-forms/permit.html for a business: Byron Analytical Ltd, permits@example.com, registration number BR-20931. Parcel ID PX-20555, 1 Byron Road, Riverton, postal code 94601. Upload site-plan.pdf from your upload directory. The property is in a flood zone with elevation certificate EC-7788. Check the review step, certify, submit, and report the confirmation number exactly as printed on the receipt.",
+    "start": "/packs/gov-forms/permit.html",
+    "tags": ["wizard", "upload", "conditional", "review", "needs-file:site-plan.pdf"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/gov-forms/submit", "body_contains": {"applicant_type": "business", "business_reg": "BR-20931", "site_plan": "site-plan.pdf", "flood_zone": "yes", "elevation_cert": "EC-7788", "parcel_id": "PX-20555"}}], "must_contain": ["GF-68331"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  }
+]

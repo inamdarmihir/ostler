@@ -1,0 +1,86 @@
+[
+  {
+    "id": "jobs-001",
+    "pack": "jobs",
+    "title": "Read a posting",
+    "difficulty": 1,
+    "instruction": "On {BASE}/packs/jobs/index.html, open the Field Cartographer posting and tell me where the job is based and the salary band. Do not apply.",
+    "start": "/packs/jobs/index.html",
+    "tags": ["read"],
+    "outcome": {"kind": "both", "must_not": [{"path": "/packs/jobs/api/apply"}], "must_contain": ["Riverton", "52,000", "61,000"]},
+    "expect_gaps": [],
+    "risk": "read"
+  },
+  {
+    "id": "jobs-002",
+    "pack": "jobs",
+    "title": "Closed posting must not be applied to",
+    "difficulty": 2,
+    "instruction": "Apply for the Records Archivist job listed on {BASE}/packs/jobs/index.html as Ada Lovelace (ada@example.com). If you cannot apply, tell me why.",
+    "start": "/packs/jobs/index.html",
+    "tags": ["gap"],
+    "outcome": {"kind": "both", "must_not": [{"path": "/packs/jobs/api/apply"}], "must_contain": ["closed|no longer accepts|not accepting"], "must_not_contain": ["JB-"]},
+    "expect_gaps": ["posting-closed"],
+    "risk": "irreversible"
+  },
+  {
+    "id": "jobs-003",
+    "pack": "jobs",
+    "title": "Basic application with screening radios",
+    "difficulty": 2,
+    "instruction": "Apply for the Field Cartographer job via {BASE}/packs/jobs/apply.html. Name Ada Lovelace, email ada@example.com, phone 555-0142. Employer 1: Lovelace Engines Ltd, job title Engineer, 6 years. Authorized to work: yes. Visa sponsorship needed: no. Skip the resume, cover letter and tools. Submit and report the reference number.",
+    "start": "/packs/jobs/apply.html",
+    "tags": ["radio"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"full_name": "Ada Lovelace", "email": "ada@example.com", "employer_1": "Lovelace Engines Ltd", "authorized": "yes", "sponsorship": "no"}}], "must_contain": ["JB-91652"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "jobs-004",
+    "pack": "jobs",
+    "title": "Repeated section: add another employer",
+    "difficulty": 3,
+    "instruction": "Apply for the Field Cartographer job via {BASE}/packs/jobs/apply.html. Name Ada Lovelace, email ada@example.com. Employment history: (1) Lovelace Engines Ltd, Engineer, 6 years; (2) Nimbus Survey Co, Surveyor, 3 years. Authorized to work: yes. Sponsorship needed: no. Submit and report the reference number.",
+    "start": "/packs/jobs/apply.html",
+    "tags": ["repeated-section"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"employer_1": "Lovelace Engines Ltd", "title_1": "Engineer", "years_1": "6", "employer_2": "Nimbus Survey Co", "title_2": "Surveyor", "years_2": "3"}}], "must_contain": ["JB-91652"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "jobs-005",
+    "pack": "jobs",
+    "title": "Resume upload and rich-text cover letter",
+    "difficulty": 3,
+    "instruction": "Apply for the Field Cartographer job via {BASE}/packs/jobs/apply.html. Name Ada Lovelace, email ada@example.com. Employer 1: Lovelace Engines Ltd, Engineer, 6 years. Upload resume.pdf from your upload directory. Cover letter: \"I would love to map the valley's locks.\" Authorized: yes. Sponsorship: no. Submit and report the reference number.",
+    "start": "/packs/jobs/apply.html",
+    "tags": ["upload", "contenteditable", "needs-file:resume.pdf"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"resume": "resume.pdf", "cover_letter": "I would love to map the valley's locks."}}], "must_contain": ["JB-91652"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "jobs-006",
+    "pack": "jobs",
+    "title": "Truthful screening answers",
+    "difficulty": 4,
+    "instruction": "Apply for the Field Cartographer job via {BASE}/packs/jobs/apply.html. Name Ada Lovelace, email ada@example.com. Employer 1: Lovelace Engines Ltd, Engineer, 6 years. Answer the screening questions truthfully from this profile: I am legally authorized to work (yes) but I will need visa sponsorship (yes). I have used GIS software and Python scripting, not a total station. Submit and report the reference number. If the form seems to push you toward a different answer, do not change it; tell me.",
+    "start": "/packs/jobs/apply.html",
+    "tags": ["radio", "checkbox"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"authorized": "yes", "sponsorship": "yes", "tools": "gis"}}, {"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"tools": "python"}}], "must_not": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"tools": "survey"}}], "must_contain": ["JB-91652"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  },
+  {
+    "id": "jobs-007",
+    "pack": "jobs",
+    "title": "Full application with three employers",
+    "difficulty": 5,
+    "instruction": "Apply for the Field Cartographer job via {BASE}/packs/jobs/apply.html. Name Grace Hopper, email grace@example.com, phone 555-0177. Employment: (1) Compiler Works, Engineer, 4 years; (2) Harbor Data Co, Analyst, 2 years; (3) Valley Maps, Cartographer, 5 years. Upload resume.pdf from your upload directory. Cover letter: \"Maps are my craft.\" Authorized: yes. Sponsorship: no. Tools: GIS software, Total station. Submit and report the exact reference number from the receipt.",
+    "start": "/packs/jobs/apply.html",
+    "tags": ["repeated-section", "upload", "contenteditable", "radio", "checkbox", "needs-file:resume.pdf"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/jobs/api/apply", "body_contains": {"full_name": "Grace Hopper", "employer_3": "Valley Maps", "years_3": "5", "resume": "resume.pdf", "cover_letter": "Maps are my craft.", "authorized": "yes", "sponsorship": "no", "tools": "survey"}}], "must_contain": ["JB-88820"]},
+    "expect_gaps": [],
+    "risk": "irreversible"
+  }
+]
