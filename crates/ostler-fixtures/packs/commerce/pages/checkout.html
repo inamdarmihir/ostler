@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hearthside Goods: checkout</title><style>body{font:15px system-ui;max-width:640px;margin:1.5rem auto;padding:0 1rem}nav a{margin-right:1rem}label{display:block;margin:.6rem 0 .2rem}input,select{padding:.4rem;width:100%;box-sizing:border-box}input[type=radio],input[type=checkbox]{width:auto}button{margin-top:1rem;padding:.5rem 1rem}#list{position:relative}#list li{position:absolute;left:0;right:0;height:52px;list-style:none;border-bottom:1px solid #ddd;box-sizing:border-box;padding:.3rem 0}.price{float:right;font-weight:600}.muted{color:#666;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}[hidden]{display:none!important}iframe{width:100%;height:260px;border:1px solid #888}</style>
+<nav><a href="/packs/commerce/cart.html">Cart</a></nav>
+<h1>Checkout</h1>
+<section id="ship">
+ <h2>1. Delivery</h2>
+ <form id="f" novalidate>
+  <label for="nm">Full name</label><input id="nm" name="full_name" autocomplete="name">
+  <label for="st">Street address</label><input id="st" name="street" autocomplete="address-line1">
+  <label for="ci">City</label><input id="ci" name="city" autocomplete="address-level2">
+  <label for="zp">Postal code</label><input id="zp" name="postal_code" autocomplete="postal-code">
+  <fieldset><legend>Delivery method</legend>
+   <label><input type="radio" name="method" value="standard" checked> Standard (5.95)</label>
+   <label><input type="radio" name="method" value="express"> Express (12.95)</label></fieldset>
+  <p id="totals"></p>
+  <div class="error" id="err" role="alert" hidden style="color:#b00020"></div>
+  <button type="submit">Continue to payment</button>
+ </form>
+</section>
+<section id="pay" hidden>
+ <h2>2. Payment</h2>
+ <p>Payment is handled by an embedded test payment form hosted on a different origin.</p>
+ <iframe id="payframe" title="Payment" src="about:blank"></iframe>
+</section>
+<script src="/packs/commerce/catalog.js"></script>
+<script>
+const cart=cartGet(),sub=cart.reduce((a,l)=>a+l.unit*l.qty,0),f=document.getElementById('f');
+const method=()=>document.querySelector('[name=method]:checked').value;
+function totals(){document.getElementById('totals').textContent='Subtotal '+fmt(sub)+' + delivery '+fmt(SHIPPING[method()])+' = Order total '+fmt(sub+SHIPPING[method()])}
+document.querySelectorAll('[name=method]').forEach(r=>r.addEventListener('change',totals));totals();
+f.addEventListener('submit',async e=>{e.preventDefault();const err=document.getElementById('err');err.hidden=true;
+ const o=Object.fromEntries(new FormData(f));
+ if(!cart.length||!o.full_name||!o.street||!o.city||!o.postal_code){err.textContent=cart.length?'Please fill in all delivery fields.':'Your cart is empty.';err.hidden=false;return}
+ o.total=fmt(sub+SHIPPING[method()]);
+ await fetch('/packs/commerce/api/shipping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});
+ document.getElementById('payframe').src='{{PAY_ORIGIN}}/packs/commerce/pay-frame.html';
+ document.getElementById('pay').hidden=false;document.getElementById('ship').querySelector('button').disabled=true});
+</script>

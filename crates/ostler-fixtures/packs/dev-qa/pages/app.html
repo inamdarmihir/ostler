@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ledgerly</title><style>body{font:15px system-ui;max-width:600px;margin:2rem auto;padding:0 1rem}nav a{margin-right:1rem}label{display:block;margin:.7rem 0 .2rem}select,input{padding:.4rem}button{margin-top:1rem;padding:.5rem 1rem}.toast{background:#e6ffe6;border:1px solid #6a6;padding:.5rem;margin-top:1rem}[hidden]{display:none!important}</style>
+<script src="/packs/dev-qa/vendor/analytics.js"></script>
+<h1>Ledgerly</h1>
+<nav><a href="#/home">Home</a><a href="#/settings">Settings</a></nav>
+<main id="view"></main>
+<script>
+// Deliberate bugs for the QA pack.
+console.error('Failed to hydrate widget: cart-badge element missing');
+fetch('/packs/dev-qa/api/orders').then(r=>{if(!r.ok)throw new Error('orders request failed: '+r.status)}).catch(e=>{
+  const p=document.createElement('p');p.id='orders-note';p.textContent='Recent orders unavailable.';document.getElementById('view').appendChild(p)});
+setTimeout(()=>{const cfg={};console.log(cfg.totals.amount)},50);
+const view=document.getElementById('view');
+function home(){view.innerHTML='<h2>Home</h2><p>Welcome to Ledgerly. Your balance is 120.00.</p>'}
+function settings(){view.innerHTML='<h2>Settings</h2><label for="theme">Theme</label><select id="theme" name="theme"><option value="light">light</option><option value="dark">dark</option><option value="sepia">sepia</option></select><div><button id="save" type="button">Save settings</button></div><div id="out"></div>';
+ document.getElementById('save').onclick=async()=>{
+  const theme=document.getElementById('theme').value,out=document.getElementById('out');
+  // Optimistic UI: announces success before the server answers.
+  out.innerHTML='<div class="toast" role="status">Settings saved</div>';
+  const r=await fetch('/packs/dev-qa/api/settings',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({theme})});
+  if(r.ok){location.hash='#/saved'}else{console.error('settings save failed with status '+r.status)}}}
+function saved(){view.innerHTML='<h2>Saved</h2><p>Settings saved. Your theme preference is now active.</p>'}
+function route(){const h=location.hash||'#/home';({'#/home':home,'#/settings':settings,'#/saved':saved}[h]||home)()}
+addEventListener('hashchange',route);route();
+</script>
