@@ -27,7 +27,7 @@
 | `ostler-mcp` | JSON-RPC loop, 23 tools in 3 profiles (14 core, 18 forms, 23 all) (including `tabs`, `context`, `look` and `wait_for_human`), lazy browser, per-tool metrics, background memory writes. |
 | `ostler-a2a` | The Agent2Agent HTTP surface (`ostler a2a`); see [A2A.md](A2A.md). |
 | `ostler` (`crates/ostler-cli`) | `serve`, `a2a`, `init`, `config`, `setup`, `doctor`, `inspect`, `memory`, `fixtures`. |
-| `ostler-fixtures` | The 49 test pages (`PAGES` in `crates/ostler-fixtures/src/lib.rs`, plus an internal 404 page) and a recording HTTP server. |
+| `ostler-fixtures` | The 49 form test pages (`PAGES` in `crates/ostler-fixtures/src/lib.rs`, plus an internal 404 page), the domain packs under `packs/` (research, gov-forms, jobs, dev-qa, commerce: 34 tasks, 29 pages), and a recording HTTP server (`/__records`, `/__reset`, `/exfil`, `/pay`, `robots.txt`, a second origin port). |
 | `ostler-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |
 
 ## The decisions that matter, and why

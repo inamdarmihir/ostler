@@ -71,6 +71,25 @@ A key that matches nothing is reported, not guessed; ties are `ambiguous`; a pag
 
 Optional **memory** in [Qdrant](https://qdrant.tech) (or an encrypted local file, no server) saves profile facts and per-site playbooks of which fact fills which field, scoped per tenant and sealed on your machine by default. See [docs/MEMORY.md](docs/MEMORY.md). A second front door, [A2A](docs/A2A.md) over HTTP, lets other agents delegate forms.
 
+## Beyond forms: research and tasks (in progress)
+
+Ostler is being widened from forms to deep research and general browser tasks, keeping one idea: **verified**. Forms read every value back; research should refuse to cite what it did not read, and report pages it could not read as gaps. The plan of record is [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md).
+
+What exists today, as tested libraries (unit, property and real-Chrome / real-Qdrant tests):
+
+| crate | what it does |
+|---|---|
+| `ostler-extract` | chunking, local BM25 ranking with MMR, quote verification (`verified` / `not found`), text-fragment links, prompt-injection flags, completeness checks. Pure logic, fuzz targets included. |
+| `ostler-workflow` | `expect` postconditions, task contracts and verdicts, a redacted action trace with OpenTelemetry-shaped export, a risk-classed action gate, double-submit guard, receipt capture. |
+| `ostler-research` | search-provider trait (SearXNG, Brave), RFC 9309 `robots.txt`, per-session budgets and per-host limits, a source ledger. |
+| `ostler-memory` | a fourth memory kind, `source`: sealed document chunks with dense plus sparse (BM25) vectors, hybrid search through Qdrant's Query API with weighted RRF (client-side fusion on older servers), retention and wipe. |
+| `ostler-browser` | readability-style `read`, table, list and pagination extraction, and a `diagnostics` console/network collector. |
+| `ostler-fixtures`, `ostler-bench` | five **domain packs** (research, gov-forms, jobs, dev-qa, commerce; 34 tasks) and a **false-success** scorer: claimed success while the outcome failed. |
+
+**Not done yet:** none of this is exposed as MCP tools. `read`, `extract`, `search`, `cite`, `open_many`, `task`, `diagnostics`, the `expect` parameter and tool presets are the next milestone (M1 in the plan). Until then an agent using Ostler over MCP still gets the form tools and `navigate`/`snapshot`. Search providers are only verified against mocks (Brave partly); there is no WARC archive; Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
+
+First scripted result across the packs (a deterministic script, not a model; [bench-results/packs-all-scripted.md](bench-results/packs-all-scripted.md)): 30 tasks ran, 29 true successes, **1 false success** (dev-qa-005: the script trusted a page's "saved" banner while the save had failed), 4 skipped because they need tools not wired yet. That trap is the point of the metric. Run it with `ostler-bench packs --scripted --pack all`.
+
 ## Benchmarks
 
 **Scripted fixtures, model-free, estimated tokens.** Five local form tasks (basic, validation, dependent dropdowns, 3-step wizard, 20-field long form), one Apple M2, one Chrome, headless, with the real Playwright MCP and Chrome DevTools MCP servers using their own batch-fill tools. No LLM is in the loop: a script plays the shortest sensible sequence per server, and correctness is judged by what the fixture server received. All three completed all 5 tasks correctly. Totals over the 5 tasks (from [bench-results/compare.md](bench-results/compare.md)):
@@ -110,6 +129,7 @@ Read this carefully: on the small forms Chrome DevTools MCP returned fewer token
 | CLI commands, `ostler serve` flags, A2A server | [docs/CLI.md](docs/CLI.md), [docs/A2A.md](docs/A2A.md) |
 | Safety controls and what is still open | [docs/SAFETY.md](docs/SAFETY.md), [SECURITY.md](SECURITY.md), [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) |
 | Searching the web, bot walls | [docs/WEB-SEARCH.md](docs/WEB-SEARCH.md) |
+| Build plan, scope background, domain packs | [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md), [docs/SCOPE-RESEARCH.md](docs/SCOPE-RESEARCH.md), [docs/SCOPE-TASKS.md](docs/SCOPE-TASKS.md) |
 | Comparison with other tools, roadmap | [docs/COMPARISON-AND-ROADMAP.md](docs/COMPARISON-AND-ROADMAP.md), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Earlier README benchmark table, full benchmarks, economics | [docs/BENCHMARK-SUMMARY.md](docs/BENCHMARK-SUMMARY.md), [docs/BENCHMARKS.md](docs/BENCHMARKS.md), [docs/ECONOMICS.md](docs/ECONOMICS.md) |
 | Architecture, system design, ADRs | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/SYSTEM-DESIGN.md](docs/SYSTEM-DESIGN.md), [docs/adr/](docs/adr/) |
@@ -118,7 +138,7 @@ Read this carefully: on the small forms Chrome DevTools MCP returned fewer token
 | Releasing | [docs/RELEASING.md](docs/RELEASING.md) |
 | Website | [inamdarmihir.github.io/ostler](https://inamdarmihir.github.io/ostler/) |
 
-Repository layout: `crates/` cdp · browser · forms · memory · mcp · a2a · cli · fixtures · bench; test pages in `crates/ostler-fixtures/fixtures/`. See also the [changelog](CHANGELOG.md) and [contributing](CONTRIBUTING.md).
+Repository layout: `crates/` cdp · browser · forms · extract · workflow · research · memory · mcp · a2a · cli · fixtures · bench; test pages in `crates/ostler-fixtures/fixtures/`. See also the [changelog](CHANGELOG.md) and [contributing](CONTRIBUTING.md).
 
 ## License
 

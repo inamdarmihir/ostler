@@ -7,7 +7,7 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 
 ## What these benchmarks do and do not show
 
-- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. Section 7 checks seven live practice pages (correctness of what the tool claims, no model, small corpus); a real-model evaluation on a wider set of real sites is the next milestone ([roadmap](../README.md#roadmap)).
+- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 form fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. Section 7 checks seven live practice pages (correctness of what the tool claims, no model, small corpus); a real-model evaluation on a wider set of real sites is the next milestone ([roadmap](../README.md#roadmap)).
 - The "per-field" baseline is **our own engine driven the way snapshot-per-action tools are driven** (one call per field, each returning a full page snapshot). It isolates the effect of the interaction pattern. It is **not** a measurement of Playwright MCP, agent-browser or any other product (section 5 runs Playwright MCP and Chrome DevTools MCP for real). Tools that offer batched form fills would sit between the two columns.
 - LLM prices, LLM turn latency and cloud prices are **illustrative parameters** (flags on the harness). Token counts are `bytes / 4`, an estimate.
 
@@ -142,7 +142,7 @@ Totals over the 5 tasks: **Ostler 19 steps / 1,550 tokens / 4.1 s; Playwright MC
 ### Caveats
 
 - **No LLM.** A real model may take more or fewer steps than the scripted ideal (wrong ref, retries, extra snapshots). The script gives every server its best case; real agents on primitive tools usually do worse, which this does not show.
-- **Fixtures only, 5 tasks, one machine, one Chrome, headless.** None of the 49 fixture pages' hostile behaviours (CAPTCHA, shadow DOM, comboboxes, rich inputs) are run here; the competitors may or may not handle those, and that is **not measured**. No real sites.
+- **Fixtures only, 5 tasks, one machine, one Chrome, headless.** None of the 49 form fixture pages' hostile behaviours (CAPTCHA, shadow DOM, comboboxes, rich inputs) are run here; the competitors may or may not handle those, and that is **not measured**. No real sites.
 - **Token counts are bytes / 4**, not a tokenizer. Playwright snapshots and Ostler observations differ in format, so the ratio is approximate.
 - **Versions move.** Playwright MCP changes its snapshot-on-navigate behaviour between releases (this version links a file); re-run with `PLAYWRIGHT_MCP_VERSION=latest`. The sequences are my best attempt per server, not blessed by their authors. If you find a shorter one, open an issue.
 - Cold start (server + Chrome launch) is in the JSON but not tabled: it varied 0.7-7.7 s between runs, mostly Node start-up and package loading, and is too noisy to rank.
