@@ -1,6 +1,6 @@
 # Quickstart
 
-Install Ostler, check that it can drive Chrome, connect your agent, and fill a demo form. About five minutes, most of it compiling.
+Install Ostler, check that it can drive Chrome, connect your agent, and try it on a demo page: read and cite a source, or fill a form. About five minutes, most of it compiling.
 
 > [!NOTE]
 > **Status: v0.2, early.** Ostler is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](review.html) found real flaws and lists them openly with a fix order. Read [what that means](economics.html#6-what-can-go-wrong) before relying on it.
@@ -36,16 +36,43 @@ After installing or rebuilding `ostler`, reconnect the MCP client (Claude Code: 
 ## 4. Try the demo
 
 ```sh
-ostler fixtures        # serves synthetic test forms at http://127.0.0.1:8787
+ostler fixtures        # serves synthetic test pages at http://127.0.0.1:8787
 ```
 
-Then ask your agent:
+Pick one. Nothing real is read or submitted; these are bundled test pages.
+
+**Research with a checked quote.** Ask your agent:
+
+> *Read http://127.0.0.1:8787/packs/research/kestrel-lock.html. Who designed the Kestrel Lock and when did it open? Cite every claim with `cite` and call `evidence` before answering.*
+
+Ostler reads the page, accepts a quote that is on it, refuses one that is not, and lists any page it could not read. The full walk-through, with unedited output, is in [Research with checked citations](research-with-citations.html).
+
+**Fill a form.** Ask your agent:
 
 > *Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria.*
 
-Ostler fills Country, watches State load, reads every value back, and reports what the page said. Nothing real is submitted.
+Ostler fills Country, watches State load, reads every value back, and reports what the page said.
 
 ## What the agent sees
+
+### Research
+
+Unedited output from the bundled research pages (`ostler serve --tools research`), captured 2026-11-06. The `<page_content untrusted="true">` tags mark text that came from the page.
+
+```text
+> cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
+VERIFIED [1] <page_content untrusted="true">http://127.0.0.1:8787/packs/research/kestrel-lock.html</page_content> (read 2026-11-06T16:01:32Z, sha256:9f602117)
+<page_content untrusted="true">opened in 1887 and was designed by Marta Ilves</page_content>
+Check it yourself (best effort): http://127.0.0.1:8787/packs/research/kestrel-lock.html#:~:text=opened%20in%201887%20and%20was%20designed%20by%20Marta%20Ilves
+
+> cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "Tomas Reyes designed the Kestrel Lock in 1887"}
+NOT VERIFIED: these words are not on <page_content untrusted="true">The Kestrel Lock</page_content>. Do not state this claim as sourced; quote the page's own words, not a summary.
+Closest text on the page (similarity 0.48): <page_content untrusted="true">The Kestrel Lock The Kestrel Lock is a double</page_content>
+```
+
+`cite` proves the words are on the page, not that the claim is true.
+
+### A form
 
 Real output from the bundled fixtures (`ostler serve --tools forms`), lightly reformatted. *State* is disabled until *Country* is chosen.
 
@@ -75,6 +102,9 @@ A key that matches nothing is reported, not guessed. A rejected submit says why,
 
 ## Things to ask your agent
 
+- "Find out what this page says about the rate limit and quote the sentence. Say so if you could not read it." (`read`, `cite`, `evidence`)
+- "Compare the pricing on these three pages and tell me what you could not check." (`open_many`, `evidence`)
+- "Open this web app, click through the signup flow and tell me what breaks." (`navigate`, `click`, `look`)
 - "Fill in the contact form on this page with my details." (after `memory_remember` of your name and email, or with `--learn`)
 - "Sign up for the newsletter on example.com, but ask me before you submit." (`--require-confirm-submit`)
 - "This form has a date picker and a country dropdown: fill it and tell me anything you couldn't verify."
@@ -82,7 +112,7 @@ A key that matches nothing is reported, not guessed. A rejected submit says why,
 
 ## Optional: memory
 
-Browsing and form filling need no account and no key. Memory is separate and optional:
+Browsing, reading, citing and form filling need no account and no key (only `search` needs a provider). Memory is separate and optional:
 
 ```sh
 ostler init                                   # saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection
@@ -94,5 +124,5 @@ See [Memory and privacy](memory.html) for exactly what is stored and what is hid
 ## Next steps
 
 - [Use with your agent](agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
-- [Tools reference](tools.html): all 23 tools and their parameters.
+- [Tools reference](tools.html): all 30 tools and their parameters.
 - [Security model](security.html): the allowlist, uploads, dialogs, CAPTCHAs.

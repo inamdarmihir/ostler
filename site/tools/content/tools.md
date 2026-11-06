@@ -164,50 +164,6 @@ Notes shared by every tab and later calls: `get`, `set`, `delete`, `list`. Keep 
 | `key` | string | |
 | `value` | string | |
 
-## Forms (profile: forms)
-
-### `form_inspect`
-
-List the page's forms as typed fields (label, kind, required, options, errors) plus submit controls and what memory knows about this form.
-
-| parameter | type | notes |
-|---|---|---|
-| `form` | string | form ref |
-
-### `form_fill`
-
-Fill many fields at once from `{label | name | ref: value}`. Handles selects, radios, checkbox groups, dates, files, comboboxes and dependent dropdowns, and verifies each field by reading it back. `auto: "required"` or `"all"` fills the rest from memory.
-
-| parameter | type | notes |
-|---|---|---|
-| `values` | object | `{label \| name \| ref: value}` |
-| `form` | string | form ref |
-| `auto` | `off` \| `required` \| `all` | fill the rest from memory |
-| `min_confidence` | number | |
-
-The report names each field `OK`, or says `UNMATCHED` (no field matches the key), `ambiguous` (several match equally well, so use the ref), or a read-back mismatch. It lists fields still empty and required, and says `unsettled` (a count) when the page was still busy at the end of the fill. File fields are refused unless `--upload-dir` allows the directory.
-
-### `form_submit`
-
-Click the form's submit or next control and report whether it was accepted, advanced to another step, or failed validation.
-
-| parameter | type | notes |
-|---|---|---|
-| `form` | string | |
-| `control` | string | submit button ref |
-| `confirm` | boolean | required when the server runs with `--require-confirm-submit` |
-
-Result: `Submitted`, `Advanced` (next step), `NOT ACCEPTED` with the page's own messages, or `Nothing changed` when the form stays put and says nothing. Just before clicking it re-reads the fields it verified and reports any the page cleared or rewrote (`CHANGED BEFORE SUBMIT`).
-
-### `fill_field`
-
-Set one field by ref (any kind, including custom widgets).
-
-| parameter | type | notes |
-|---|---|---|
-| `ref` | string, **required** | |
-| `value` | any, **required** | |
-
 ## Research (profile: research)
 
 Built around one contract: **an answer can only contain what was read and verified.** See the [Cookbook](cookbook.html#13-research-with-citations-that-are-checked) for the workflow.
@@ -266,6 +222,50 @@ Links on the current page with anchor text and context, optionally filtered.
 | `text_contains` | string | |
 | `href_contains` | string | |
 | `limit` | integer | default 30 |
+
+## Forms (profile: forms)
+
+### `form_inspect`
+
+List the page's forms as typed fields (label, kind, required, options, errors) plus submit controls and what memory knows about this form.
+
+| parameter | type | notes |
+|---|---|---|
+| `form` | string | form ref |
+
+### `form_fill`
+
+Fill many fields at once from `{label | name | ref: value}`. Handles selects, radios, checkbox groups, dates, files, comboboxes and dependent dropdowns, and verifies each field by reading it back. `auto: "required"` or `"all"` fills the rest from memory.
+
+| parameter | type | notes |
+|---|---|---|
+| `values` | object | `{label \| name \| ref: value}` |
+| `form` | string | form ref |
+| `auto` | `off` \| `required` \| `all` | fill the rest from memory |
+| `min_confidence` | number | |
+
+The report names each field `OK`, or says `UNMATCHED` (no field matches the key), `ambiguous` (several match equally well, so use the ref), or a read-back mismatch. It lists fields still empty and required, and says `unsettled` (a count) when the page was still busy at the end of the fill. File fields are refused unless `--upload-dir` allows the directory.
+
+### `form_submit`
+
+Click the form's submit or next control and report whether it was accepted, advanced to another step, or failed validation.
+
+| parameter | type | notes |
+|---|---|---|
+| `form` | string | |
+| `control` | string | submit button ref |
+| `confirm` | boolean | required when the server runs with `--require-confirm-submit` |
+
+Result: `Submitted`, `Advanced` (next step), `NOT ACCEPTED` with the page's own messages, or `Nothing changed` when the form stays put and says nothing. Just before clicking it re-reads the fields it verified and reports any the page cleared or rewrote (`CHANGED BEFORE SUBMIT`).
+
+### `fill_field`
+
+Set one field by ref (any kind, including custom widgets).
+
+| parameter | type | notes |
+|---|---|---|
+| `ref` | string, **required** | |
+| `value` | any, **required** | |
 
 ## Memory (profile: all)
 

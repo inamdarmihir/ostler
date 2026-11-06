@@ -1,12 +1,13 @@
 cff-version: 1.2.0
 message: "If you use Ostler, please cite it as below."
 type: software
-title: "Ostler: an MCP browser for AI agents that checks its own work"
+title: "Ostler: an MCP browser for AI agents that reads, researches and acts, and checks its own work"
 abstract: >-
   Ostler is an open-source MCP browser for AI coding agents such as Claude Code,
-  Codex and Cursor. It checks its own work: research answers cite only pages it
-  actually read, with every quote verified, forms are filled in one call with
-  every value read back, and Qdrant remembers what worked.
+  Codex and Cursor. It reads, researches and acts in a real Chrome, and checks
+  its own work: research answers cite only pages it actually read, with every
+  quote verified; forms are filled in one call with every value read back; and
+  Qdrant remembers what worked.
 authors:
   - family-names: Inamdar
     given-names: Mihir

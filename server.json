@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.inamdarmihir/ostler",
   "title": "Ostler",
-  "description": "Browser for AI agents: research that cites only pages it read, forms filled and read back.",
+  "description": "Browser for AI agents: reading, research that cites only pages it read, web tasks, and forms read back.",
   "websiteUrl": "https://inamdarmihir.github.io/ostler/",
   "repository": {
     "url": "https://github.com/inamdarmihir/ostler",
