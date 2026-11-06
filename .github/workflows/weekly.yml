@@ -46,10 +46,11 @@ jobs:
       - name: Generated docs must be up to date
         run: |
           python3 site/tools/build_docs.py
-          git diff --exit-code site/docs
+          gen="site/docs site/sitemap.xml site/llms.txt site/llms-full.txt"
+          git diff --exit-code -- $gen
           # `git diff` ignores untracked files: a page the generator newly emits must be committed too.
-          if [ -n "$(git status --porcelain -- site/docs)" ]; then
-            git status --porcelain -- site/docs
-            echo "site/docs is stale: run 'python3 site/tools/build_docs.py' and commit the result" >&2
+          if [ -n "$(git status --porcelain -- $gen)" ]; then
+            git status --porcelain -- $gen
+            echo "generated site files are stale: run 'python3 site/tools/build_docs.py' and commit the result" >&2
             exit 1
           fi

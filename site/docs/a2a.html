@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>A2A - Ostler docs</title>
-<meta name="description" content="Let other agents hand Ostler forms over Agent2Agent v1.0.">
+<title>Ostler A2A: Let Other Agents Hand Over Forms (Agent2Agent v1.0)</title>
+<meta name="description" content="Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/a2a.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="A2A - Ostler docs"><meta property="og:description" content="Let other agents hand Ostler forms over Agent2Agent v1.0.">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Ostler A2A: Let Other Agents Hand Over Forms (Agent2Agent v1.0)"><meta property="og:description" content="Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/a2a.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="A2A - Ostler docs"><meta name="twitter:description" content="Let other agents hand Ostler forms over Agent2Agent v1.0."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Ostler A2A: Let Other Agents Hand Over Forms (Agent2Agent v1.0)">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler A2A: Let Other Agents Hand Over Forms (Agent2Agent v1.0)"><meta name="twitter:description" content="Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/a2a.html#article","headline":"Ostler Agent2Agent (A2A) interface","description":"Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do.","url":"https://inamdarmihir.github.io/ostler/docs/a2a.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/a2a.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"A2A","item":"https://inamdarmihir.github.io/ostler/docs/a2a.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -23,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -47,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -60,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html">Design review</a></li>
 </ul></div>
@@ -72,8 +77,8 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Reference</p>
-<article class="prose"><h1>A2A</h1>
-<p class="lede">Let other agents hand Ostler forms over Agent2Agent v1.0.</p>
+<article class="prose"><h1>Ostler Agent2Agent (A2A) interface</h1>
+<p class="lede">Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#sending-work">Sending work</a></li><li class="toc-l2"><a href="#the-task-lifecycle">The task lifecycle</a></li><li class="toc-l2"><a href="#conversations-share-state">Conversations share state</a></li><li class="toc-l2"><a href="#methods">Methods</a></li><li class="toc-l2"><a href="#limits-timeouts-and-shutdown">Limits, timeouts and shutdown</a></li><li class="toc-l2"><a href="#securing-it">Securing it</a></li><li class="toc-l2"><a href="#verified-against">Verified against</a></li></ul></details>
 <p>Ostler can be driven by another agent over <a href="https://a2a-protocol.org" rel="noopener">A2A</a> (v1.0, JSON-RPC over HTTP, SSE streaming), as well as by a coding agent over MCP. Use MCP when one agent owns the browser; use A2A when another agent (or service) should be able to hand Ostler a form as a task.</p>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler a2a --allow-domain example.com          <span class="tok-c"># http://127.0.0.1:8765</span>
@@ -121,8 +126,8 @@ curl http://127.0.0.1:8765/.well-known/agent-card.json</code></pre></div>
 <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#sending-work">Sending work</a></li><li class="toc-l2"><a href="#the-task-lifecycle">The task lifecycle</a></li><li class="toc-l2"><a href="#conversations-share-state">Conversations share state</a></li><li class="toc-l2"><a href="#methods">Methods</a></li><li class="toc-l2"><a href="#limits-timeouts-and-shutdown">Limits, timeouts and shutdown</a></li><li class="toc-l2"><a href="#securing-it">Securing it</a></li><li class="toc-l2"><a href="#verified-against">Verified against</a></li></ul></aside>
 </div>
 <footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
-<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
 </div></footer>
 <dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
 <form method="dialog" class="search-form" role="search">

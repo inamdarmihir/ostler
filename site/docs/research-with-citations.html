@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Research with Checked Citations Using Ostler</title>
+<meta name="description" content="Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/research-with-citations.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Research with Checked Citations Using Ostler"><meta property="og:description" content="Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/research-with-citations.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Research with Checked Citations Using Ostler">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Research with Checked Citations Using Ostler"><meta name="twitter:description" content="Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/research-with-citations.html#article","headline":"Research with checked citations using Ostler","description":"Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove.","url":"https://inamdarmihir.github.io/ostler/docs/research-with-citations.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/research-with-citations.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Research with checked citations","item":"https://inamdarmihir.github.io/ostler/docs/research-with-citations.html"}]}]}</script>
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html" aria-current="page">Research with checked citations</a></li>
+<li><a href="cookbook.html">Cookbook</a></li>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Guides</p>
+<article class="prose"><h1>Research with checked citations using Ostler</h1>
+<p class="lede">Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#the-workflow">The workflow</a></li><li class="toc-l2"><a href="#try-it-on-the-bundled-pages">Try it on the bundled pages</a></li><li class="toc-l2"><a href="#expected-output">Expected output</a></li><li class="toc-l3"><a href="#a-page-is-read">A page is read</a></li><li class="toc-l3"><a href="#a-quote-that-is-on-the-page">A quote that is on the page</a></li><li class="toc-l3"><a href="#a-quote-that-is-not-on-the-page">A quote that is not on the page</a></li><li class="toc-l3"><a href="#a-page-that-cannot-be-fully-read">A page that cannot be fully read</a></li><li class="toc-l3"><a href="#what-the-agent-may-say">What the agent may say</a></li><li class="toc-l2"><a href="#what-it-checks-and-what-it-does-not">What it checks, and what it does not</a></li><li class="toc-l2"><a href="#provenance-and-evidence">Provenance and evidence</a></li><li class="toc-l2"><a href="#next-step">Next step</a></li></ul></details>
+<p>Ostler checks a quotation against the text of a page it actually read in this session, and lists the pages it could not read. An agent using <code>read</code>, <code>cite</code> and <code>evidence</code> can then answer with only the claims that were verified, and say plainly what it could not check. It runs on your machine, in your Chrome, from any MCP client such as Claude Code, Codex or Cursor.</p>
+<p><strong>What this does not do.</strong> <code>cite</code> proves that the words are on the page. It does not prove that the claim is true, that the page is a good source, or that the agent quoted in context. Quote matching is not fact-checking.</p>
+<h2 id="the-workflow">The workflow<a class="anchor" href="#the-workflow" aria-label="Link to this section">#</a></h2>
+<p>Three tools carry it. They are in the <code>research</code> profile; <code>--tools research</code> pins them, and the default <code>--tools auto</code> reveals them after the first <code>read</code>. All 30 tools are in the <a href="tools.html#research-profile-research">tools reference</a>.</p>
+<div class="table-wrap"><table><thead><tr><th>step</th><th>tool</th><th>what it does</th></tr></thead><tbody><tr><td>1</td><td><code>read</code></td><td>Opens a page and returns the best passages for your <code>query</code>, with a fetch time and a content hash. The page text is stored for this session.</td></tr><tr><td>2</td><td><code>cite</code></td><td>Takes a <code>url</code> and a <code>quote</code> (12 or more characters). Returns <code>VERIFIED</code> with a link a person can open to check the words, or <code>NOT VERIFIED</code>, <code>NOT READ</code> or <code>TOO SHORT</code>.</td></tr><tr><td>3</td><td><code>evidence</code></td><td>Lists verified citations, pages read but not cited, and gaps: paywall, bot wall, robots.txt refusal, HTTP error, empty page. Call it before answering.</td></tr></tbody></table></div>
+<p><code>open_many</code> reads up to 10 URLs at once in a scratch tab and obeys robots.txt. <code>search</code> finds pages to read; it needs a provider (<code>OSTLER_SEARXNG_URL</code>, or <code>OSTLER_SEARCH_PROVIDER=brave</code> with <code>OSTLER_BRAVE_API_KEY</code>) and has been tested against mock servers only.</p>
+<h2 id="try-it-on-the-bundled-pages">Try it on the bundled pages<a class="anchor" href="#try-it-on-the-bundled-pages" aria-label="Link to this section">#</a></h2>
+<p>Nothing leaves your machine. Install Ostler from source (<a href="install.html">install guide</a>), then start the local fixture server:</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler fixtures        <span class="tok-c"># serves http://127.0.0.1:8787, loopback only</span></code></pre></div>
+<p>Add <code>ostler serve --tools research</code> to your MCP client (<a href="agents.html">setup for each client</a>), and give the agent this prompt:</p>
+<blockquote><p>Find out who designed the Kestrel Lock and when it opened. Use <code>read</code>, then back every claim with <code>cite</code>, and finish with <code>evidence</code>. If a page could not be read, say so instead of guessing. Start at <code>http://127.0.0.1:8787/packs/research/index.html</code>.</p></blockquote>
+<h2 id="expected-output">Expected output<a class="anchor" href="#expected-output" aria-label="Link to this section">#</a></h2>
+<p>This is unedited tool output from <code>ostler 0.2.0</code> built from the <code>main</code> branch (no tagged release), captured on 2026-11-06 against <code>ostler fixtures</code> with <code>ostler serve --tools research</code>. Fetch times and the shown similarity score can differ on your run; the structure and verdicts should not.</p>
+<h3 id="a-page-is-read">A page is read<a class="anchor" href="#a-page-is-read" aria-label="Link to this section">#</a></h3>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; read {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "query": "who designed the lock"}
+Read: &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page_content&gt; — &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-lock.html&lt;/page_content&gt; · page · 297 chars · fetched 2026-11-06T16:01:32Z · sha256:9f602117
+1 of 1 passages for &lt;page_content untrusted="true"&gt;who designed the lock&lt;/page_content&gt;:
+&lt;page_content untrusted="true"&gt;
+[p1 · The Kestrel Lock]
+# The Kestrel Lock
+
+The Kestrel Lock is a double-chamber canal lock on the Kestrel River. It opened in 1887 and was designed by [Marta Ilves](http://127.0.0.1:8787/packs/research/marta-ilves.html).
+
+A major restoration in 1962 was supervised by the engineer Tomas Reyes, who is sometimes wrongly credited with the original design.
+
+See also: [Archive index](http://127.0.0.1:8787/packs/research/index.html).
+&lt;/page_content&gt;
+To use any of this in an answer, call cite with the page URL and an exact quote.</code></pre></div>
+<p><code>&lt;page_content untrusted="true"&gt;</code> marks text that came from the page. The agent is meant to treat it as data, not as instructions.</p>
+<h3 id="a-quote-that-is-on-the-page">A quote that is on the page<a class="anchor" href="#a-quote-that-is-on-the-page" aria-label="Link to this section">#</a></h3>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
+VERIFIED [1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-lock.html&lt;/page_content&gt; (read 2026-11-06T16:01:32Z, sha256:9f602117)
+&lt;page_content untrusted="true"&gt;opened in 1887 and was designed by Marta Ilves&lt;/page_content&gt;
+Check it yourself (best effort): http://127.0.0.1:8787/packs/research/kestrel-lock.html#:~:text=opened%20in%201887%20and%20was%20designed%20by%20Marta%20Ilves</code></pre></div>
+<p>The <code>#:~:text=</code> link opens the page with the quoted words highlighted, so a person can check the source without trusting the agent.</p>
+<h3 id="a-quote-that-is-not-on-the-page">A quote that is not on the page<a class="anchor" href="#a-quote-that-is-not-on-the-page" aria-label="Link to this section">#</a></h3>
+<p>The page says the 1962 restoration was supervised by Tomas Reyes, who "is sometimes wrongly credited with the original design". An agent that skims could easily write that Reyes designed the lock. Ostler rejects the claim:</p>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "Tomas Reyes designed the Kestrel Lock in 1887"}
+NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page_content&gt;. Do not state this claim as sourced; quote the page's own words, not a summary.
+Closest text on the page (similarity 0.48): &lt;page_content untrusted="true"&gt;The Kestrel Lock The Kestrel Lock is a double&lt;/page_content&gt;</code></pre></div>
+<p>The agent is told not to state the claim as sourced. In this run the "closest text" it offered was the page's title and the start of its first sentence, at similarity 0.48, which is not the sentence that matters. Treat that hint as a pointer to look again, not as the answer.</p>
+<h3 id="a-page-that-cannot-be-fully-read">A page that cannot be fully read<a class="anchor" href="#a-page-that-cannot-be-fully-read" aria-label="Link to this section">#</a></h3>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; read {"url": "http://127.0.0.1:8787/packs/research/paywall.html"}
+Read: &lt;page_content untrusted="true"&gt;The Valley Courier: the cost of restoring the Kestrel Lock&lt;/page_content&gt; — &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/paywall.html&lt;/page_content&gt; · page · 293 chars · fetched 2026-11-06T16:01:32Z · sha256:8952387c
+PAYWALL: only a teaser is readable here. Do not state what the rest of the article says; report it as a gap.
+&lt;page_content untrusted="true"&gt;
+# The cost of restoring the Kestrel Lock
+
+The Valley Courier (synthetic). When the council approved the Kestrel Lock restoration, nobody expected the bill to become the talk of the valley...
+
+## Subscribe to keep reading
+
+This article is for subscribers only. Sign in or subscribe to read the rest.
+&lt;/page_content&gt;
+To use any of this in an answer, call cite with the page URL and an exact quote.</code></pre></div>
+<h3 id="what-the-agent-may-say">What the agent may say<a class="anchor" href="#what-the-agent-may-say" aria-label="Link to this section">#</a></h3>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; evidence {}
+EVIDENCE: 2 page(s) read, 1 verified citation(s), 1 gap kind(s). 2 sources: 1 ok; 1 gaps: 1 paywalled
+
+Verified (state only what these support):
+[1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-lock.html&lt;/page_content&gt; — &lt;page_content untrusted="true"&gt;opened in 1887 and was designed by Marta Ilves&lt;/page_content&gt;
+    check: http://127.0.0.1:8787/packs/research/kestrel-lock.html#:~:text=opened%20in%201887%20and%20was%20designed%20by%20Marta%20Ilves
+
+Gaps (not read; say so rather than guess what they contain):
+- paywalled: http://127.0.0.1:8787/packs/research/paywall.html
+
+Read but not cited:
+- &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/paywall.html&lt;/page_content&gt;</code></pre></div>
+<p>The paywalled page is a gap: the agent must report that it could not read it, and must not guess what the article says. In this output the same page also appears under "Read but not cited"; that is how the report looks today, and it does not change the rule that a gap is not evidence.</p>
+<h2 id="what-it-checks-and-what-it-does-not">What it checks, and what it does not<a class="anchor" href="#what-it-checks-and-what-it-does-not" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Checked</th><th>Not checked</th></tr></thead><tbody><tr><td>The quoted words are on a page read in this session (Markdown around them is ignored, <code>...</code> marks an omission).</td><td>That the claim is true, current or well sourced.</td></tr><tr><td>The agent cannot cite a page it never read: <code>NOT READ</code> is an error.</td><td>Whether the quote is used in its original context.</td></tr><tr><td>A changed page invalidates earlier citations: <code>read</code> reports <code>CHANGED</code> and <code>evidence</code> lists them as stale.</td><td>Pages behind a bot wall or paywall: these are reported as gaps, not worked around.</td></tr><tr><td>Text aimed at the agent is flagged (<code>ATTENTION</code>), not obeyed.</td><td>PDFs: there is no PDF text layer.</td></tr></tbody></table></div>
+<p>Other limits today: pages are read one at a time, sources are not kept across sessions, and <code>search</code> has not been run against a live provider in tests.</p>
+<h2 id="provenance-and-evidence">Provenance and evidence<a class="anchor" href="#provenance-and-evidence" aria-label="Link to this section">#</a></h2>
+<ul><li>Tool behaviour: <a href="tools.html#research-profile-research">tools reference</a> and the <a href="cookbook.html#13-research-with-citations-that-are-checked">cookbook recipe</a>.</li><li>Evidence for these tools is a transcript on bundled fixtures, plus the project's tests. There is no published accuracy evaluation of citation checking on real pages yet; see <a href="benchmarks.html">benchmarks</a> for what has and has not been measured.</li><li>Source code: <a href="https://github.com/inamdarmihir/ostler" rel="noopener">github.com/inamdarmihir/ostler</a>.</li></ul>
+<h2 id="next-step">Next step<a class="anchor" href="#next-step" aria-label="Link to this section">#</a></h2>
+<p>For forms rather than research, see <a href="forms.html">verified form filling</a>.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/research-with-citations.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="agents.html"><span>Previous</span><strong>Use with your agent</strong></a>
+<a class="pager-next" rel="next" href="cookbook.html"><span>Next</span><strong>Cookbook</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-workflow">The workflow</a></li><li class="toc-l2"><a href="#try-it-on-the-bundled-pages">Try it on the bundled pages</a></li><li class="toc-l2"><a href="#expected-output">Expected output</a></li><li class="toc-l3"><a href="#a-page-is-read">A page is read</a></li><li class="toc-l3"><a href="#a-quote-that-is-on-the-page">A quote that is on the page</a></li><li class="toc-l3"><a href="#a-quote-that-is-not-on-the-page">A quote that is not on the page</a></li><li class="toc-l3"><a href="#a-page-that-cannot-be-fully-read">A page that cannot be fully read</a></li><li class="toc-l3"><a href="#what-the-agent-may-say">What the agent may say</a></li><li class="toc-l2"><a href="#what-it-checks-and-what-it-does-not">What it checks, and what it does not</a></li><li class="toc-l2"><a href="#provenance-and-evidence">Provenance and evidence</a></li><li class="toc-l2"><a href="#next-step">Next step</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>

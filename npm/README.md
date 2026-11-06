@@ -1,6 +1,6 @@
 # ostler
 
-A browser for AI agents (MCP). Fills a whole form in one call, reads every value back to check it, and learns from each fill. Optional [Qdrant](https://qdrant.tech) memory.
+An open-source MCP browser for AI coding agents (Claude Code, Codex, Cursor) that reads, researches and acts in a real Chrome, and checks its own work. Research answers cite only pages it read, with every quote verified; forms are filled in one call and every value is read back. Optional [Qdrant](https://qdrant.tech) memory.
 
 This npm package is a thin launcher: on first run it downloads the prebuilt `ostler` binary for your platform (macOS and Linux, x64 and arm64), verifies its sha256, and caches it in `~/.cache/ostler`. No install scripts run.
 

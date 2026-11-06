@@ -332,3 +332,5 @@ figure.chart svg text { fill: var(--fg); font: 13px var(--sans); } figure.chart 
 .faq summary { cursor: pointer; padding: 14px 0; font-size: 16px; }
 .faq details[open] summary { margin-bottom: 4px; }
 .faq details p { margin: 0 0 14px; }
+.compare caption { caption-side: bottom; text-align: left; font-size: 13.5px; color: var(--mut); padding: 10px 14px; }
+.chart-data { margin: 0 0 24px; }

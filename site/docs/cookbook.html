@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Cookbook - Ostler docs</title>
-<meta name="description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<title>Ostler Cookbook: MCP Browser Recipes for Research, Forms and Logins</title>
+<meta name="description" content="Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/cookbook.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Cookbook - Ostler docs"><meta property="og:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Ostler Cookbook: MCP Browser Recipes for Research, Forms and Logins"><meta property="og:description" content="Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/cookbook.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Cookbook - Ostler docs"><meta name="twitter:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Ostler Cookbook: MCP Browser Recipes for Research, Forms and Logins">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler Cookbook: MCP Browser Recipes for Research, Forms and Logins"><meta name="twitter:description" content="Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/cookbook.html#article","headline":"Ostler cookbook: recipes for MCP browser workflows","description":"Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.","url":"https://inamdarmihir.github.io/ostler/docs/cookbook.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/cookbook.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Cookbook","item":"https://inamdarmihir.github.io/ostler/docs/cookbook.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -23,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -47,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html" aria-current="page">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -60,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html">Design review</a></li>
 </ul></div>
@@ -72,11 +77,11 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Guides</p>
-<article class="prose"><h1>Cookbook</h1>
-<p class="lede">Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.</p>
+<article class="prose"><h1>Ostler cookbook: recipes for MCP browser workflows</h1>
+<p class="lede">Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#contents">Contents</a></li><li class="toc-l2"><a href="#1-read-a-page-and-answer-a-question">1. Read a page and answer a question</a></li><li class="toc-l2"><a href="#2-compare-several-pages-side-by-side">2. Compare several pages side by side</a></li><li class="toc-l2"><a href="#3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)</a></li><li class="toc-l2"><a href="#4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal</a></li><li class="toc-l2"><a href="#5-log-in-once-reuse-the-session">5. Log in once, reuse the session</a></li><li class="toc-l2"><a href="#6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly</a></li><li class="toc-l2"><a href="#7-fill-a-form-and-verify-it">7. Fill a form and verify it</a></li><li class="toc-l2"><a href="#8-fill-a-multi-step-wizard">8. Fill a multi-step wizard</a></li><li class="toc-l2"><a href="#9-never-fill-the-same-form-twice">9. Never fill the same form twice</a></li><li class="toc-l2"><a href="#10-submit-only-with-your-approval">10. Submit only with your approval</a></li><li class="toc-l2"><a href="#11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A</a></li><li class="toc-l2"><a href="#12-keep-a-run-cheap">12. Keep a run cheap</a></li><li class="toc-l2"><a href="#13-research-with-citations-that-are-checked">13. Research with citations that are checked</a></li><li class="toc-l2"><a href="#planned-not-yet-mcp-tools">Planned, not yet MCP tools</a></li></ul></details>
 <p>Recipes for what you can do with Ostler <strong>today</strong>. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md" rel="noopener">README</a>; tool details are in <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md" rel="noopener">TOOLS.md</a>.</p>
-<p>Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 15 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all. Recipe 13 is deep research with citations that are checked.</p>
+<p>Ostler is a general browser first: the 15 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).</p>
 <p>Everything marked <strong>planned</strong> at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.</p>
 <h2 id="contents">Contents<a class="anchor" href="#contents" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table><thead><tr><th>#</th><th>recipe</th><th>tools</th></tr></thead><tbody><tr><td>1</td><td><a href="#1-read-a-page-and-answer-a-question">Read a page and answer a question</a></td><td><code>navigate</code> <code>snapshot</code></td></tr><tr><td>2</td><td><a href="#2-compare-several-pages-side-by-side">Compare several pages side by side</a></td><td><code>tabs</code> <code>snapshot</code> <code>context</code></td></tr><tr><td>3</td><td><a href="#3-check-a-web-app-after-a-change-qa">Check a web app after a change (QA)</a></td><td><code>navigate</code> <code>click</code> <code>wait_for</code> <code>look</code> <code>screenshot</code></td></tr><tr><td>4</td><td><a href="#4-get-past-a-cookie-wall-or-modal">Get past a cookie wall or modal</a></td><td><code>look</code> <code>click</code></td></tr><tr><td>5</td><td><a href="#5-log-in-once-reuse-the-session">Log in once, reuse the session</a></td><td><code>--profile-dir</code> <code>wait_for_human</code></td></tr><tr><td>6</td><td><a href="#6-handle-a-captcha-honestly">Handle a CAPTCHA honestly</a></td><td><code>wait_for_human</code> <code>--headed</code></td></tr><tr><td>7</td><td><a href="#7-fill-a-form-and-verify-it">Fill a form and verify it</a></td><td><code>form_inspect</code> <code>form_fill</code> <code>form_submit</code></td></tr><tr><td>8</td><td><a href="#8-fill-a-multi-step-wizard">Fill a multi-step wizard</a></td><td><code>form_fill</code> <code>form_submit</code></td></tr><tr><td>9</td><td><a href="#9-never-fill-the-same-form-twice">Never fill the same form twice</a></td><td><code>memory_remember</code> <code>--learn</code></td></tr><tr><td>10</td><td><a href="#10-submit-only-with-your-approval">Submit only with your approval</a></td><td><code>--require-confirm-submit</code></td></tr><tr><td>11</td><td><a href="#11-hand-a-form-to-another-agent-over-a2a">Hand a form to another agent over A2A</a></td><td><code>ostler a2a</code></td></tr><tr><td>12</td><td><a href="#12-keep-a-run-cheap">Keep a run cheap</a></td><td><code>--tools</code> <code>stats</code> <code>snapshot</code> delta</td></tr><tr><td>13</td><td><a href="#13-research-with-citations-that-are-checked">Research with citations that are checked</a></td><td><code>search</code> <code>open_many</code> <code>read</code> <code>cite</code> <code>evidence</code></td></tr></tbody></table></div>
@@ -139,7 +144,7 @@ Check it yourself (best effort): .../kestrel-lock.html#:~:text=opened%20in%20188
 &gt; cite {"url": ".../kestrel-lock.html", "quote": "Tomas Reyes designed the Kestrel Lock in 1887"}
 NOT VERIFIED: these words are not on "The Kestrel Lock". Do not state this claim as sourced ...</code></pre></div>
 <p>What this gives you that a page-to-markdown API does not:</p>
-<ul><li><strong>Nothing can be cited that was not read.</strong> <code>cite</code> checks the quote against the stored text of a page read in this session. <code>NOT READ</code> and <code>NOT VERIFIED</code> are errors, and the second shows the closest text on the page.</li><li><strong>Gaps are reported, not hidden.</strong> A paywalled page (teaser only), a verification wall, a robots.txt refusal, an HTTP error or an empty page is recorded. <code>evidence</code> lists them next to the verified citations, so "I could not read X" is part of the answer.</li><li><strong>Changed pages invalidate their citations.</strong> Read the same URL again and, if the text differs, <code>read</code> says <code>CHANGED</code> and <code>evidence</code> lists the earlier citations as stale.</li><li><strong>Text aimed at your agent is flagged</strong>, not obeyed: the header says <code>ATTENTION</code>, and a citation inside such text carries a warning.</li><li><strong>It runs on your machine and your browser.</strong> With <code>--profile-dir</code>, pages behind your login are readable; nothing is sent to a third party.</li></ul>
+<ul><li><strong>Nothing can be cited that was not read.</strong> <code>cite</code> checks the quote against the stored text of a page read in this session. <code>NOT READ</code> and <code>NOT VERIFIED</code> are errors, and the second shows the closest text on the page.</li><li><strong>Gaps are reported, not hidden.</strong> A paywalled page (teaser only), a verification wall, a robots.txt refusal, an HTTP error or an empty page is recorded. <code>evidence</code> lists them next to the verified citations, so "I could not read X" is part of the answer.</li><li><strong>Changed pages invalidate their citations.</strong> Read the same URL again and, if the text differs, <code>read</code> says <code>CHANGED</code> and <code>evidence</code> lists the earlier citations as stale.</li><li><strong>Text aimed at your agent is flagged</strong>, not obeyed: the header says <code>ATTENTION</code>, and a citation inside such text carries a warning.</li><li><strong>It runs on your machine and your browser.</strong> With <code>--profile-dir</code>, pages behind your login are readable; Ostler sends nothing to a third party, though your MCP client may pass what a tool returns to its model provider.</li></ul>
 <p><code>open_many</code> reads up to 10 URLs at once in a scratch tab (your tab is untouched), obeying robots.txt and per-host spacing, and returns the best passages from each. <code>search</code> needs a provider: set <code>OSTLER_SEARXNG_URL</code> (a SearXNG instance) or <code>OSTLER_SEARCH_PROVIDER=brave</code> with <code>OSTLER_BRAVE_API_KEY</code>, then restart the server. <code>extract</code> returns tables as rows and lists with a <code>PARTIAL: 5 of 13</code> verdict when the page says there is more.</p>
 <p><strong>Be aware:</strong> <code>cite</code> proves the words are on the page, not that the claim is true. Pages are read one at a time, there is no PDF text layer, and sources are not kept across sessions. A search provider has been tested against mock servers only.</p>
 <h2 id="planned-not-yet-mcp-tools">Planned, not yet MCP tools<a class="anchor" href="#planned-not-yet-mcp-tools" aria-label="Link to this section">#</a></h2>
@@ -149,15 +154,15 @@ NOT VERIFIED: these words are not on "The Kestrel Lock". Do not state this claim
 <p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/COOKBOOK.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
 </article>
 <nav class="pager" aria-label="Previous and next pages">
-<a class="pager-prev" rel="prev" href="agents.html"><span>Previous</span><strong>Use with your agent</strong></a>
+<a class="pager-prev" rel="prev" href="research-with-citations.html"><span>Previous</span><strong>Research with checked citations</strong></a>
 <a class="pager-next" rel="next" href="forms.html"><span>Next</span><strong>Forms and verification</strong></a>
 </nav>
 </main>
 <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#contents">Contents</a></li><li class="toc-l2"><a href="#1-read-a-page-and-answer-a-question">1. Read a page and answer a question</a></li><li class="toc-l2"><a href="#2-compare-several-pages-side-by-side">2. Compare several pages side by side</a></li><li class="toc-l2"><a href="#3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)</a></li><li class="toc-l2"><a href="#4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal</a></li><li class="toc-l2"><a href="#5-log-in-once-reuse-the-session">5. Log in once, reuse the session</a></li><li class="toc-l2"><a href="#6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly</a></li><li class="toc-l2"><a href="#7-fill-a-form-and-verify-it">7. Fill a form and verify it</a></li><li class="toc-l2"><a href="#8-fill-a-multi-step-wizard">8. Fill a multi-step wizard</a></li><li class="toc-l2"><a href="#9-never-fill-the-same-form-twice">9. Never fill the same form twice</a></li><li class="toc-l2"><a href="#10-submit-only-with-your-approval">10. Submit only with your approval</a></li><li class="toc-l2"><a href="#11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A</a></li><li class="toc-l2"><a href="#12-keep-a-run-cheap">12. Keep a run cheap</a></li><li class="toc-l2"><a href="#13-research-with-citations-that-are-checked">13. Research with citations that are checked</a></li><li class="toc-l2"><a href="#planned-not-yet-mcp-tools">Planned, not yet MCP tools</a></li></ul></aside>
 </div>
 <footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
-<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
 </div></footer>
 <dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
 <form method="dialog" class="search-form" role="search">

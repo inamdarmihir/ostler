@@ -41,6 +41,88 @@ OUT = SITE / "docs"
 CONTENT = HERE / "content"
 GITHUB = "https://github.com/inamdarmihir/ostler"
 SITE_URL = "https://inamdarmihir.github.io/ostler/"
+# One definition, used verbatim by the landing page, README, llms.txt and the
+# structured data, so search engines and AI answer engines see one entity.
+DEFINITION = ("Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. "
+              "It reads, researches and acts in a real Chrome, and checks its own work: "
+              "research answers cite only pages it actually read, with every quote verified; "
+              "forms are filled in one call with every value read back; and Qdrant remembers what worked.")
+
+# One release-status source for generated pages and machine-readable files; check_site.py compares the
+# hand-written homepage against it, so the two cannot drift silently.
+VERSION = "0.2.0"
+STATUS = "development source; no tagged release yet"
+CREATOR = {"@type": "Person", "@id": SITE_URL + "#creator", "name": "Mihir Inamdar",
+           "url": "https://github.com/inamdarmihir", "sameAs": ["https://github.com/inamdarmihir"]}
+
+# Search-facing title, meta description and H1 per page. The short catalogue title below stays the
+# sidebar label and the search-index name. Pages not listed here keep "<title> - Ostler MCP browser docs".
+SEO = {
+    "index": ("Ostler Documentation: Setup, Research and Form Automation",
+              "Set up Ostler, connect an MCP client, research with checked quotations, browse and test web apps, verify form fills, and review memory, security and benchmark limitations.",
+              "Ostler MCP browser documentation"),
+    "install": ("Install Ostler on macOS or Linux",
+                "Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.",
+                "Install Ostler from source"),
+    "quickstart": ("Ostler Quickstart: Connect Your Agent and Try a Form",
+                   "Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.",
+                   "Start using Ostler: read, cite and fill on local test pages"),
+    "agents": ("Ostler Setup for Claude Code, Codex, Cursor and VS Code",
+               "Configure Ostler as a local MCP browser for your coding agent. Find setup commands, configuration locations and troubleshooting steps.",
+               "Connect Ostler to your MCP client"),
+    "forms": ("Verified Form Filling with Ostler",
+              "Learn how Ostler matches fields, handles dependent controls, reads values back and distinguishes filling from submission outcomes.",
+              "Verified form filling with Ostler"),
+    "tools": ("Ostler MCP Tools: Browser, Research, Forms and Memory",
+              "Explore Ostler's MCP tool profiles and parameters for navigation, quotations, evidence gaps, forms and optional memory.",
+              "Ostler MCP tools and profiles"),
+    "memory": ("Ostler Memory: Qdrant, Saved Facts and Privacy Limits",
+               "See what Ostler memory stores, how playbooks differ from profile facts, where data goes, and the limits and release status of encryption and embeddings.",
+               "Ostler memory and privacy"),
+    "benchmarks": ("Ostler Benchmarks: Fixtures, MCP Comparisons and Limits",
+                   "Inspect scripted fixture results, a five-task MCP comparison and a small live-practice check, with methods, raw data and limitations.",
+                   "Ostler benchmarks and evaluation limits"),
+    "security": ("Ostler Security Model and Data-Flow Limits",
+                 "Review browser restrictions, untrusted content, memory protections and residual risks before using Ostler with sensitive workflows.",
+                 "Ostler security model and limitations"),
+    "research-with-citations": ("Research with Checked Citations Using Ostler",
+                                "Read pages, check quoted text and report evidence gaps with Ostler. Follow a reproducible MCP workflow and understand what verification cannot prove.",
+                                "Research with checked citations using Ostler"),
+    "cookbook": ("Ostler Cookbook: MCP Browser Recipes for Research, Forms and Logins",
+                 "Recipes for an MCP browser agent: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.",
+                 "Ostler cookbook: recipes for MCP browser workflows"),
+    "configuration": ("Configure Ostler: Config File, Environment Variables and CLI Flags",
+                      "Ostler's config file, environment variables and every serve and a2a flag, with defaults.",
+                      "Ostler configuration and CLI reference"),
+    "a2a": ("Ostler A2A: Let Other Agents Hand Over Forms (Agent2Agent v1.0)",
+            "Let other agents hand Ostler forms over Agent2Agent v1.0: how the interface works, how to secure it and what it does not do.",
+            "Ostler Agent2Agent (A2A) interface"),
+    "architecture": ("Ostler Architecture: Crates, Injected Runtime and Form Model",
+                     "Ostler's crates, the injected in-page runtime, the form model, and the decisions behind them.",
+                     "Ostler architecture"),
+    "economics": ("Ostler Economics: Unit Costs, Scaling Limits and Risks",
+                  "Unit costs, scaling limits, the moat question and what could go wrong for Ostler, with the assumptions stated.",
+                  "Ostler economics and scaling limits"),
+    "review": ("Ostler Design Review, October 2026: Flaws and Their Status",
+               "The October 2026 design review of Ostler: five design flaws and their status.",
+               "Ostler design review (October 2026)"),
+    "troubleshooting": ("Troubleshoot Ostler: Symptoms, Causes and Fixes",
+                        "Symptoms, causes and fixes for Ostler. Start with ostler doctor.",
+                        "Troubleshooting Ostler"),
+    "changelog": ("Ostler Changelog: Released and Unreleased Changes",
+                  "What changed in Ostler, including the Unreleased section that is on the main branch but not in a tagged release.",
+                  "Ostler changelog"),
+    "ostler-vs-playwright-mcp": ("Ostler vs Playwright MCP: Forms, Evidence and Trade-offs",
+                                 "Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.",
+                                 "Ostler vs Playwright MCP"),
+}
+
+
+def seo(page: dict) -> tuple[str, str, str]:
+    """(title tag, meta description, h1) for a page."""
+    if page["slug"] in SEO:
+        return SEO[page["slug"]]
+    return f"{page['title']} - Ostler MCP browser docs", page["desc"], page["title"]
 
 # --------------------------------------------------------------------------
 # Page catalogue. Order here is the sidebar order and the prev/next order.
@@ -48,24 +130,26 @@ SITE_URL = "https://inamdarmihir.github.io/ostler/"
 # --------------------------------------------------------------------------
 GROUPS = [
     ("Get started", [
-        ("quickstart", "Quickstart", "Install, check, connect, and fill a demo form in five minutes.", ("content", "quickstart.md")),
+        ("quickstart", "Quickstart", "Install, check, connect, then read and cite a demo page or fill a demo form, in five minutes.", ("content", "quickstart.md")),
         ("install", "Install", "Every way to get the binary, what works today, update and uninstall.", ("content", "install.md")),
-        ("agents", "Use with your agent", "Claude Code, Codex, Cursor, VS Code and any MCP client.", ("content", "agents.md")),
+        ("agents", "Use with your agent", "Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.", ("content", "agents.md")),
     ]),
     ("Guides", [
-        ("cookbook", "Cookbook", "Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.", ("repo", "docs/COOKBOOK.md")),
+        ("research-with-citations", "Research with checked citations", "Read pages, check each quote against them, and report what could not be read, with real tool output.", ("content", "research-with-citations.md")),
+        ("cookbook", "Cookbook", "Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.", ("repo", "docs/COOKBOOK.md")),
         ("forms", "Forms and verification", "How keys become fields, how values are verified by read-back, and what submit results mean.", ("content", "forms.md")),
         ("memory", "Memory and privacy", "What is stored, what sealing hides and does not, local embeddings, per-tenant tokens.", ("content", "memory.md")),
         ("configuration", "Configuration and CLI", "Config file, environment variables, every serve and a2a flag.", ("content", "configuration.md")),
     ]),
     ("Reference", [
-        ("tools", "Tools reference", "All 21 MCP tools, their parameters and profiles.", ("content", "tools.md")),
+        ("tools", "Tools reference", "All 30 MCP tools: browse, read and cite, search, extract, forms and memory, with parameters and profiles.", ("content", "tools.md")),
         ("security", "Security model", "The threat model: what Ostler does, and what it does not do.", ("repo", "SECURITY.md")),
         ("a2a", "A2A", "Let other agents hand Ostler forms over Agent2Agent v1.0.", ("repo", "docs/A2A.md")),
         ("architecture", "Architecture", "Crates, the injected runtime, the form model, and the decisions behind them.", ("repo", "docs/ARCHITECTURE.md")),
     ]),
     ("Evidence", [
         ("benchmarks", "Benchmarks", "Measured on local fixtures with a scripted agent. Read the caveats.", ("repo", "docs/BENCHMARKS.md")),
+        ("ostler-vs-playwright-mcp", "Ostler vs Playwright MCP", "Five scripted form tasks on local fixtures: tool calls, tokens, time, and what the comparison does not show.", ("content", "ostler-vs-playwright-mcp.md")),
         ("economics", "Economics", "Unit costs, scaling limits, the moat question and what could go wrong.", ("repo", "docs/ECONOMICS.md")),
         ("review", "Design review", "The October 2026 review: five design flaws and their status.", ("repo", "docs/REVIEW-2026-10.md")),
     ]),
@@ -105,8 +189,8 @@ README_ANCHORS = {
     "cli-reference": "configuration.html",
     "a2a-let-other-agents-hand-it-forms": "a2a.html",
     "safety": "security.html",
-    "how-it-compares": "../index.html#compare",
-    "roadmap": "../index.html#limits",
+    "how-it-compares": "../#compare",
+    "roadmap": "../#limits",
     "searching-the-web": "troubleshooting.html#searching-the-web",
 }
 # Intro paragraphs inserted (as Markdown) under the title of converted pages.
@@ -476,7 +560,7 @@ def header(prefix: str, section: str) -> str:
     return f'''<header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">{ICON_MENU}</button>
-<a class="brand" href="{prefix}index.html"><img src="{prefix}assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="{prefix or './'}"><img src="{prefix}assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="{prefix}docs/index.html"{cur("docs")}>Docs</a>
 <a href="{prefix}docs/tools.html">Tools</a>
@@ -523,7 +607,14 @@ def sidebar(current: str) -> str:
     return "\n".join(parts)
 
 
-def head(title: str, desc: str, canonical: str, prefix: str) -> str:
+def json_ld(data: dict) -> str:
+    # `</` must not appear inside a script element.
+    return ('<script type="application/ld+json">'
+            + json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+            + "</script>")
+
+
+def head(title: str, desc: str, canonical: str, prefix: str, ld: dict | None = None, og_type: str = "website") -> str:
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -531,25 +622,60 @@ def head(title: str, desc: str, canonical: str, prefix: str) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)}</title>
 <meta name="description" content="{attr(desc)}">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="{prefix}favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{prefix}assets/icon-180.png">
 <link rel="canonical" href="{attr(SITE_URL + canonical)}">
+<link rel="alternate" type="text/plain" title="llms.txt" href="{prefix}llms.txt">
 <meta name="color-scheme" content="light dark">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:type" content="{og_type}"><meta property="og:site_name" content="Ostler">
 <meta property="og:title" content="{attr(title)}"><meta property="og:description" content="{attr(desc)}">
 <meta property="og:url" content="{attr(SITE_URL + canonical)}"><meta property="og:image" content="{SITE_URL}assets/og.png">
-<meta property="og:image:alt" content="Ostler">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="{attr(title)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{attr(title)}"><meta name="twitter:description" content="{attr(desc)}"><meta name="twitter:image" content="{SITE_URL}assets/og.png">
+{json_ld(ld) if ld else ""}
 {THEME_BOOT}
 <link rel="stylesheet" href="{prefix}assets/site.css">
 <script defer src="{prefix}assets/site.js"></script>
 </head>'''
 
 
+def page_ld(page: dict) -> dict:
+    """Article graph that reuses the homepage's #website, #app and #creator identifiers."""
+    url = f"{SITE_URL}docs/{page['slug']}.html"
+    _, desc, h1 = seo(page)
+    return {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "TechArticle",
+                "@id": url + "#article",
+                "headline": h1,
+                "description": desc,
+                "url": url,
+                "mainEntityOfPage": url,
+                "inLanguage": "en",
+                "isPartOf": {"@id": SITE_URL + "#website"},
+                "about": {"@id": SITE_URL + "#app"},
+                "author": CREATOR,
+                "license": "https://www.apache.org/licenses/LICENSE-2.0",
+            },
+            {
+                "@type": "BreadcrumbList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "Ostler", "item": SITE_URL},
+                    {"@type": "ListItem", "position": 2, "name": "Docs", "item": f"{SITE_URL}docs/index.html"},
+                    {"@type": "ListItem", "position": 3, "name": page["title"], "item": url},
+                ],
+            },
+        ],
+    }
+
+
 def footer(prefix: str) -> str:
     return f'''<footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
-<nav aria-label="Footer"><a href="{prefix}docs/index.html">Docs</a><a href="{prefix}docs/security.html">Security</a><a href="{prefix}docs/changelog.html">Changelog</a><a href="{GITHUB}" rel="noopener">GitHub</a></nav>
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="{prefix}docs/index.html">Docs</a><a href="{prefix}docs/security.html">Security</a><a href="{prefix}docs/changelog.html">Changelog</a><a href="{prefix}llms.txt">llms.txt</a><a href="{GITHUB}" rel="noopener">GitHub</a></nav>
 </div></footer>'''
 
 
@@ -573,7 +699,7 @@ def page_html(page: dict, body: str, toc: list, idx: int) -> str:
     src_path = f"site/tools/content/{src}" if kind == "content" else src
     edit = f'{GITHUB}/blob/main/{src_path}'
     return "\n".join([
-        head(f"{title} - Ostler docs", page["desc"], f"docs/{slug}.html", "../"),
+        head(seo(page)[0], seo(page)[1], f"docs/{slug}.html", "../", page_ld(page), "article"),
         '<body data-search="search-index.json">',
         '<a class="skip-link" href="#content">Skip to content</a>',
         header("../", "docs"),
@@ -582,8 +708,8 @@ def page_html(page: dict, body: str, toc: list, idx: int) -> str:
         '<div class="scrim" data-scrim hidden></div>',
         '<main id="content" class="doc-main" tabindex="-1">',
         f'<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> {esc(page["group"])}</p>',
-        f'<article class="prose"><h1>{esc(title)}</h1>',
-        f'<p class="lede">{esc(page["desc"])}</p>',
+        f'<article class="prose"><h1>{esc(seo(page)[2])}</h1>',
+        f'<p class="lede">{esc(seo(page)[1])}</p>',
         toc_inline,
         body,
         f'<p class="edit-link"><a href="{edit}" rel="noopener">View this page&rsquo;s source on GitHub</a></p>',
@@ -605,9 +731,9 @@ def overview_html() -> str:
         for slug, title, desc, _ in items:
             cards.append(f'<a class="doc-card" href="{slug}.html"><strong>{esc(title)}</strong><span>{esc(desc)}</span></a>')
         cards.append("</div>")
-    desc = "Documentation for Ostler: a Rust MCP browser server for AI coding agents that browses, fills forms, verifies, and remembers."
+    title, desc, h1 = SEO["index"]
     return "\n".join([
-        head("Ostler documentation", desc, "docs/index.html", "../"),
+        head(title, desc, "docs/index.html", "../"),
         '<body data-search="search-index.json">',
         '<a class="skip-link" href="#content">Skip to content</a>',
         header("../", "docs"),
@@ -615,8 +741,8 @@ def overview_html() -> str:
         sidebar("index"),
         '<div class="scrim" data-scrim hidden></div>',
         '<main id="content" class="doc-main" tabindex="-1">',
-        '<article class="prose"><h1>Ostler documentation</h1>',
-        '<p class="lede">Ostler is a headless browser server for AI coding agents. It fills a whole form in one call, reads every value back to check it, and remembers what worked in Qdrant. It speaks MCP to coding agents and A2A to other agents.</p>',
+        f'<article class="prose"><h1>{esc(h1)}</h1>',
+        f'<p class="lede">{esc(DEFINITION)} It speaks MCP to coding agents and A2A to other agents.</p>',
         '<aside class="callout callout-note" role="note"><p class="callout-title">Status: v0.2, early</p><p>Tested end to end against real Chrome and a real Qdrant server, but evaluated on local fixtures, not the open web. The docs say what was measured and what was not. Features marked <span class="badge badge-unreleased">Unreleased</span> are on the main branch and not in a tagged release.</p></aside>',
         '<div class="start-row"><a class="btn primary" href="quickstart.html">Quickstart</a><a class="btn" href="agents.html">Use with your agent</a><a class="btn" href="tools.html">Tools reference</a></div>',
         "\n".join(cards),
@@ -647,9 +773,72 @@ def chunks(text: str, size: int) -> list[str]:
     return out
 
 
+def sitemap() -> str:
+    urls = ["", "docs/index.html"] + [f"docs/{p['slug']}.html" for p in PAGES]
+    rows = "".join(f"<url><loc>{SITE_URL}{u}</loc></url>\n" for u in urls)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + rows + "</urlset>\n")
+
+
+def llms_txt() -> str:
+    """The llms.txt index (https://llmstxt.org): what Ostler is, then every page."""
+    out = [
+        "# Ostler",
+        "",
+        f"> {DEFINITION}",
+        "",
+        "Ostler is one local Rust binary (Apache-2.0) that runs Chrome and speaks MCP over stdio to coding agents "
+        "and A2A over HTTP to other agents. It has no LLM inside, no cloud browser and no anti-bot evasion. "
+        f"Status: v{VERSION[:3]}, early ({STATUS}); tested against real Chrome and Qdrant on local fixtures, not yet benchmarked on the open web.",
+        "",
+        "Key facts:",
+        "",
+        "- Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.",
+        "- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.",
+        "- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.",
+        "- Browsing: a general MCP browser in a real Chrome. 15 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.",
+        "- Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).",
+        "- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).",
+        "- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic. Tool output goes to your MCP client and, through it, to that client's model provider.",
+        "- Safety: page text is fenced as untrusted, a domain allowlist holds every request, CAPTCHAs are handed to a person.",
+        "",
+        "## Docs",
+        "",
+    ]
+    for gname, items in GROUPS:
+        for slug, title, desc, _ in items:
+            out.append(f"- [{title}]({SITE_URL}docs/{slug}.html): {desc}")
+    out += [
+        "",
+        "## Optional",
+        "",
+        f"- [Full documentation as one Markdown file]({SITE_URL}llms-full.txt)",
+        f"- [Source code on GitHub]({GITHUB})",
+        f"- [README]({GITHUB}/blob/main/README.md)",
+        "",
+    ]
+    return "\n".join(out)
+
+
+def bundle_md(md: str, conv: "Converter") -> str:
+    """Make one chapter readable out of context: absolute links, no repo: or :unreleased: markers."""
+    from urllib.parse import urljoin
+
+    md = md.replace(":unreleased:", "**Unreleased: main branch, not a tagged release.**")
+
+    def link(m: re.Match) -> str:
+        url, external = conv.resolve(m.group(2))
+        if not external and not url.startswith("#"):
+            url = urljoin(SITE_URL + "docs/", url)
+        return f"[{m.group(1)}]({url}{m.group(3)})"
+
+    return re.sub(r'\[([^\]]+)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)', link, md)
+
+
 def build() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     index = []
+    full = [llms_txt().split("## Docs")[0].rstrip(), ""]
     for idx, page in enumerate(PAGES):
         kind, src = page["src"]
         path = (CONTENT / src) if kind == "content" else (REPO / src)
@@ -663,6 +852,8 @@ def build() -> int:
         if intro:
             body = f"<p>{Converter('content', '').inline(intro)}</p>\n" + body
         (OUT / f"{page['slug']}.html").write_text(page_html(page, body, conv.toc, idx), encoding="utf-8")
+        if page["slug"] != "changelog":  # history, not documentation
+            full += ["", "---", "", f"Source: {SITE_URL}docs/{page['slug']}.html", "", bundle_md(md, conv).strip(), ""]
 
         # search index: split the body at h2/h3
         pieces = re.split(r'(?=<h[23] id=")', body)
@@ -683,7 +874,10 @@ def build() -> int:
                     index.append({"p": page["title"], "s": sec, "u": url, "t": chunk})
     (OUT / "index.html").write_text(overview_html(), encoding="utf-8")
     (OUT / "search-index.json").write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"built {len(PAGES) + 1} pages, {len(index)} search entries -> {OUT}")
+    (SITE / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
+    (SITE / "llms.txt").write_text(llms_txt(), encoding="utf-8")
+    (SITE / "llms-full.txt").write_text("\n".join(full), encoding="utf-8")
+    print(f"built {len(PAGES) + 1} pages, {len(index)} search entries, sitemap and llms.txt -> {SITE}")
     return 0
 
 

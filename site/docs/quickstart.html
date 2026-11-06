@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Quickstart - Ostler docs</title>
-<meta name="description" content="Install, check, connect, and fill a demo form in five minutes.">
+<title>Ostler Quickstart: Connect Your Agent and Try a Form</title>
+<meta name="description" content="Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/quickstart.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Quickstart - Ostler docs"><meta property="og:description" content="Install, check, connect, and fill a demo form in five minutes.">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Ostler Quickstart: Connect Your Agent and Try a Form"><meta property="og:description" content="Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/quickstart.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Quickstart - Ostler docs"><meta name="twitter:description" content="Install, check, connect, and fill a demo form in five minutes."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Ostler Quickstart: Connect Your Agent and Try a Form">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler Quickstart: Connect Your Agent and Try a Form"><meta name="twitter:description" content="Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/quickstart.html#article","headline":"Start using Ostler: read, cite and fill on local test pages","description":"Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.","url":"https://inamdarmihir.github.io/ostler/docs/quickstart.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/quickstart.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Quickstart","item":"https://inamdarmihir.github.io/ostler/docs/quickstart.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -23,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -47,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -60,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html">Design review</a></li>
 </ul></div>
@@ -72,10 +77,10 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
-<article class="prose"><h1>Quickstart</h1>
-<p class="lede">Install, check, connect, and fill a demo form in five minutes.</p>
-<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#1-install">1. Install</a></li><li class="toc-l2"><a href="#2-check-it-works">2. Check it works</a></li><li class="toc-l2"><a href="#3-connect-your-agent">3. Connect your agent</a></li><li class="toc-l2"><a href="#4-try-the-demo">4. Try the demo</a></li><li class="toc-l2"><a href="#what-the-agent-sees">What the agent sees</a></li><li class="toc-l2"><a href="#things-to-ask-your-agent">Things to ask your agent</a></li><li class="toc-l2"><a href="#optional-memory">Optional: memory</a></li><li class="toc-l2"><a href="#next-steps">Next steps</a></li></ul></details>
-<p>Install Ostler, check that it can drive Chrome, connect your agent, and fill a demo form. About five minutes, most of it compiling.</p>
+<article class="prose"><h1>Start using Ostler: read, cite and fill on local test pages</h1>
+<p class="lede">Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#1-install">1. Install</a></li><li class="toc-l2"><a href="#2-check-it-works">2. Check it works</a></li><li class="toc-l2"><a href="#3-connect-your-agent">3. Connect your agent</a></li><li class="toc-l2"><a href="#4-try-the-demo">4. Try the demo</a></li><li class="toc-l2"><a href="#what-the-agent-sees">What the agent sees</a></li><li class="toc-l3"><a href="#research">Research</a></li><li class="toc-l3"><a href="#a-form">A form</a></li><li class="toc-l2"><a href="#things-to-ask-your-agent">Things to ask your agent</a></li><li class="toc-l2"><a href="#optional-memory">Optional: memory</a></li><li class="toc-l2"><a href="#next-steps">Next steps</a></li></ul></details>
+<p>Install Ostler, check that it can drive Chrome, connect your agent, and try it on a demo page: read and cite a source, or fill a form. About five minutes, most of it compiling.</p>
 <aside class="callout callout-note" role="note"><p class="callout-title">Note</p><p><strong>Status: v0.2, early.</strong> Ostler is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A <a href="review.html">design review</a> found real flaws and lists them openly with a fix order. Read <a href="economics.html#6-what-can-go-wrong">what that means</a> before relying on it.</p></aside>
 <h2 id="1-install">1. Install<a class="anchor" href="#1-install" aria-label="Link to this section">#</a></h2>
 <p>You need <strong>Chrome or Chromium</strong> (Ostler drives a real browser) and Rust 1.89 or newer to build from source.</p>
@@ -89,11 +94,27 @@
 <p>That writes the entry into the client's config file with the binary's absolute path: it backs the file up first, keeps your other servers, refuses a malformed file and prints what changed (<code>--dry-run</code> previews, <code>--uninstall</code> removes). <code>ostler install --list</code> shows every client. To only print a snippet instead, use <code>ostler setup &lt;client&gt;</code>. Prefer your own Chrome window? See "Use your own Chrome" on the <a href="install.html">Install</a> page. Details for every client are in <a href="agents.html">Use with your agent</a>.</p>
 <p>After installing or rebuilding <code>ostler</code>, reconnect the MCP client (Claude Code: <code>/mcp</code>; others: restart it) so it starts the new binary.</p>
 <h2 id="4-try-the-demo">4. Try the demo<a class="anchor" href="#4-try-the-demo" aria-label="Link to this section">#</a></h2>
-<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler fixtures        <span class="tok-c"># serves synthetic test forms at http://127.0.0.1:8787</span></code></pre></div>
-<p>Then ask your agent:</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler fixtures        <span class="tok-c"># serves synthetic test pages at http://127.0.0.1:8787</span></code></pre></div>
+<p>Pick one. Nothing real is read or submitted; these are bundled test pages.</p>
+<p><strong>Research with a checked quote.</strong> Ask your agent:</p>
+<blockquote><p><em>Read http://127.0.0.1:8787/packs/research/kestrel-lock.html. Who designed the Kestrel Lock and when did it open? Cite every claim with <code>cite</code> and call <code>evidence</code> before answering.</em></p></blockquote>
+<p>Ostler reads the page, accepts a quote that is on it, refuses one that is not, and lists any page it could not read. The full walk-through, with unedited output, is in <a href="research-with-citations.html">Research with checked citations</a>.</p>
+<p><strong>Fill a form.</strong> Ask your agent:</p>
 <blockquote><p><em>Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria.</em></p></blockquote>
-<p>Ostler fills Country, watches State load, reads every value back, and reports what the page said. Nothing real is submitted.</p>
+<p>Ostler fills Country, watches State load, reads every value back, and reports what the page said.</p>
 <h2 id="what-the-agent-sees">What the agent sees<a class="anchor" href="#what-the-agent-sees" aria-label="Link to this section">#</a></h2>
+<h3 id="research">Research<a class="anchor" href="#research" aria-label="Link to this section">#</a></h3>
+<p>Unedited output from the bundled research pages (<code>ostler serve --tools research</code>), captured 2026-11-06. The <code>&lt;page_content untrusted="true"&gt;</code> tags mark text that came from the page.</p>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
+VERIFIED [1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-lock.html&lt;/page_content&gt; (read 2026-11-06T16:01:32Z, sha256:9f602117)
+&lt;page_content untrusted="true"&gt;opened in 1887 and was designed by Marta Ilves&lt;/page_content&gt;
+Check it yourself (best effort): http://127.0.0.1:8787/packs/research/kestrel-lock.html#:~:text=opened%20in%201887%20and%20was%20designed%20by%20Marta%20Ilves
+
+&gt; cite {"url": "http://127.0.0.1:8787/packs/research/kestrel-lock.html", "quote": "Tomas Reyes designed the Kestrel Lock in 1887"}
+NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page_content&gt;. Do not state this claim as sourced; quote the page's own words, not a summary.
+Closest text on the page (similarity 0.48): &lt;page_content untrusted="true"&gt;The Kestrel Lock The Kestrel Lock is a double&lt;/page_content&gt;</code></pre></div>
+<p><code>cite</code> proves the words are on the page, not that the claim is true.</p>
+<h3 id="a-form">A form<a class="anchor" href="#a-form" aria-label="Link to this section">#</a></h3>
 <p>Real output from the bundled fixtures (<code>ostler serve --tools forms</code>), lightly reformatted. <em>State</em> is disabled until <em>Country</em> is chosen.</p>
 <div class="code" data-lang="output"><pre tabindex="0"><code>&gt; form_inspect
 form [e2] fingerprint=07efd5b3061187a1
@@ -116,14 +137,14 @@ NOT ACCEPTED: the page reported problems.
   e3 "Recipient": "Please fill in this field."</code></pre></div>
 <p>A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words. More on how this works in <a href="forms.html">Forms and verification</a>.</p>
 <h2 id="things-to-ask-your-agent">Things to ask your agent<a class="anchor" href="#things-to-ask-your-agent" aria-label="Link to this section">#</a></h2>
-<ul><li>"Fill in the contact form on this page with my details." (after <code>memory_remember</code> of your name and email, or with <code>--learn</code>)</li><li>"Sign up for the newsletter on example.com, but ask me before you submit." (<code>--require-confirm-submit</code>)</li><li>"This form has a date picker and a country dropdown: fill it and tell me anything you couldn't verify."</li><li>"What's blocking this page?" (<code>look</code> shows numbered click targets; a CAPTCHA is reported, not bypassed)</li></ul>
+<ul><li>"Find out what this page says about the rate limit and quote the sentence. Say so if you could not read it." (<code>read</code>, <code>cite</code>, <code>evidence</code>)</li><li>"Compare the pricing on these three pages and tell me what you could not check." (<code>open_many</code>, <code>evidence</code>)</li><li>"Open this web app, click through the signup flow and tell me what breaks." (<code>navigate</code>, <code>click</code>, <code>look</code>)</li><li>"Fill in the contact form on this page with my details." (after <code>memory_remember</code> of your name and email, or with <code>--learn</code>)</li><li>"Sign up for the newsletter on example.com, but ask me before you submit." (<code>--require-confirm-submit</code>)</li><li>"This form has a date picker and a country dropdown: fill it and tell me anything you couldn't verify."</li><li>"What's blocking this page?" (<code>look</code> shows numbered click targets; a CAPTCHA is reported, not bypassed)</li></ul>
 <h2 id="optional-memory">Optional: memory<a class="anchor" href="#optional-memory" aria-label="Link to this section">#</a></h2>
-<p>Browsing and form filling need no account and no key. Memory is separate and optional:</p>
+<p>Browsing, reading, citing and form filling need no account and no key (only <code>search</code> needs a provider). Memory is separate and optional:</p>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler init                                   <span class="tok-c"># saves your Qdrant URL, key and privacy choices (sealing, embeddings, retention); tests the connection</span>
 ostler install --client claude-code -- --learn --lean <span class="tok-c"># re-register with memory flags</span></code></pre></div>
 <p>See <a href="memory.html">Memory and privacy</a> for exactly what is stored and what is hidden.</p>
 <h2 id="next-steps">Next steps<a class="anchor" href="#next-steps" aria-label="Link to this section">#</a></h2>
-<ul><li><a href="agents.html">Use with your agent</a>: Claude Code, Codex, Cursor, VS Code, anything else.</li><li><a href="tools.html">Tools reference</a>: all 23 tools and their parameters.</li><li><a href="security.html">Security model</a>: the allowlist, uploads, dialogs, CAPTCHAs.</li></ul>
+<ul><li><a href="agents.html">Use with your agent</a>: Claude Code, Codex, Cursor, VS Code, anything else.</li><li><a href="tools.html">Tools reference</a>: all 30 tools and their parameters.</li><li><a href="security.html">Security model</a>: the allowlist, uploads, dialogs, CAPTCHAs.</li></ul>
 <p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/quickstart.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
 </article>
 <nav class="pager" aria-label="Previous and next pages">
@@ -131,11 +152,11 @@ ostler install --client claude-code -- --learn --lean <span class="tok-c"># re-r
 <a class="pager-next" rel="next" href="install.html"><span>Next</span><strong>Install</strong></a>
 </nav>
 </main>
-<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#1-install">1. Install</a></li><li class="toc-l2"><a href="#2-check-it-works">2. Check it works</a></li><li class="toc-l2"><a href="#3-connect-your-agent">3. Connect your agent</a></li><li class="toc-l2"><a href="#4-try-the-demo">4. Try the demo</a></li><li class="toc-l2"><a href="#what-the-agent-sees">What the agent sees</a></li><li class="toc-l2"><a href="#things-to-ask-your-agent">Things to ask your agent</a></li><li class="toc-l2"><a href="#optional-memory">Optional: memory</a></li><li class="toc-l2"><a href="#next-steps">Next steps</a></li></ul></aside>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#1-install">1. Install</a></li><li class="toc-l2"><a href="#2-check-it-works">2. Check it works</a></li><li class="toc-l2"><a href="#3-connect-your-agent">3. Connect your agent</a></li><li class="toc-l2"><a href="#4-try-the-demo">4. Try the demo</a></li><li class="toc-l2"><a href="#what-the-agent-sees">What the agent sees</a></li><li class="toc-l3"><a href="#research">Research</a></li><li class="toc-l3"><a href="#a-form">A form</a></li><li class="toc-l2"><a href="#things-to-ask-your-agent">Things to ask your agent</a></li><li class="toc-l2"><a href="#optional-memory">Optional: memory</a></li><li class="toc-l2"><a href="#next-steps">Next steps</a></li></ul></aside>
 </div>
 <footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
-<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
 </div></footer>
 <dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
 <form method="dialog" class="search-form" role="search">
