@@ -1317,6 +1317,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ostler-extract"
+version = "0.2.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "ostler-fixtures"
 version = "0.2.0"
 dependencies = [
