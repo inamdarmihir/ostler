@@ -20,6 +20,7 @@ Key facts:
 - [Quickstart](https://inamdarmihir.github.io/ostler/docs/quickstart.html): Install, check, connect, then read and cite a demo page or fill a demo form, in five minutes.
 - [Install](https://inamdarmihir.github.io/ostler/docs/install.html): Every way to get the binary, what works today, update and uninstall.
 - [Use with your agent](https://inamdarmihir.github.io/ostler/docs/agents.html): Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.
+- [LangChain, LlamaIndex, AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html): Use Ostler's tools from three Python agent frameworks: tested code, real output, and the one-session rule for cite.
 - [Research with checked citations](https://inamdarmihir.github.io/ostler/docs/research-with-citations.html): Read pages, check each quote against them, and report what could not be read, with real tool output.
 - [Cookbook](https://inamdarmihir.github.io/ostler/docs/cookbook.html): Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.
 - [Forms and verification](https://inamdarmihir.github.io/ostler/docs/forms.html): How keys become fields, how values are verified by read-back, and what submit results mean.

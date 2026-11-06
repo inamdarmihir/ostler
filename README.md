@@ -18,9 +18,14 @@
 </p>
 
 <p align="center">
+  <img src="assets/demo-research.gif" alt="Ostler reading a page, then cite marking a real quote VERIFIED and a decoy quote NOT VERIFIED with the closest real text on the page, then evidence listing a paywalled page as a gap" width="720">
+</p>
+<p align="center"><sub><b>Research:</b> <code>read</code>, then <code>cite</code> checks each quote against the page, then <code>evidence</code> reports what could not be read.</sub></p>
+
+<p align="center">
   <img src="assets/demo.gif" alt="Ostler's own tool output on a local test page: look boxes the one clickable button under a cookie wall and notes two more are hidden; one form_fill call is read back and the page's three validation errors are reported; a corrected fill is verified and the submit is classified from the page" width="720">
 </p>
-<p align="center"><sub>Real tool output, recorded against the bundled local test pages (<code>ostler fixtures</code>). Nothing real is submitted.</sub></p>
+<p align="center"><sub><b>Browse and forms:</b> <code>look</code> under a cookie wall, one <code>form_fill</code> read back, the submit classified. Both GIFs are real tool output recorded against the bundled local test pages (<code>ostler fixtures</code>), with the <code>&lt;page_content&gt;</code> wrappers omitted. Nothing real is submitted.</sub></p>
 
 **Ostler** is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It reads, researches and acts in a real Chrome, and checks its own work: research answers cite only pages it actually read, with every quote verified; forms are filled in one call with every value read back; and Qdrant remembers what worked. It is one local Rust binary that drives Chrome on your machine; Ostler sends pages to no third party (a search provider or Qdrant Cloud only if you configure one), but your MCP client may forward tool output to its model provider.
 
@@ -46,6 +51,8 @@ ostler setup cursor           # prints JSON for ~/.cursor/mcp.json
 ```
 
 Also `ostler setup vscode` and `ostler setup json` (generic `mcpServers`). Only Claude Code is applied automatically; other clients' files are never modified. See [docs/CLIENTS.md](docs/CLIENTS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+**Building your own agent in Python?** [LangChain, LlamaIndex and AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html) load the same tools over MCP. The snippets were run against Ostler 0.2.0 with no language model in the loop. Keep one Ostler session open for the whole task, or `cite` will not see what `read` fetched.
 
 Try it: run `ostler fixtures` (synthetic test pages at http://127.0.0.1:8787), then ask your agent:
 

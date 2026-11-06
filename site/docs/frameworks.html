@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Use Ostler from LangChain, LlamaIndex and AutoGen (MCP)</title>
+<meta name="description" content="Load Ostler&#x27;s browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/frameworks.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Use Ostler from LangChain, LlamaIndex and AutoGen (MCP)"><meta property="og:description" content="Load Ostler&#x27;s browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/frameworks.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Use Ostler from LangChain, LlamaIndex and AutoGen (MCP)">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Use Ostler from LangChain, LlamaIndex and AutoGen (MCP)"><meta name="twitter:description" content="Load Ostler&#x27;s browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/frameworks.html#article","headline":"Use Ostler from LangChain, LlamaIndex and AutoGen","description":"Load Ostler's browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite.","url":"https://inamdarmihir.github.io/ostler/docs/frameworks.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/frameworks.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"LangChain, LlamaIndex, AutoGen","item":"https://inamdarmihir.github.io/ostler/docs/frameworks.html"}]}]}</script>
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+<li><a href="frameworks.html" aria-current="page">LangChain, LlamaIndex, AutoGen</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
+<li><a href="cookbook.html">Cookbook</a></li>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
+<article class="prose"><h1>Use Ostler from LangChain, LlamaIndex and AutoGen</h1>
+<p class="lede">Load Ostler's browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#the-one-rule-keep-one-session-open">The one rule: keep one session open</a></li><li class="toc-l2"><a href="#langchain">LangChain</a></li><li class="toc-l2"><a href="#llamaindex">LlamaIndex</a></li><li class="toc-l2"><a href="#autogen">AutoGen</a></li><li class="toc-l2"><a href="#other-frameworks">Other frameworks</a></li></ul></details>
+<p>Ostler is an MCP server, so any agent framework with an MCP adapter can use its browser, research and form tools. This page shows the three popular Python frameworks, with the code that was run and the output it produced.</p>
+<p><strong>What was tested, and what was not.</strong> Each snippet below was run against Ostler 0.2.0 and the bundled demo page (<code>ostler fixtures</code>): the adapter connects over stdio, loads the tools, and calls <code>read</code> then <code>cite</code> directly. <strong>No language model was in the loop</strong>, so the step that hands the tools to an agent is shown as documented usage and marked as not run.</p>
+<h2 id="the-one-rule-keep-one-session-open">The one rule: keep one session open<a class="anchor" href="#the-one-rule-keep-one-session-open" aria-label="Link to this section">#</a></h2>
+<p><code>cite</code> only accepts a quote from a page that <code>read</code> fetched <strong>in the same Ostler session</strong>. A session is one running Ostler process. Adapters differ in whether they keep it:</p>
+<div class="table-wrap"><table><thead><tr><th>framework</th><th>default behaviour</th><th>what to do</th></tr></thead><tbody><tr><td>LangChain (<code>langchain-mcp-adapters</code>)</td><td><code>client.get_tools()</code> starts a new Ostler process per tool call, so <code>cite</code> returns <code>NOT READ</code></td><td>open <code>client.session("ostler")</code> and use <code>load_mcp_tools(session)</code></td></tr><tr><td>LlamaIndex (<code>llama-index-tools-mcp</code>)</td><td><code>BasicMCPClient</code> starts a new process per call, so <code>cite</code> returns <code>NOT READ</code></td><td>open an <code>mcp.ClientSession</code> yourself and pass it to <code>McpToolSpec</code></td></tr><tr><td>AutoGen (<code>autogen-ext[mcp]</code>)</td><td><code>McpWorkbench</code> as a context manager keeps one session</td><td>use <code>async with McpWorkbench(params)</code></td></tr></tbody></table></div>
+<p>Both failures were observed, not assumed: the <code>NOT READ</code> reply is <code>NOT READ: &lt;url&gt; was not read in this session ... call read first</code>. It is Ostler refusing to certify a quote from a page it did not read in that session, which is the point of <code>cite</code>. Run the agent inside the <code>async with</code> block; when the block exits, the Ostler process and its Chrome end and the read history is gone.</p>
+<p>Every example assumes <code>ostler</code> is on your <code>PATH</code> (see <a href="install.html">install</a>) and the demo pages are being served with <code>ostler fixtures</code>. <code>--tools research</code> pins the 21 research-profile tools; use <code>--tools all</code> for all 30 (<a href="tools.html">profiles</a>).</p>
+<h2 id="langchain">LangChain<a class="anchor" href="#langchain" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>pip install langchain-mcp-adapters      <span class="tok-c"># tested: 0.3.2, with mcp 1.30.0</span></code></pre></div>
+<div class="code" data-lang="python"><pre tabindex="0"><code>import asyncio
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
+
+URL = "http://127.0.0.1:8787/packs/research/kestrel-lock.html"
+client = MultiServerMCPClient({"ostler": {"transport": "stdio", "command": "ostler",
+                                          "args": ["serve", "--tools", "research"]}})
+
+async def main():
+    async with client.session("ostler") as session:  # one session = one Ostler process
+        tools = {t.name: t for t in await load_mcp_tools(session)}
+        print("loaded:", len(tools), list(tools)[:8])
+        await tools["read"].ainvoke({"url": URL})
+        for quote in ["It opened in 1887 and was designed by Marta Ilves",
+                      "Tomas Reyes designed the Kestrel Lock in 1887"]:
+            r = await tools["cite"].ainvoke({"url": URL, "quote": quote})
+            print(r[0]["text"][:90].replace("\n", " "))
+
+asyncio.run(main())</code></pre></div>
+<p>Output (the second quote is a decoy that is not on the page):</p>
+<div class="code" data-lang=""><pre tabindex="0"><code>loaded: 21 ['navigate', 'snapshot', 'read', 'click', 'type', 'press', 'hover', 'scroll']
+VERIFIED [1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-l
+NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page</code></pre></div>
+<p>Tool results come back as a list of content blocks, so the text is <code>r[0]["text"]</code>. To hand the tools to an agent, keep the agent call inside the same <code>async with</code> block. <strong>Not run</strong> (no model available here; <code>langchain</code> and a model package are extra installs):</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code>from langchain.agents import create_agent
+async with client.session("ostler") as session:
+    agent = create_agent("anthropic:claude-sonnet-4-5", await load_mcp_tools(session))
+    await agent.ainvoke({"messages": "Who designed the Kestrel Lock? Cite the exact quote."})</code></pre></div>
+<h2 id="llamaindex">LlamaIndex<a class="anchor" href="#llamaindex" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>pip install llama-index-tools-mcp       <span class="tok-c"># tested: 0.6.0, with mcp 2.3.0</span></code></pre></div>
+<div class="code" data-lang="python"><pre tabindex="0"><code>import asyncio
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from llama_index.tools.mcp import McpToolSpec
+
+URL = "http://127.0.0.1:8787/packs/research/kestrel-lock.html"
+SERVER = StdioServerParameters(command="ostler", args=["serve", "--tools", "research"])
+
+async def main():
+    async with stdio_client(SERVER) as (r, w), ClientSession(r, w) as session:  # one Ostler process
+        await session.initialize()
+        tools = {t.metadata.name: t for t in await McpToolSpec(session).to_tool_list_async()}
+        print("loaded:", len(tools), list(tools)[:8])
+        await tools["read"].acall(url=URL)
+        for quote in ["It opened in 1887 and was designed by Marta Ilves",
+                      "Tomas Reyes designed the Kestrel Lock in 1887"]:
+            out = await tools["cite"].acall(url=URL, quote=quote)
+            print(out.raw_output.content[0].text[:90].replace("\n", " "))
+
+asyncio.run(main())</code></pre></div>
+<p>Output:</p>
+<div class="code" data-lang=""><pre tabindex="0"><code>loaded: 21 ['navigate', 'snapshot', 'read', 'click', 'type', 'press', 'hover', 'scroll']
+VERIFIED [1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-l
+NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page</code></pre></div>
+<p>The clean text of a result is <code>out.raw_output.content[0].text</code>; <code>out.content</code> is the noisy <code>str()</code> of the whole result. Pass <code>url</code> to <code>cite</code> explicitly, since it is required. To use the tools in an agent, build a <code>FunctionAgent(tools=list(tools.values()), llm=...)</code> and run it inside the same session block. <strong>Not run</strong> (no model).</p>
+<h2 id="autogen">AutoGen<a class="anchor" href="#autogen" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>pip install "autogen-ext[mcp]" autogen-agentchat "mcp&lt;2"   <span class="tok-c"># tested: autogen-ext 0.7.5, mcp 1.30.0</span></code></pre></div>
+<p>The <code>mcp&lt;2</code> pin is needed: with <code>mcp</code> 2.3.0 installed, <code>from autogen_ext.tools.mcp import ...</code> failed in testing with <code>ImportError: cannot import name 'RequestContext' from 'mcp.shared.context'</code>.</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code>import asyncio
+from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
+
+URL = "http://127.0.0.1:8787/packs/research/kestrel-lock.html"
+params = StdioServerParams(command="ostler", args=["serve", "--tools", "research"],
+                           read_timeout_seconds=60)
+
+async def main():
+    async with McpWorkbench(params) as wb:  # one session = one Ostler process
+        tools = await wb.list_tools()
+        print("loaded:", len(tools), [t["name"] for t in tools[:8]])
+        await wb.call_tool("read", {"url": URL})
+        for quote in ["It opened in 1887 and was designed by Marta Ilves",
+                      "Tomas Reyes designed the Kestrel Lock in 1887"]:
+            r = await wb.call_tool("cite", {"url": URL, "quote": quote})
+            print(r.to_text()[:90].replace("\n", " "))
+
+asyncio.run(main())</code></pre></div>
+<p>Output:</p>
+<div class="code" data-lang=""><pre tabindex="0"><code>loaded: 21 ['navigate', 'snapshot', 'read', 'click', 'type', 'press', 'hover', 'scroll']
+VERIFIED [1] &lt;page_content untrusted="true"&gt;http://127.0.0.1:8787/packs/research/kestrel-l
+NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Kestrel Lock&lt;/page</code></pre></div>
+<p>A <code>NOT VERIFIED</code> result comes back with <code>is_error = True</code> on the <code>ToolResult</code> rather than as an exception. <code>AssistantAgent</code> takes the workbench through its <code>workbench</code> parameter (the parameter exists; the model call was <strong>not run</strong>):</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code>async with McpWorkbench(params) as wb:
+    agent = AssistantAgent("researcher", model_client=model_client, workbench=wb)
+    await agent.run(task="Read the Kestrel Lock page and cite who designed it.")</code></pre></div>
+<h2 id="other-frameworks">Other frameworks<a class="anchor" href="#other-frameworks" aria-label="Link to this section">#</a></h2>
+<p>Anything that speaks MCP over stdio works the same way: launch <code>ostler serve --tools research</code> (or <code>forms</code>, or <code>all</code>), keep the process for the whole task, and give the model the tools. For Claude Code, Codex, Cursor and VS Code, see <a href="agents.html">use with your agent</a>. Not tested here: CrewAI, the OpenAI Agents SDK, Semantic Kernel, and non-Python frameworks.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/frameworks.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="agents.html"><span>Previous</span><strong>Use with your agent</strong></a>
+<a class="pager-next" rel="next" href="research-with-citations.html"><span>Next</span><strong>Research with checked citations</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-one-rule-keep-one-session-open">The one rule: keep one session open</a></li><li class="toc-l2"><a href="#langchain">LangChain</a></li><li class="toc-l2"><a href="#llamaindex">LlamaIndex</a></li><li class="toc-l2"><a href="#autogen">AutoGen</a></li><li class="toc-l2"><a href="#other-frameworks">Other frameworks</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>
