@@ -14,7 +14,8 @@ browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does
 | Forms | typed form model, one-call fill with per-field verification, selects, radios, checkbox groups, dates, files, comboboxes, dependent dropdowns, wizards, submit outcome (accepted / next step / validation failed) |
 | Memory | facts remembered and recalled, sealed Qdrant storage, learning from validation failures, survives site redesigns |
 | Safety | untrusted page text fencing, domain allow-list, private-network block, submit confirmation gate, CAPTCHA hand-off, secrets refused |
-| Token economy | `auto` tool profile (14 core tools, rest revealed on forms), delta observations, terse output |
+| Token economy | `auto` tool profile (15 core tools, research tools revealed after the first `read`, forms on form pages), `read` with a `query` returns only the best passages, delta observations, terse output |
+| Research | `read`, `cite` (quote verified against pages read this session), `evidence` (citations and gaps), `search` (SearXNG, Brave), `open_many` (robots.txt, per-host spacing, scratch tab), `extract` (tables, lists with a completeness verdict), `links` |
 | Operations | `doctor --fix`, `install --client`, A2A mode, bench suite and comparison, own or attached Chrome |
 
 ## Gaps, ranked by how often developers hit them

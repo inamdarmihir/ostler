@@ -16,6 +16,7 @@ pub mod chunk;
 pub mod completeness;
 pub mod fragment;
 pub mod inject;
+pub mod markdown;
 pub mod quote;
 
 pub use bm25::{diversify, Bm25Index, Bm25Params, Fnv1a, Hit, SparseVector, TermHasher, Tokenizer};
@@ -23,4 +24,5 @@ pub use chunk::{chunk_text, estimate_tokens, Chunk, ChunkOptions};
 pub use completeness::{assess, assess_hints, parse_hints, Assessment, Completeness, Hints};
 pub use fragment::{fragment_from_verified, text_fragment_url, FragmentError, FragmentOptions};
 pub use inject::{detect_injection, InjectionFlag, InjectionKind};
+pub use markdown::plain_text;
 pub use quote::{char_slice, verify_quote, QuoteVerdict, MIN_QUOTE_CHARS};

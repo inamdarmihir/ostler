@@ -4,6 +4,7 @@
 //! are inherently sequential. Logs go to stderr; stdout carries protocol messages only.
 
 mod app;
+mod evidence;
 mod relevance;
 mod render;
 mod tools;
