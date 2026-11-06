@@ -344,3 +344,18 @@ fn start_with_no_apps_explains_instead_of_failing() {
     assert!(ok, "{out}");
     assert!(out.contains("No supported AI app found"), "{out}");
 }
+
+#[test]
+fn start_cautious_registers_the_confirm_flag() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join(".cursor")).unwrap();
+    let (ok, out, _) = run(ostler(d.path()).args(["start", "--cautious"]));
+    assert!(ok, "{out}");
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(d.path().join(".cursor/mcp.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        v["mcpServers"]["ostler"]["args"],
+        json!(["serve", "--require-confirm-submit"])
+    );
+}

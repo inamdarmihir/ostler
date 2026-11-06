@@ -39,8 +39,13 @@ enum Cmd {
     Install(InstallArgs),
     /// Easiest start: find the AI apps on this computer (Claude, Cursor, Codex, ...), connect Ostler to them, check Chrome.
     ///
-    /// No flags, no config files. Safe to run again. `ostler install --list` shows what it would touch.
-    Start,
+    /// No config files needed. Safe to run again. `ostler install --list` shows what it would touch.
+    Start {
+        /// Cautious mode: block page requests that change things (POST etc.) unless the assistant uses the
+        /// confirmed `form_submit` tool. Stricter than the default; it can also stop some logins and button clicks.
+        #[arg(long)]
+        cautious: bool,
+    },
     /// Sign in to a website once in a visible Chrome window; later runs with `--profile-dir` reuse the session.
     ///
     /// Example: `ostler login https://mail.example.com`. Sign in, then come back here and press Enter.
@@ -201,7 +206,7 @@ async fn login_cmd(
     Ok(())
 }
 
-fn start_cmd() -> Result<()> {
+fn start_cmd(cautious: bool) -> Result<()> {
     println!("Ostler gives your AI assistant a real web browser.\n");
     match ostler_cdp::find_chrome(None) {
         Ok(p) => println!("[ok] Chrome found: {}", p.display()),
@@ -213,7 +218,11 @@ fn start_cmd() -> Result<()> {
     let paths = install::Paths::from_env()?;
     let spec = install::Spec {
         exe: std::env::current_exe()?.display().to_string(),
-        args: vec!["serve".to_string()],
+        args: if cautious {
+            vec!["serve".to_string(), "--require-confirm-submit".to_string()]
+        } else {
+            vec!["serve".to_string()]
+        },
     };
     let results = install::apply_detected(&paths, &spec);
     if results.is_empty() {
@@ -245,7 +254,13 @@ fn start_cmd() -> Result<()> {
         println!(
             "  \"Research <a topic> and give me sources, checking every quote against the page.\""
         );
-        println!("Want a safe practice page first? Run `ostler fixtures`.");
+        println!("Safe practice first: run `ostler fixtures`, then ask:");
+        println!("  \"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria. Don't submit.\"");
+        if !cautious {
+            println!(
+                "Want extra protection against accidental submits? `ostler start --cautious`."
+            );
+        }
         println!("Undo any time: `ostler install --client <name> --uninstall`.");
     }
     Ok(())
@@ -1531,7 +1546,7 @@ async fn main() -> Result<()> {
         Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(d) => doctor(d).await?,
         Cmd::Install(a) => install_cmd(a)?,
-        Cmd::Start => start_cmd()?,
+        Cmd::Start { cautious } => start_cmd(cautious)?,
         Cmd::Login {
             url,
             profile_dir,

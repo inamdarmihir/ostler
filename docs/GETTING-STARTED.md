@@ -61,6 +61,21 @@ A Chrome window opens. Sign in, then press Enter in Terminal. Then connect Ostle
 
 For a safe practice page, run `ostler fixtures` and ask the assistant to fill in the form at http://127.0.0.1:8787/dependent.html. Nothing real is submitted.
 
+## Extra caution
+
+`ostler start --cautious` connects Ostler so page requests that change things (form posts and similar) are blocked unless the assistant uses its confirmed submit step. It is stricter than normal and can also stop some sign-ins or buttons. Run `ostler start` again without the flag to go back.
+
+## What the messages mean
+
+| you see | meaning |
+|---|---|
+| `VERIFIED` / `NOT VERIFIED` | the quoted words were (or were not) found on a page the assistant actually read. It proves the words are there, not that they are true |
+| `NOT READ` | the assistant cited a page it never opened |
+| gaps in `evidence` | pages it could not read (paywall, bot check, blocked by the site's robots.txt, error) |
+| `CHALLENGE:` | the site showed a CAPTCHA or "are you human" check. Ostler does not solve these |
+| `UNMATCHED key` | a detail you gave matches no field on the form, so nothing was guessed |
+| `NOT ACCEPTED` | the site rejected the form and says why |
+
 ## Good to know
 
 - Ostler uses its own Chrome window, hidden by default. To sign in to a site once and reuse it, or to solve a CAPTCHA yourself, see [Troubleshooting](TROUBLESHOOTING.md).

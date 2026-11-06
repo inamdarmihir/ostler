@@ -22,6 +22,10 @@ Analysis of what stops a non-developer from using Ostler, what this change fixes
 4. MCP prompt templates (`crates/ostler-mcp/src/prompts.rs`): five click-to-run tasks. Unit and JSON-RPC tested; not yet seen in a real client menu.
 5. `ostler login <url>`: sign in once, reuse the session. Builds and parses; not run against a real display here.
 6. Cursor and VS Code install links in the guide (formats not verified against the apps).
+7. `ostler start --cautious` (registers `--require-confirm-submit`), a practice prompt printed by `start`, and a plain-English table of the tool messages in the guide.
+8. [DISTRIBUTION-CHECKLIST.md](DISTRIBUTION-CHECKLIST.md): where to list Ostler, with honest status.
+
+Deliberately not done: confirmation on by default (the flag blocks every non-GET request, which breaks logins), a visible-browser default (changes behaviour for existing agents), and an update notice (needs a network call).
 
 ## Still open, in suggested order
 
