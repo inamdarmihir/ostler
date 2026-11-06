@@ -44,8 +44,9 @@ SITE_URL = "https://inamdarmihir.github.io/ostler/"
 # One definition, used verbatim by the landing page, README, llms.txt and the
 # structured data, so search engines and AI answer engines see one entity.
 DEFINITION = ("Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. "
-              "It checks its own work: research answers cite only pages it actually read, with every quote verified, "
-              "forms are filled in one call with every value read back, and Qdrant remembers what worked.")
+              "It reads, researches and acts in a real Chrome, and checks its own work: "
+              "research answers cite only pages it actually read, with every quote verified; "
+              "forms are filled in one call with every value read back; and Qdrant remembers what worked.")
 
 # One release-status source for generated pages and machine-readable files; check_site.py compares the
 # hand-written homepage against it, so the two cannot drift silently.
@@ -58,14 +59,14 @@ CREATOR = {"@type": "Person", "@id": SITE_URL + "#creator", "name": "Mihir Inamd
 # sidebar label and the search-index name. Pages not listed here keep "<title> - Ostler MCP browser docs".
 SEO = {
     "index": ("Ostler Documentation: Setup, Research and Form Automation",
-              "Set up Ostler, connect an MCP client, verify form fills and research quotations, and review memory, security and benchmark limitations.",
+              "Set up Ostler, connect an MCP client, research with checked quotations, browse and test web apps, verify form fills, and review memory, security and benchmark limitations.",
               "Ostler MCP browser documentation"),
     "install": ("Install Ostler on macOS or Linux",
                 "Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.",
                 "Install Ostler from source"),
     "quickstart": ("Ostler Quickstart: Connect Your Agent and Try a Form",
-                   "Install Ostler, run doctor, connect your MCP client and test verified form filling on local fixtures without submitting to real services.",
-                   "Start using Ostler with a local test form"),
+                   "Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.",
+                   "Start using Ostler: read, cite and fill on local test pages"),
     "agents": ("Ostler Setup for Claude Code, Codex, Cursor and VS Code",
                "Configure Ostler as a local MCP browser for your coding agent. Find setup commands, configuration locations and troubleshooting steps.",
                "Connect Ostler to your MCP client"),
@@ -129,7 +130,7 @@ def seo(page: dict) -> tuple[str, str, str]:
 # --------------------------------------------------------------------------
 GROUPS = [
     ("Get started", [
-        ("quickstart", "Quickstart", "Install, check, connect, and fill a demo form in five minutes.", ("content", "quickstart.md")),
+        ("quickstart", "Quickstart", "Install, check, connect, then read and cite a demo page or fill a demo form, in five minutes.", ("content", "quickstart.md")),
         ("install", "Install", "Every way to get the binary, what works today, update and uninstall.", ("content", "install.md")),
         ("agents", "Use with your agent", "Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.", ("content", "agents.md")),
     ]),
@@ -795,6 +796,7 @@ def llms_txt() -> str:
         "- Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.",
         "- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.",
         "- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.",
+        "- Browsing: a general MCP browser in a real Chrome. 15 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.",
         "- Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).",
         "- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).",
         "- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic. Tool output goes to your MCP client and, through it, to that client's model provider.",

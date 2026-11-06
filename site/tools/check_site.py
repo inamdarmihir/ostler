@@ -132,9 +132,14 @@ def main(argv: list[str]) -> int:
     if not m or int(m.group(1)) != headings:
         err(f"tools.md says {m.group(1) if m else '?'} tools but documents {headings}")
     else:
-        for n in set(re.findall(r"\b(\d+) (?:MCP )?tools\b", plain(home))):
-            if int(n) != headings:
-                err(f"homepage says {n} tools; tools.md documents {headings}")
+        # History is allowed to say 21 or 25: the benchmark pages describe the tool lists that were measured.
+        historical = {"docs/benchmarks.html", "docs/ostler-vs-playwright-mcp.html", "docs/changelog.html", "docs/review.html", "docs/economics.html"}
+        for name, text in pages.items():
+            if name in historical:
+                continue
+            for n in set(re.findall(r"\b(\d+) (?:MCP )?tools\b", plain(text))):
+                if int(n) != headings:
+                    err(f"{name} says {n} tools; tools.md documents {headings}")
 
     # --- FAQ structured data == visible FAQ ---------------------------------------------------------
     faq = next((n for n in graph if n.get("@type") == "FAQPage"), None)

@@ -1,6 +1,6 @@
 [package]
 name = "ostler"
-description = "Open-source MCP browser for AI coding agents: research that cites only pages it read, verified form filling, Qdrant memory"
+description = "Open-source MCP browser for AI coding agents: reading, research that cites only pages it read, web tasks, verified form filling, Qdrant memory"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
