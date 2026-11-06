@@ -27,6 +27,12 @@ allow = [
     "BSL-1.0",
     "CDLA-Permissive-2.0",
 ]
+# M0 adoption spikes (docs/adr/0012 to 0018) checked the dependency trees of Qdrant Edge, qdrant-client,
+# rmcp and htmd against this list: all fit. One miss was found, NOT added here:
+#   MPL-2.0  option-ext 0.2.0, pulled in by fastembed -> hf-hub -> dirs -> dirs-sys (docs/adr/0013).
+#   It would need an exception, with a reason and a removal condition, if fastembed's default `hf-hub`
+#   feature is adopted; the alternative is to drop `hf-hub` and download models ourselves.
+# Not allowed and rejected on licence grounds: html2md (GPL-3.0+), see docs/adr/0016.
 
 [bans]
 multiple-versions = "warn"
