@@ -590,8 +590,8 @@ def page_ld(page: dict) -> dict:
 
 def footer(prefix: str) -> str:
     return f'''<footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
-<nav aria-label="Footer"><a href="{prefix}docs/index.html">Docs</a><a href="{prefix}docs/security.html">Security</a><a href="{prefix}docs/changelog.html">Changelog</a><a href="{GITHUB}" rel="noopener">GitHub</a></nav>
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="{prefix}docs/index.html">Docs</a><a href="{prefix}docs/security.html">Security</a><a href="{prefix}docs/changelog.html">Changelog</a><a href="{prefix}llms.txt">llms.txt</a><a href="{GITHUB}" rel="noopener">GitHub</a></nav>
 </div></footer>'''
 
 
@@ -710,9 +710,11 @@ def llms_txt() -> str:
         "Key facts:",
         "",
         "- Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.",
+        "- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.",
+        "- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.",
         "- Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).",
-        "- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (scripted, model-free).",
-        "- Memory: optional, in Qdrant or an encrypted local file; stores facts and per-site playbooks, never secrets.",
+        "- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).",
+        "- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic.",
         "- Safety: page text is fenced as untrusted, a domain allowlist holds every request, CAPTCHAs are handed to a person.",
         "",
         "## Docs",
@@ -733,6 +735,21 @@ def llms_txt() -> str:
     return "\n".join(out)
 
 
+def bundle_md(md: str, conv: "Converter") -> str:
+    """Make one chapter readable out of context: absolute links, no repo: or :unreleased: markers."""
+    from urllib.parse import urljoin
+
+    md = md.replace(":unreleased:", "**Unreleased: main branch, not a tagged release.**")
+
+    def link(m: re.Match) -> str:
+        url, external = conv.resolve(m.group(2))
+        if not external and not url.startswith("#"):
+            url = urljoin(SITE_URL + "docs/", url)
+        return f"[{m.group(1)}]({url}{m.group(3)})"
+
+    return re.sub(r'\[([^\]]+)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)', link, md)
+
+
 def build() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     index = []
@@ -751,7 +768,7 @@ def build() -> int:
             body = f"<p>{Converter('content', '').inline(intro)}</p>\n" + body
         (OUT / f"{page['slug']}.html").write_text(page_html(page, body, conv.toc, idx), encoding="utf-8")
         if page["slug"] != "changelog":  # history, not documentation
-            full += ["", "---", "", f"Source: {SITE_URL}docs/{page['slug']}.html", "", md.strip(), ""]
+            full += ["", "---", "", f"Source: {SITE_URL}docs/{page['slug']}.html", "", bundle_md(md, conv).strip(), ""]
 
         # search index: split the body at h2/h3
         pieces = re.split(r'(?=<h[23] id=")', body)
