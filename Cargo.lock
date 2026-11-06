@@ -1317,6 +1317,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ostler-extract"
+version = "0.2.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "ostler-fixtures"
 version = "0.2.0"
 dependencies = [
@@ -1369,6 +1379,34 @@ dependencies = [
  "tokio",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "ostler-research"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tiny_http",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ostler-workflow"
+version = "0.2.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

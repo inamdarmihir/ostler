@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::time::{sleep, Instant};
 
+use crate::diagnostics::{self, Cursor, DiagBuf, DiagKind, Diagnostics};
 use crate::policy::Policy;
 
 pub const RUNTIME_JS: &str = include_str!("runtime.js");
@@ -73,6 +74,8 @@ struct Shared {
     doc: Mutex<Option<(u16, String)>>,
     /// Sessions of cross-site iframes and workers attached to this page, kept so the gate reaches them too.
     children: Mutex<Vec<Session>>,
+    /// Console, exception and network-problem log for `diagnostics`.
+    diag: DiagBuf,
 }
 
 /// Pause new related targets (cross-site iframes, workers) until interception is set up on them.
@@ -125,6 +128,15 @@ fn spawn_verdict(params: &Value, sess: Session, policy: Arc<Policy>, shared: Arc
                 .unwrap()
                 .push(format!("{method} {url}"));
             verdict = Err("blocked by --require-confirm-submit".into());
+        }
+        if let Err(why) = &verdict {
+            shared.diag.push(
+                DiagKind::Blocked,
+                "warning",
+                &format!("{method} blocked: {why}"),
+                Some(&url),
+                None,
+            );
         }
         let _ = match (verdict, is_doc) {
             (Ok(()), _) => {
@@ -467,6 +479,28 @@ impl Page {
                 let is_main = |frame_id: Option<&str>| {
                     frame_id.is_some() && frame_id == shared.main_frame.lock().unwrap().as_deref()
                 };
+                if ev.method == "Network.responseReceived"
+                    && ev.params["response"]["status"].as_u64().unwrap_or(0) >= 400
+                {
+                    let r = &ev.params["response"];
+                    let status = r["status"].as_u64().unwrap_or(0) as u16;
+                    let method = ev.params["requestId"]
+                        .as_str()
+                        .and_then(|id| shared.diag.request(id))
+                        .map(|(_, m)| m)
+                        .unwrap_or_default();
+                    shared.diag.push(
+                        DiagKind::HttpError,
+                        if status >= 500 { "error" } else { "warning" },
+                        format!(
+                            "{method} {status} {}",
+                            r["statusText"].as_str().unwrap_or("")
+                        )
+                        .trim(),
+                        r["url"].as_str(),
+                        Some(status),
+                    );
+                }
                 match ev.method.as_str() {
                     "Page.frameStartedLoading" if is_main(ev.params["frameId"].as_str()) => {
                         shared.started.fetch_add(1, Ordering::SeqCst);
@@ -485,6 +519,90 @@ impl Page {
                         let status = r["status"].as_u64().unwrap_or(0) as u16;
                         let mime = r["mimeType"].as_str().unwrap_or("").to_string();
                         *shared.doc.lock().unwrap() = Some((status, mime));
+                    }
+                    "Runtime.consoleAPICalled" => {
+                        let kind = ev.params["type"].as_str().unwrap_or("log");
+                        if kind != "clear" {
+                            shared.diag.push(
+                                DiagKind::Console,
+                                diagnostics::console_level(kind),
+                                &diagnostics::console_text(&ev.params["args"]),
+                                ev.params["stackTrace"]["callFrames"][0]["url"].as_str(),
+                                None,
+                            );
+                        }
+                    }
+                    "Runtime.exceptionThrown" => {
+                        let d = &ev.params["exceptionDetails"];
+                        let text = d["exception"]["description"]
+                            .as_str()
+                            .or_else(|| d["exception"]["value"].as_str())
+                            .or_else(|| d["text"].as_str())
+                            .unwrap_or("uncaught exception");
+                        let line = d["lineNumber"].as_u64().map(|l| l + 1);
+                        let text = match line {
+                            Some(l) => format!("{text} (line {l})"),
+                            None => text.to_string(),
+                        };
+                        shared.diag.push(
+                            DiagKind::Exception,
+                            "error",
+                            &text,
+                            d["url"].as_str(),
+                            None,
+                        );
+                    }
+                    // The browser's own network complaints arrive as Network events below; skip the
+                    // duplicate console echo of them.
+                    "Log.entryAdded"
+                        if ev.params["entry"]["source"].as_str() != Some("network") =>
+                    {
+                        let e = &ev.params["entry"];
+                        let level = match e["level"].as_str() {
+                            Some("error") => "error",
+                            Some("warning") => "warning",
+                            Some("verbose") => "debug",
+                            _ => "info",
+                        };
+                        shared.diag.push(
+                            DiagKind::Log,
+                            level,
+                            e["text"].as_str().unwrap_or(""),
+                            e["url"].as_str(),
+                            None,
+                        );
+                    }
+                    "Network.requestWillBeSent" => {
+                        if let (Some(id), Some(url)) = (
+                            ev.params["requestId"].as_str(),
+                            ev.params["request"]["url"].as_str(),
+                        ) {
+                            shared.diag.note_request(
+                                id,
+                                url,
+                                ev.params["request"]["method"].as_str().unwrap_or("GET"),
+                            );
+                        }
+                    }
+                    "Network.loadingFailed" => {
+                        let err = ev.params["errorText"].as_str().unwrap_or("failed");
+                        // Policy blocks are recorded where they are decided; blocked media is deliberate;
+                        // a cancelled request is the page moving on.
+                        let ignore = err.contains("BLOCKED_BY_CLIENT")
+                            || ev.params["canceled"].as_bool() == Some(true);
+                        if !ignore {
+                            let (url, method) = ev.params["requestId"]
+                                .as_str()
+                                .and_then(|id| shared.diag.request(id))
+                                .unwrap_or_default();
+                            shared.diag.push(
+                                DiagKind::RequestFailed,
+                                "error",
+                                format!("{method} failed: {err}").trim_start(),
+                                Some(&url),
+                                None,
+                            );
+                        }
                     }
                     "Fetch.requestPaused" => {
                         spawn_verdict(
@@ -549,7 +667,7 @@ impl Page {
         }
         // A session handles its commands in order, so sending these together has the same effect as one
         // after another, without a round trip each.
-        let (_, _, _, _, _, tree, _) = tokio::try_join!(
+        let (_, _, _, _, _, tree, _, _) = tokio::try_join!(
             // Cross-site iframes live in other processes with sessions of their own. Chrome pauses them at
             // start until we have enabled interception there, so their very first request is seen too.
             s.call("Target.setAutoAttach", AUTO_ATTACH.clone()),
@@ -568,6 +686,8 @@ impl Page {
             s.call("Page.getFrameTree", json!({})),
             // Main-document HTTP status comes from the network layer; the page itself never shows it.
             s.call("Network.enable", json!({})),
+            // Browser log entries (deprecations, CSP violations) for `diagnostics`.
+            s.call("Log.enable", json!({})),
         )?;
         *page.shared.main_frame.lock().unwrap() =
             tree["frameTree"]["frame"]["id"].as_str().map(String::from);
@@ -710,6 +830,37 @@ impl Page {
             .call("Network.setBlockedURLs", json!({ "urls": urls }))
             .await?;
         Ok(())
+    }
+
+    /// Console messages, uncaught exceptions and network problems (HTTP status >= 400, failed requests,
+    /// requests the policy blocked) recorded for this tab, oldest first, after `since`.
+    ///
+    /// The buffer is bounded ([`diagnostics::MAX_ENTRIES`] entries, [`diagnostics::MAX_TEXT`] characters
+    /// each); `dropped` counts entries after `since` that were evicted unread. URLs are path-only. Every
+    /// entry is page-derived and marked `untrusted`. Requests made by iframes in other processes and by
+    /// workers are not captured.
+    pub async fn diagnostics(&self, since: Cursor, limit: usize) -> Result<Diagnostics> {
+        self.sync_events().await;
+        Ok(self.shared.diag.read(since, limit))
+    }
+
+    /// Cursor at the current end of the diagnostics stream, so a later `diagnostics(cursor, ..)` returns
+    /// only what happened after this call.
+    pub async fn diagnostics_head(&self) -> Cursor {
+        self.sync_events().await;
+        self.shared.diag.head()
+    }
+
+    /// Let events the browser has already sent reach the event loop: one round trip, then a short yield.
+    async fn sync_events(&self) {
+        let _ = self
+            .session
+            .call("Runtime.evaluate", json!({"expression": "0"}))
+            .await;
+        for _ in 0..3 {
+            tokio::task::yield_now().await;
+        }
+        sleep(Duration::from_millis(30)).await;
     }
 
     pub async fn info(&self) -> Result<PageInfo> {

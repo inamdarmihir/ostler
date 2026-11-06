@@ -1,0 +1,28 @@
+{
+  "_comment": "Names are what you pass to --model. api_key_env is the NAME of an environment variable; the key itself is never stored or logged.",
+  "models": {
+    "ollama-local": {
+      "backend": "openai",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "REPLACE_WITH_A_MODEL_YOU_HAVE_PULLED",
+      "temperature": 0
+    },
+    "vllm-local": {
+      "backend": "openai",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "REPLACE_WITH_THE_SERVED_MODEL_NAME",
+      "temperature": 0
+    },
+    "hosted-openai-compatible": {
+      "backend": "openai",
+      "base_url": "https://REPLACE.example/v1",
+      "model": "REPLACE",
+      "api_key_env": "OSTLER_EVAL_API_KEY"
+    },
+    "anthropic": {
+      "backend": "anthropic",
+      "model": "REPLACE_WITH_A_MODEL_ID",
+      "api_key_env": "ANTHROPIC_API_KEY"
+    }
+  }
+}

@@ -99,7 +99,7 @@ mod tests {
         let claims: serde_json::Value =
             serde_json::from_slice(&B64URL.decode(parts[1]).unwrap()).unwrap();
         let access = claims["access"].as_array().unwrap();
-        assert_eq!(access.len(), 3);
+        assert_eq!(access.len(), Kind::ALL.len());
         for a in access {
             assert!(a["collection"]
                 .as_str()

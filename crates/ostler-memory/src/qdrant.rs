@@ -11,7 +11,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::store::{Filter, Hit, Kind, Rank, Store};
+use crate::sparse::SparseVector;
+use crate::store::{fuse_rankings, Filter, Hit, HybridHit, HybridQuery, Kind, Rank, Store};
 use crate::{Embedder, MemoryError, Result};
 
 #[derive(Clone)]
@@ -260,10 +261,16 @@ pub struct QdrantStore {
     retry: Retry,
     /// Whether the server can score with a formula (Qdrant 1.14+): see [`FORMULA_UNKNOWN`].
     formula: AtomicU8,
+    /// Whether the server can fuse a dense and a sparse ranking with weighted RRF (Qdrant 1.17+): same
+    /// three states as `formula`. Unknown means "try, and fall back on a 400".
+    hybrid: AtomicU8,
 }
 
 /// Minimum Qdrant server version for server-side ranked search (the Query API `formula`).
 pub const MIN_FORMULA_VERSION: (u32, u32) = (1, 14);
+/// Minimum Qdrant server version for server-side weighted RRF (`rrf.weights`, documented as "available as
+/// of v1.17.0"). Older servers get two plain queries and the fusion is done here, with the same formula.
+pub const MIN_HYBRID_VERSION: (u32, u32) = (1, 17);
 const FORMULA_UNKNOWN: u8 = 0;
 const FORMULA_YES: u8 = 1;
 const FORMULA_NO: u8 = 2;
@@ -337,6 +344,7 @@ impl QdrantStore {
             cooldown: BREAKER_COOLDOWN,
             retry: Retry::DEFAULT,
             formula: AtomicU8::new(FORMULA_UNKNOWN),
+            hybrid: AtomicU8::new(FORMULA_UNKNOWN),
         })
     }
 
@@ -512,6 +520,11 @@ impl QdrantStore {
         kind: Kind,
         items: Vec<(String, String, Value)>,
     ) -> Result<()> {
+        if kind == Kind::Source {
+            return Err(MemoryError::Invalid(
+                "source chunks need a sparse vector too: use Memory::save_sources".into(),
+            ));
+        }
         let texts: Vec<String> = items.iter().map(|i| i.1.clone()).collect();
         let vectors: Vec<Value> = match &self.cfg.vectors {
             VectorSource::CloudInference { model, .. } => texts
@@ -578,12 +591,113 @@ impl QdrantStore {
             _ => FORMULA_YES,
         };
         self.formula.store(state, Ordering::Relaxed);
+        let hybrid = match known {
+            Some(v) if v < MIN_HYBRID_VERSION => FORMULA_NO,
+            Some(_) => FORMULA_YES,
+            None => FORMULA_UNKNOWN,
+        };
+        self.hybrid.store(hybrid, Ordering::Relaxed);
     }
 
     /// Force the pre-1.14 path (client-side scoring) regardless of the server version. For parity tests.
     #[doc(hidden)]
     pub fn force_client_side_ranking(&self) {
         self.formula.store(FORMULA_NO, Ordering::Relaxed);
+    }
+
+    /// Force the pre-1.17 hybrid path (two queries, fusion here) regardless of the server version.
+    /// For parity tests.
+    #[doc(hidden)]
+    pub fn force_client_side_fusion(&self) {
+        self.hybrid.store(FORMULA_NO, Ordering::Relaxed);
+    }
+
+    /// The vector as stored for `kind`: source points carry named vectors, the rest a single unnamed one.
+    fn point_vector(kind: Kind, dense: Value, sparse: Option<&SparseVector>) -> Value {
+        if kind != Kind::Source {
+            return dense;
+        }
+        let mut v = serde_json::Map::new();
+        v.insert("dense".into(), dense);
+        if let Some(s) = sparse {
+            v.insert("bm25".into(), s.to_qdrant());
+        }
+        Value::Object(v)
+    }
+
+    /// Server-side hybrid query: two prefetches, one weighted-RRF fusion (a single Query API call).
+    async fn hybrid_on_server(&self, q: &HybridQuery<'_>, dense: Value) -> Result<Vec<HybridHit>> {
+        let filter = q.filter.to_qdrant();
+        let mut prefetch = vec![json!({
+            "query": dense, "using": "dense", "filter": filter, "limit": q.pool,
+        })];
+        let mut weights = vec![q.dense_weight];
+        if self.sparse_wanted(q) {
+            prefetch.push(json!({
+                "query": q.sparse.to_qdrant(), "using": "bm25", "filter": filter, "limit": q.pool,
+            }));
+            weights.push(q.sparse_weight);
+        }
+        let v = self
+            .ok_idem(
+                reqwest::Method::POST,
+                &format!("/collections/{}/points/query", self.coll(Kind::Source)),
+                Some(json!({
+                    "prefetch": prefetch,
+                    "query": { "rrf": { "k": q.rrf_k.round().max(1.0) as u64, "weights": weights } },
+                    "filter": filter,
+                    "limit": q.pool,
+                    "with_payload": true,
+                    "with_vector": ["dense"],
+                })),
+            )
+            .await?;
+        Ok(parse_hybrid_hits(&v["result"]["points"]))
+    }
+
+    fn sparse_wanted(&self, q: &HybridQuery<'_>) -> bool {
+        !q.sparse.is_empty() && q.sparse_weight > 0.0
+    }
+
+    /// Hybrid search for servers without weighted RRF: one query per ranking, fused with the same formula.
+    async fn hybrid_on_client(&self, q: &HybridQuery<'_>, dense: Value) -> Result<Vec<HybridHit>> {
+        let path = format!("/collections/{}/points/query", self.coll(Kind::Source));
+        let filter = q.filter.to_qdrant();
+        let run = |query: Value, using: &str| {
+            json!({
+                "query": query, "using": using, "filter": filter, "limit": q.pool,
+                "with_payload": true, "with_vector": ["dense"],
+            })
+        };
+        let d = self
+            .ok_idem(reqwest::Method::POST, &path, Some(run(dense, "dense")))
+            .await?;
+        let mut hits = parse_hybrid_hits(&d["result"]["points"]);
+        let dense_ids: Vec<String> = hits.iter().map(|h| h.hit.id.clone()).collect();
+        let mut sparse_ids = vec![];
+        if self.sparse_wanted(q) {
+            let s = self
+                .ok_idem(
+                    reqwest::Method::POST,
+                    &path,
+                    Some(run(q.sparse.to_qdrant(), "bm25")),
+                )
+                .await?;
+            for h in parse_hybrid_hits(&s["result"]["points"]) {
+                sparse_ids.push(h.hit.id.clone());
+                if !hits.iter().any(|x| x.hit.id == h.hit.id) {
+                    hits.push(h);
+                }
+            }
+        }
+        Ok(fuse_rankings(&dense_ids, &sparse_ids, q)
+            .into_iter()
+            .filter_map(|(id, score)| {
+                let mut h = hits.iter().find(|h| h.hit.id == id)?.clone();
+                h.hit.score = score;
+                Some(h)
+            })
+            .collect())
     }
 
     /// Refuse to run against vectors built by a different embedding model. Two models can share a
@@ -641,6 +755,7 @@ impl QdrantStore {
             "id_hint",
             "host",
             "labels_norm",
+            "url",
         ] {
             specs.push((field, json!("keyword")));
         }
@@ -674,7 +789,18 @@ impl Store for QdrantStore {
                 .send(reqwest::Method::GET, &format!("/collections/{name}"), None)
                 .await?;
             if status == 200 {
-                let size = info["result"]["config"]["params"]["vectors"]["size"].as_u64();
+                let params = &info["result"]["config"]["params"];
+                let size = if kind == Kind::Source {
+                    if params["sparse_vectors"]["bm25"].is_null() {
+                        return Err(MemoryError::Invalid(format!(
+                            "collection {name} has no sparse vector named \"bm25\", so hybrid search over sources cannot work. \
+                             Delete it (sources are re-fetchable) or use a different collection prefix"
+                        )));
+                    }
+                    params["vectors"]["dense"]["size"].as_u64()
+                } else {
+                    params["vectors"]["size"].as_u64()
+                };
                 if let Some(size) = size {
                     if size as usize != self.cfg.vectors.dim() {
                         return Err(MemoryError::Invalid(format!(
@@ -691,15 +817,28 @@ impl Store for QdrantStore {
             if status != 404 {
                 return Err(self.status_error(status, &info));
             }
+            let dense = json!({ "size": self.cfg.vectors.dim(), "distance": "Cosine", "on_disk": self.cfg.on_disk });
+            let config = if kind == Kind::Source {
+                // Named vectors from the start: `dense` for meaning, `bm25` (sparse, IDF applied by the
+                // server at query time) for exact terms. The older kinds keep their single unnamed vector.
+                json!({
+                    "vectors": { "dense": dense },
+                    "sparse_vectors": { "bm25": { "modifier": "idf" } },
+                    "hnsw_config": { "on_disk": self.cfg.on_disk },
+                    "on_disk_payload": true
+                })
+            } else {
+                json!({
+                    "vectors": dense,
+                    "hnsw_config": { "on_disk": self.cfg.on_disk },
+                    "on_disk_payload": true
+                })
+            };
             let (created, body) = self
                 .send(
                     reqwest::Method::PUT,
                     &format!("/collections/{name}"),
-                    Some(json!({
-                        "vectors": { "size": self.cfg.vectors.dim(), "distance": "Cosine", "on_disk": self.cfg.on_disk },
-                        "hnsw_config": { "on_disk": self.cfg.on_disk },
-                        "on_disk_payload": true
-                    })),
+                    Some(config),
                 )
                 .await?;
             // 409: another process created it between our GET and PUT. Same end state; carry on.
@@ -712,11 +851,58 @@ impl Store for QdrantStore {
     }
 
     async fn upsert(&self, kind: Kind, id: &str, text: &str, payload: Value) -> Result<()> {
-        let vector = self.vector_for(text).await?;
+        let vector = Self::point_vector(kind, self.vector_for(text).await?, None);
         self.ok_idem(
             reqwest::Method::PUT,
             &format!("/collections/{}/points?wait=true", self.coll(kind)),
             Some(json!({ "points": [{ "id": id, "vector": vector, "payload": payload }] })),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn upsert_source(
+        &self,
+        id: &str,
+        text: &str,
+        sparse: SparseVector,
+        payload: Value,
+    ) -> Result<()> {
+        let vector = Self::point_vector(Kind::Source, self.vector_for(text).await?, Some(&sparse));
+        self.ok_idem(
+            reqwest::Method::PUT,
+            &format!("/collections/{}/points?wait=true", self.coll(Kind::Source)),
+            Some(json!({ "points": [{ "id": id, "vector": vector, "payload": payload }] })),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn search_hybrid(&self, q: &HybridQuery<'_>) -> Result<Vec<HybridHit>> {
+        if q.pool == 0 {
+            return Ok(vec![]);
+        }
+        let dense = self.vector_for(q.text).await?;
+        match self.hybrid.load(Ordering::Relaxed) {
+            FORMULA_NO => self.hybrid_on_client(q, dense).await,
+            FORMULA_YES => self.hybrid_on_server(q, dense).await,
+            _ => match self.hybrid_on_server(q, dense.clone()).await {
+                // Version unreadable and the server refused the weighted fusion: it is older than 1.17.
+                Err(MemoryError::Status { status: 400, .. }) => {
+                    self.hybrid.store(FORMULA_NO, Ordering::Relaxed);
+                    self.hybrid_on_client(q, dense).await
+                }
+                other => other,
+            },
+        }
+    }
+
+    async fn replace_payload(&self, kind: Kind, id: &str, payload: Value) -> Result<()> {
+        // PUT .../payload overwrites the whole payload (POST would merge); vectors are untouched.
+        self.ok_idem(
+            reqwest::Method::PUT,
+            &format!("/collections/{}/points/payload?wait=true", self.coll(kind)),
+            Some(json!({ "payload": payload, "points": [id] })),
         )
         .await?;
         Ok(())
@@ -733,11 +919,15 @@ impl Store for QdrantStore {
             return Ok(vec![]);
         }
         let query = self.vector_for(text).await?;
+        let mut body = json!({ "query": query, "filter": filter.to_qdrant(), "limit": limit, "with_payload": true });
+        if kind == Kind::Source {
+            body["using"] = json!("dense");
+        }
         let v = self
             .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/query", self.coll(kind)),
-                Some(json!({ "query": query, "filter": filter.to_qdrant(), "limit": limit, "with_payload": true })),
+                Some(body),
             )
             .await?;
         Ok(parse_hits(&v["result"]["points"]))
@@ -772,11 +962,15 @@ impl Store for QdrantStore {
             return Ok(hits);
         }
         let vector = self.vector_for(text).await?;
+        let mut body = rank.to_qdrant_query(vector, filter, limit);
+        if kind == Kind::Source {
+            body["prefetch"]["using"] = json!("dense");
+        }
         let v = self
             .ok_idem(
                 reqwest::Method::POST,
                 &format!("/collections/{}/points/query", self.coll(kind)),
-                Some(rank.to_qdrant_query(vector, filter, limit)),
+                Some(body),
             )
             .await?;
         Ok(parse_hits(&v["result"]["points"]))
@@ -831,6 +1025,21 @@ impl Store for QdrantStore {
             .await?;
         Ok(v["result"]["count"].as_u64().unwrap_or(0))
     }
+}
+
+/// Hits of a query made with `with_vector: ["dense"]`.
+fn parse_hybrid_hits(points: &Value) -> Vec<HybridHit> {
+    let hits = parse_hits(points);
+    let raw = points.as_array().cloned().unwrap_or_default();
+    hits.into_iter()
+        .zip(raw)
+        .map(|(hit, p)| HybridHit {
+            hit,
+            vector: p["vector"]["dense"]
+                .as_array()
+                .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0) as f32).collect()),
+        })
+        .collect()
 }
 
 fn parse_hits(points: &Value) -> Vec<Hit> {
@@ -1173,11 +1382,12 @@ mod tests {
             .mount(&srv)
             .await;
         Mock::given(method("GET"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(
-                    json!({"result":{"config":{"params":{"vectors":{"size":384}}}}}),
-                ),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"result":{"config":{"params":{
+                    "vectors":{"size":384,"dense":{"size":384}},
+                    "sparse_vectors":{"bm25":{}}
+                }}}}),
+            ))
             .with_priority(2)
             .mount(&srv)
             .await;
@@ -1346,10 +1556,234 @@ mod tests {
         }
     }
 
+    fn point(id: &str, score: f64, dense: [f64; 2]) -> Value {
+        json!({"id": id, "score": score, "payload": {"n": id}, "vector": {"dense": dense}})
+    }
+
+    fn hybrid_query<'a>(sparse: &'a SparseVector, f: &'a Filter) -> HybridQuery<'a> {
+        HybridQuery {
+            text: "zx 4471",
+            sparse,
+            filter: f,
+            pool: 20,
+            dense_weight: 1.0,
+            sparse_weight: 2.0,
+            rrf_k: 60.0,
+        }
+    }
+
+    /// Qdrant 1.17+: one Query API call, two prefetches (named vectors), weighted RRF. The shape follows
+    /// qdrant.tech/documentation/search/hybrid-queries and was accepted by a real 1.20.0 (see `sources_real`).
+    #[tokio::test]
+    async fn hybrid_on_a_new_server_is_one_weighted_rrf_query() {
+        let srv = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"version": "1.17.1"})))
+            .mount(&srv)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_sources/points/query"))
+            .and(body_partial_json(json!({
+                "prefetch": [
+                    {"using": "dense", "query": {"text": "zx 4471", "model": "sentence-transformers/all-minilm-l6-v2"}, "limit": 20},
+                    {"using": "bm25", "query": {"indices": [7, 9], "values": [1.0, 1.0]}, "limit": 20},
+                ],
+                "query": {"rrf": {"k": 60, "weights": [1.0, 2.0]}},
+                "with_vector": ["dense"],
+                "limit": 20,
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result": {"points": [
+                point("a", 0.04, [1.0, 0.0]), point("b", 0.03, [0.0, 1.0]),
+            ]}})))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        let store = cloud(srv.uri());
+        store.probe_version().await;
+        let sparse = SparseVector {
+            indices: vec![7, 9],
+            values: vec![1.0, 1.0],
+        };
+        let f = Filter::tenant("t");
+        let hits = store
+            .search_hybrid(&hybrid_query(&sparse, &f))
+            .await
+            .unwrap();
+        assert_eq!(
+            hits.iter().map(|h| h.hit.id.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
+        assert_eq!(hits[0].vector.as_deref(), Some(&[1.0f32, 0.0][..]));
+        assert_eq!(hits[0].hit.score, 0.04);
+    }
+
+    /// Before 1.17 there is no `rrf.weights`: two plain queries, fused here with the same formula.
+    #[tokio::test]
+    async fn hybrid_on_an_old_server_fuses_two_rankings_on_the_client() {
+        let srv = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"version": "1.16.3"})))
+            .mount(&srv)
+            .await;
+        let q = "/collections/ostler_sources/points/query";
+        Mock::given(method("POST"))
+            .and(path(q))
+            .and(body_partial_json(json!({"using": "dense"})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"result": {"points": [
+                    point("a", 0.9, [1.0, 0.0]), point("b", 0.5, [0.0, 1.0]),
+                ]}})),
+            )
+            .expect(1)
+            .mount(&srv)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(q))
+            .and(body_partial_json(json!({"using": "bm25"})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"result": {"points": [
+                    point("c", 2.0, [0.7, 0.7]), point("b", 1.0, [0.0, 1.0]),
+                ]}})),
+            )
+            .expect(1)
+            .mount(&srv)
+            .await;
+        let store = cloud(srv.uri());
+        store.probe_version().await;
+        let sparse = SparseVector {
+            indices: vec![7],
+            values: vec![1.0],
+        };
+        let f = Filter::tenant("t");
+        let hits = store
+            .search_hybrid(&hybrid_query(&sparse, &f))
+            .await
+            .unwrap();
+        // dense [a, b], sparse [c, b] with weights 1 and 2: b is in both, c leads the heavier ranking.
+        let want = crate::fusion::rrf_fuse(&[(&["a", "b"][..], 1.0), (&["c", "b"][..], 2.0)], 60.0);
+        assert_eq!(
+            hits.iter()
+                .map(|h| (h.hit.id.clone(), h.hit.score))
+                .collect::<Vec<_>>(),
+            want.iter()
+                .map(|(i, s)| (i.to_string(), *s))
+                .collect::<Vec<_>>()
+        );
+        // A point only the sparse ranking found still carries its dense vector for MMR.
+        assert!(hits
+            .iter()
+            .find(|h| h.hit.id == "c")
+            .unwrap()
+            .vector
+            .is_some());
+    }
+
+    /// Version unreadable and the server answers 400 to the weighted fusion: remember it and use two queries.
+    #[tokio::test]
+    async fn an_unknown_old_server_is_detected_by_its_400() {
+        let srv = MockServer::start().await;
+        let q = "/collections/ostler_sources/points/query";
+        Mock::given(method("POST"))
+            .and(path(q))
+            .and(body_partial_json(json!({"query": {"rrf": {}}})))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({"status": {"error": "unknown field `weights`"}})),
+            )
+            .expect(1)
+            .mount(&srv)
+            .await;
+        for using in ["dense", "bm25"] {
+            Mock::given(method("POST"))
+                .and(path(q))
+                .and(body_partial_json(json!({"using": using})))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(
+                        json!({"result": {"points": [point("a", 1.0, [1.0, 0.0])]}}),
+                    ),
+                )
+                .expect(2)
+                .mount(&srv)
+                .await;
+        }
+        let store = cloud(srv.uri());
+        let sparse = SparseVector {
+            indices: vec![7],
+            values: vec![1.0],
+        };
+        let f = Filter::tenant("t");
+        for _ in 0..2 {
+            let hits = store
+                .search_hybrid(&hybrid_query(&sparse, &f))
+                .await
+                .unwrap();
+            assert_eq!(hits.len(), 1);
+        }
+    }
+
+    /// An empty sparse query (all stop words removed, or sparse weight 0) sends one prefetch, not two.
+    #[tokio::test]
+    async fn no_sparse_query_means_a_single_prefetch() {
+        let srv = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/collections/ostler_sources/points/query"))
+            .and(body_partial_json(json!({
+                "prefetch": [{"using": "dense"}],
+                "query": {"rrf": {"weights": [1.0]}},
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"result": {"points": []}})),
+            )
+            .expect(1)
+            .mount(&srv)
+            .await;
+        let store = cloud(srv.uri());
+        store.hybrid.store(FORMULA_YES, Ordering::Relaxed);
+        let f = Filter::tenant("t");
+        let none = SparseVector::default();
+        assert!(store
+            .search_hybrid(&hybrid_query(&none, &f))
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn source_points_use_named_vectors_and_the_others_do_not() {
+        let srv = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/collections/ostler_sources/points"))
+            .and(body_partial_json(json!({"points":[{"id":"s1","vector":{
+                "dense":{"text":"hello","model":"sentence-transformers/all-minilm-l6-v2"},
+                "bm25":{"indices":[3],"values":[1.5]}
+            }}]})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status":"ok"})))
+            .expect(1)
+            .mount(&srv)
+            .await;
+        cloud(srv.uri())
+            .upsert_source(
+                "s1",
+                "hello",
+                SparseVector {
+                    indices: vec![3],
+                    values: vec![1.5],
+                },
+                json!({"tenant":"t"}),
+            )
+            .await
+            .unwrap();
+    }
+
     fn collection_ok(size: u64) -> ResponseTemplate {
-        ResponseTemplate::new(200).set_body_json(
-            json!({"result":{"config":{"params":{"vectors":{"size":size,"distance":"Cosine"}}}}}),
-        )
+        // One canned answer for every collection: the single-vector shape the older kinds have, and the
+        // named-vector shape (with the sparse `bm25`) the source collection has.
+        ResponseTemplate::new(200).set_body_json(json!({"result":{"config":{"params":{
+            "vectors":{"size":size,"distance":"Cosine","dense":{"size":size,"distance":"Cosine"}},
+            "sparse_vectors":{"bm25":{"modifier":"idf"}}
+        }}}}))
     }
 
     #[tokio::test]

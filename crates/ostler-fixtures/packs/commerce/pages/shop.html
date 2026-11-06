@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hearthside Goods: catalogue</title><style>body{font:15px system-ui;max-width:640px;margin:1.5rem auto;padding:0 1rem}nav a{margin-right:1rem}label{display:block;margin:.6rem 0 .2rem}input,select{padding:.4rem;width:100%;box-sizing:border-box}input[type=radio],input[type=checkbox]{width:auto}button{margin-top:1rem;padding:.5rem 1rem}#list{position:relative}#list li{position:absolute;left:0;right:0;height:52px;list-style:none;border-bottom:1px solid #ddd;box-sizing:border-box;padding:.3rem 0}.price{float:right;font-weight:600}.muted{color:#666;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}[hidden]{display:none!important}iframe{width:100%;height:260px;border:1px solid #888}</style>
+<nav><a href="/packs/commerce/index.html">Home</a><a href="/packs/commerce/cart.html">Cart</a></nav>
+<h1>Catalogue</h1>
+<form id="filters" onsubmit="return false">
+ <label for="q">Search products</label><input id="q" name="q" type="search" autocomplete="off">
+ <label for="cat">Category</label><select id="cat" name="category"><option value="">All categories</option><option value="kitchen">Kitchen</option><option value="outdoor">Outdoor</option><option value="lighting">Lighting</option><option value="office">Office</option></select>
+ <label><input type="checkbox" id="stock" name="instock"> In stock only</label>
+</form>
+<p id="count" aria-live="polite"></p>
+<ul id="list" style="padding:0;margin:0"></ul>
+<script src="/packs/commerce/catalog.js"></script>
+<script>
+// The list is virtualized: only the rows near the viewport exist in the DOM.
+const ROW=52,BUF=3,list=document.getElementById('list');
+let items=[];
+function filtered(){const q=document.getElementById('q').value.trim().toLowerCase(),c=document.getElementById('cat').value,s=document.getElementById('stock').checked;
+ return CATALOG.filter(p=>(!q||p.name.toLowerCase().includes(q))&&(!c||p.cat===c)&&(!s||p.stock))}
+function render(){const top=Math.max(0,scrollY-list.offsetTop),first=Math.max(0,Math.floor(top/ROW)-BUF),n=Math.ceil(innerHeight/ROW)+2*BUF;
+ list.style.height=items.length*ROW+'px';list.innerHTML='';
+ for(let i=first;i<Math.min(items.length,first+n);i++){const p=items[i],li=document.createElement('li');li.style.top=i*ROW+'px';
+  li.innerHTML='<a href="/packs/commerce/product.html?id='+p.id+'">'+p.name+'</a> <span class="price">'+fmt(p.price)+'</span><br><span class="muted">'+p.cat+(p.stock?'':' - out of stock')+'</span>';list.appendChild(li)}}
+function refresh(){items=filtered();document.getElementById('count').textContent='Showing '+items.length+' of '+CATALOG.length+' products';render()}
+for(const id of ['q','cat','stock'])document.getElementById(id).addEventListener('input',refresh);
+addEventListener('scroll',render);addEventListener('resize',render);
+const q0=new URLSearchParams(location.search).get('q');if(q0)document.getElementById('q').value=q0;
+refresh();
+</script>

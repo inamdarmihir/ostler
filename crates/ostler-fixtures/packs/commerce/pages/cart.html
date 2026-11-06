@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hearthside Goods: cart</title><style>body{font:15px system-ui;max-width:640px;margin:1.5rem auto;padding:0 1rem}nav a{margin-right:1rem}label{display:block;margin:.6rem 0 .2rem}input,select{padding:.4rem;width:100%;box-sizing:border-box}input[type=radio],input[type=checkbox]{width:auto}button{margin-top:1rem;padding:.5rem 1rem}#list{position:relative}#list li{position:absolute;left:0;right:0;height:52px;list-style:none;border-bottom:1px solid #ddd;box-sizing:border-box;padding:.3rem 0}.price{float:right;font-weight:600}.muted{color:#666;font-size:13px}fieldset{margin:1rem 0}fieldset label{display:inline-block;margin-right:1rem}[hidden]{display:none!important}iframe{width:100%;height:260px;border:1px solid #888}</style>
+<nav><a href="/packs/commerce/shop.html">Catalogue</a></nav>
+<h1>Your cart</h1>
+<div id="lines"></div>
+<p id="sub"></p>
+<p><a id="go" href="/packs/commerce/checkout.html">Proceed to checkout</a></p>
+<script src="/packs/commerce/catalog.js"></script>
+<script>
+const c=cartGet(),el=document.getElementById('lines');
+if(!c.length){el.textContent='Your cart is empty.';document.getElementById('go').hidden=true}
+else{el.innerHTML='<ul>'+c.map(l=>'<li>'+l.qty+' x '+l.name+' ('+l.sku+') '+fmt(l.unit*l.qty)+'</li>').join('')+'</ul>';
+ document.getElementById('sub').textContent='Subtotal: '+fmt(c.reduce((a,l)=>a+l.unit*l.qty,0))}
+</script>

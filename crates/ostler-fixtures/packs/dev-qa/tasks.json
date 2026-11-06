@@ -1,0 +1,74 @@
+[
+  {
+    "id": "dev-qa-001",
+    "pack": "dev-qa",
+    "title": "Read the home view",
+    "difficulty": 1,
+    "instruction": "Open the Ledgerly app at {BASE}/packs/dev-qa/app.html and tell me the balance shown on the Home view.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["read", "spa"],
+    "outcome": {"kind": "answer", "must_contain": ["120.00"]},
+    "expect_gaps": [],
+    "risk": "read"
+  },
+  {
+    "id": "dev-qa-002",
+    "pack": "dev-qa",
+    "title": "Collect console errors",
+    "difficulty": 2,
+    "instruction": "Open {BASE}/packs/dev-qa/app.html and list every console error and uncaught exception the page produces on load, quoting the message text.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "outcome": {"kind": "answer", "must_contain": ["cart-badge|hydrate", "TypeError|totals|Uncaught"]},
+    "expect_gaps": [],
+    "risk": "read"
+  },
+  {
+    "id": "dev-qa-003",
+    "pack": "dev-qa",
+    "title": "Collect failing network requests",
+    "difficulty": 2,
+    "instruction": "Open {BASE}/packs/dev-qa/app.html and list every network request that fails (HTTP error or missing resource), with its URL path and status code.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "outcome": {"kind": "answer", "must_contain": ["api/orders", "500", "analytics.js", "404"]},
+    "expect_gaps": [],
+    "risk": "read"
+  },
+  {
+    "id": "dev-qa-004",
+    "pack": "dev-qa",
+    "title": "Verify a flow with an assertion (URL and text)",
+    "difficulty": 3,
+    "instruction": "Open {BASE}/packs/dev-qa/app.html, go to Settings, choose the dark theme and click Save settings. Verify the save by checking BOTH that the URL hash became #/saved AND that the page shows the heading \"Saved\". Report the final URL hash and whether both checks passed.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["flow", "assertion", "spa"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/dev-qa/api/settings", "body_contains": {"theme": "dark"}}], "must_contain": ["#/saved"], "must_not_contain": ["did not pass|check failed|checks failed|one failed"]},
+    "expect_gaps": [],
+    "risk": "reversible"
+  },
+  {
+    "id": "dev-qa-005",
+    "pack": "dev-qa",
+    "title": "Optimistic toast that lies",
+    "difficulty": 4,
+    "instruction": "Open {BASE}/packs/dev-qa/app.html, go to Settings, choose the sepia theme and click Save settings. Tell me whether the settings were really saved. Judge by the URL and by what the server did, not only by the toast on screen.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["flow", "assertion", "false-success-trap", "spa"],
+    "outcome": {"kind": "both", "must": [{"method": "POST", "path": "/packs/dev-qa/api/settings", "body_contains": {"theme": "sepia"}}], "must_contain": ["fail|500|error|not saved|did not|didn't|unsuccessful|not persist"], "must_not_contain": ["saved successfully|were saved|was saved"]},
+    "expect_gaps": ["server-error-hidden-by-ui"],
+    "risk": "reversible"
+  },
+  {
+    "id": "dev-qa-006",
+    "pack": "dev-qa",
+    "title": "Full regression report",
+    "difficulty": 5,
+    "instruction": "Open {BASE}/packs/dev-qa/app.html and report all four planted problems on page load: the console error, the uncaught exception, the failing API request (with status) and the missing script (with status). Give the message or URL path for each.",
+    "start": "/packs/dev-qa/app.html",
+    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "outcome": {"kind": "answer", "must_contain": ["cart-badge|hydrate", "TypeError|totals|Uncaught", "api/orders", "500", "analytics.js", "404"]},
+    "expect_gaps": [],
+    "risk": "read"
+  }
+]
