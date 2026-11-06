@@ -1382,6 +1382,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ostler-workflow"
+version = "0.2.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
