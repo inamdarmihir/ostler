@@ -58,3 +58,35 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "Ostler ${GITHUB_REF_NAME}" \
             --notes "Install: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+  homebrew:
+    # Updates the Homebrew tap (inamdarmihir/homebrew-ostler) after the release exists.
+    # Skipped, not failed, until the HOMEBREW_TAP_TOKEN secret is set (fine-grained token with
+    # contents:write on the tap repo only).
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Skip if no tap token
+        if: env.TAP_TOKEN == ''
+        run: echo "HOMEBREW_TAP_TOKEN is not set; skipping the Homebrew update."
+      - name: Generate the formula from the published checksums
+        if: env.TAP_TOKEN != ''
+        run: |
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern SHA256SUMS --dir .
+          scripts/gen-formula.sh "${GITHUB_REF_NAME}" SHA256SUMS > ostler.rb
+          ruby -c ostler.rb
+      - name: Push it to the tap
+        if: env.TAP_TOKEN != ''
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/inamdarmihir/homebrew-ostler.git" tap
+          mkdir -p tap/Formula && cp ostler.rb tap/Formula/ostler.rb
+          cd tap
+          git checkout -B main   # the tap may be empty on the first release
+          git config user.name "ostler release bot"; git config user.email "actions@users.noreply.github.com"
+          git add Formula/ostler.rb
+          git diff --cached --quiet && { echo "formula unchanged"; exit 0; }
+          git commit -m "ostler ${GITHUB_REF_NAME#v}"
+          git push origin HEAD:main

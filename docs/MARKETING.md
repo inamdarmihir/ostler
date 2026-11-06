@@ -48,7 +48,9 @@ The README demo is `assets/demo.gif` (5 steps, 960 px, under 100 KB): real tool 
 
 - [ ] Prebuilt binaries (macOS arm64/x64, Linux) so install is not `cargo install`
 - [ ] `brew` tap or `cargo binstall` metadata
-- [x] README GIF (`assets/demo.gif`). [ ] Social preview uploaded (manual, in repo settings)
+- [x] README GIFs (`assets/demo.gif`: browse and forms; `assets/demo-research.gif`: read, cite, evidence). Both are real tool replies and real page screenshots. [ ] Social preview uploaded (manual, in repo settings)
+- [x] `glama.json` in the repo root (maintainer `inamdarmihir`). [ ] Add the server on glama.ai and press Claim ownership. Smithery: its publishing docs could not be fetched when this was checked (2026-11-06), so no `smithery.yaml` was written; read their current docs before submitting, and note Ostler needs a local Chrome, so a hosted listing is not a fit.
+- [x] Python framework docs (LangChain, LlamaIndex, AutoGen) with snippets that were run: `site/tools/content/frameworks.md`
 - [x] Real-site check published, including what it found (`ostler-bench real`, [BENCHMARKS §7](BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm)): 7 practice pages, 44/45 fields, the 2 false claims it caught fixed. **Still to do for a stronger claim:** a wider set of real (not practice) sites, with failures
 - [ ] LLM-in-the-loop benchmark against Playwright MCP and chrome-devtools-mcp
 - [ ] Close the open safety items listed in the design review status table (uploads, DevTools port, default allowlist, `confirm()`)

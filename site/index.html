@@ -108,6 +108,10 @@ Gaps (not read; say so rather than guess what they contain):
 <div class="card"><h3>Browse and test web apps</h3><p><code>navigate</code>, <code>snapshot</code>, <code>click</code>, <code>type</code>, tabs, screenshots and <code>look</code>, which boxes and numbers every clickable element. Compare pages, check a web app after a change, get past a cookie wall, log in once with <code>--profile-dir</code>, and hand a CAPTCHA to a person. No form or research tools needed.</p><a class="more" href="docs/cookbook.html">The recipes &rarr;</a></div>
 <div class="card"><h3>Fill forms</h3><p><code>form_inspect</code>, <code>form_fill</code> and <code>form_submit</code>: a whole form in one call, dependent dropdowns and wizards handled, every value read back from the live page, and the submit result reported separately from the fill.</p><a class="more" href="#how">How forms work &rarr;</a></div>
 </div>
+<div class="grid g2" style="margin-top:24px">
+<figure style="margin:0"><img src="assets/demo-research.gif" width="960" height="560" loading="lazy" decoding="async" style="width:100%;height:auto;border:1px solid var(--line);border-radius:12px" alt="Ostler reading a page, then cite marking one quote VERIFIED and a decoy quote NOT VERIFIED with the closest real text, then evidence listing a paywalled page as a gap"><figcaption style="font-size:14px;color:var(--mut);margin-top:8px"><b>Research.</b> <code>read</code>, then <code>cite</code> (a real quote is <b>VERIFIED</b>, a decoy is not), then <code>evidence</code> reports the paywalled page as a gap. Real tool replies from the bundled demo pages (<code>&lt;page_content&gt;</code> wrappers omitted).</figcaption></figure>
+<figure style="margin:0"><img src="assets/demo.gif" width="960" height="548" loading="lazy" decoding="async" style="width:100%;height:auto;border:1px solid var(--line);border-radius:12px" alt="Ostler's look tool boxing the one clickable button under a cookie wall, a form_fill whose three validation errors are reported, a corrected fill verified, and the submit classified from the page"><figcaption style="font-size:14px;color:var(--mut);margin-top:8px"><b>Browse and forms.</b> <code>look</code> under a cookie wall, one <code>form_fill</code> call read back with the page's three validation errors, then the corrected fill and the submit result. Real tool output; nothing real is submitted.</figcaption></figure>
+</div>
 </div></section>
 
 <section class="section" id="research"><div class="wrap">
@@ -198,6 +202,7 @@ form_submit  →  Submitted | Advanced (next step) | NOT SUBMITTED + the page's 
 <p class="kicker">Integrations</p>
 <h2>Works with the agents you already use</h2>
 <p class="sub">Any MCP client can launch <code>ostler serve</code> over stdio. <code>ostler setup</code> prints the exact config with the binary's absolute path.</p>
+<p class="sub">Building your own agent? <a href="docs/frameworks.html">LangChain, LlamaIndex and AutoGen</a> load the same tools; each snippet there was run, with no model in the loop.</p>
 <div class="tabs" role="tablist" aria-label="Agent setup">
 <button role="tab" id="tab-claude" aria-selected="true" aria-controls="panel-claude" type="button">Claude Code</button>
 <button role="tab" id="tab-codex" aria-selected="false" aria-controls="panel-codex" tabindex="-1" type="button">Codex</button>

@@ -90,6 +90,8 @@ ostler setup json
 
 prints the common `mcpServers` shape. The only requirement is that the client starts `ostler serve` and speaks MCP over stdio. `ostler serve` should print one `ready` line on stderr and wait; stdout carries only MCP messages.
 
+Building your own agent in Python? See [LangChain, LlamaIndex and AutoGen](frameworks.html) for tested code. Keep one Ostler session open for the whole task, or `cite` will not see what `read` fetched.
+
 ## A good agent workflow
 
 For research with citations:

@@ -9,11 +9,12 @@ versions can never be deleted or overwritten (only *yanked*), so a human pushes 
 |---|---|---|
 | crates.io account | https://crates.io (sign in with GitHub) | then **Account Settings → API Tokens → New token** with scopes `publish-new` and `publish-update`. Run `cargo login` and paste it. Never commit it. |
 | npm account | https://www.npmjs.com/signup | `npm login`. Enable 2FA (npm requires it for publishing). |
-| GitHub | already set up | the release workflow uses the built-in `GITHUB_TOKEN`; no secrets needed. |
+| GitHub | already set up | the release workflow uses the built-in `GITHUB_TOKEN` for the release itself. |
+| Homebrew tap | public repo `inamdarmihir/homebrew-ostler` (empty is fine) | create a fine-grained token with **Contents: read and write on that repo only**, and save it as the `HOMEBREW_TAP_TOKEN` repository secret (Settings → Secrets and variables → Actions). Until it is set the `homebrew` job skips itself. After each release it writes `Formula/ostler.rb` from the published `SHA256SUMS`. |
 
-Names checked free on 2026-10-31: crates.io `ostler`, `ostler-cdp`, `ostler-forms`, `ostler-browser`, `ostler-memory`, `ostler-mcp`, `ostler-a2a`, `ostler-fixtures`; npm `ostler`. Check again right before publishing, because first come, first served.
+Names checked free on 2026-11-06: crates.io `ostler`, `ostler-a2a`, `ostler-browser`, `ostler-cdp`, `ostler-extract`, `ostler-fixtures`, `ostler-forms`, `ostler-mcp`, `ostler-memory`, `ostler-research`, `ostler-workflow`; npm `ostler`. Check again right before publishing, because first come, first served.
 
-## Why eight crates
+## Why eleven crates
 
 `cargo install ostler` only works if every crate it depends on is on crates.io too, so the internal crates are published (with "internal crate" descriptions and no stability promise). The user-facing package is `ostler` (the `crates/ostler-cli` directory). `ostler-bench` is `publish = false`.
 
@@ -36,7 +37,7 @@ Names checked free on 2026-10-31: crates.io `ostler`, `ostler-cdp`, `ostler-form
    ```sh
    cargo publish --workspace
    ```
-   If it stops partway, crates.io already has the ones that went through. Fix the cause, then publish the remaining crates one at a time with `cargo publish -p <name>`, dependencies first (`ostler-cdp`, `ostler-forms`, `ostler-memory`, `ostler-fixtures`, `ostler-browser`, `ostler-mcp`, `ostler-a2a`, `ostler`).
+   If it stops partway, crates.io already has the ones that went through. Fix the cause, then publish the remaining crates one at a time with `cargo publish -p <name>`, dependencies first (`ostler-cdp`, `ostler-extract`, `ostler-fixtures`, `ostler-forms`, `ostler-memory`, `ostler-research`, `ostler-workflow`, `ostler-browser`, `ostler-mcp`, `ostler-a2a`, `ostler`). `cargo publish --workspace --dry-run` passes for all eleven.
 5. **Publish npm** (only after the release assets exist):
    ```sh
    cd npm && npm publish --access public
