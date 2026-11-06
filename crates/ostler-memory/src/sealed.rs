@@ -25,6 +25,14 @@
 //! integers; and the sealed part must read back identically (so absurd nesting, or a float that does not
 //! survive a JSON round trip, is refused instead of stored unreadable).
 //!
+//! **Source memory** (page chunks, [`Kind::Source`]) is sealed the same way: chunk text, headings, title and
+//! the original URL are inside the AES-256-GCM blob; the URL is also kept as a keyed hash (`url`) so a page's
+//! chunks can be found and replaced; the fetch time is the clear `verified_ts`, because Qdrant must expire
+//! on it. Hybrid search needs a sparse vector, and the store hands [`Memory`](crate::Memory) a keyed
+//! [`TermHasher`] so that the term ids Qdrant sees are HMAC-SHA-256 outputs (truncated to 32 bits) under a
+//! sub-key of the index key. See [`crate::sparse`] for exactly what that still reveals (term-frequency
+//! pattern, chunk length, co-occurrence, repeated query terms).
+//!
 //! What this does **not** hide: the vector. The `text` passed to `upsert`/`search` is embedded by Qdrant
 //! Cloud Inference (so the server sees it) or by a local model (so only the vector leaves). For full
 //! privacy pair this with a local embedder. Point counts, timing, tenant name and win/loss counters are
@@ -41,7 +49,8 @@ use hmac::{Hmac, Mac};
 use serde_json::{json, Map, Value};
 use sha2::Sha256;
 
-use crate::store::{Filter, Hit, Kind, Rank, Store};
+use crate::sparse::{SparseVector, TermHasher};
+use crate::store::{Filter, Hit, HybridHit, HybridQuery, Kind, Rank, Store};
 use crate::{MemoryError, Result};
 
 const CLEAR: &[&str] = &["tenant", "wins", "losses", "verified_ts"];
@@ -52,6 +61,8 @@ const HASHED: &[&str] = &[
     "id_hint",
     "host",
     "labels_norm",
+    // Source chunks: the page address, so one page's chunks can be replaced, listed or forgotten.
+    "url",
 ];
 const SEALED: &str = "_sealed";
 /// Written by this build: associated data covers the point id and the clear fields.
@@ -74,7 +85,7 @@ impl std::fmt::Debug for SealKey {
     }
 }
 
-fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+pub(crate) fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut m =
         <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("hmac accepts any key length");
     for p in parts {
@@ -445,10 +456,49 @@ impl Store for SealedStore {
         self.inner.ensure().await
     }
 
+    fn term_hasher(&self) -> TermHasher {
+        TermHasher::Keyed(hmac(&self.key.idx, &[b"ostler/sparse/key/v1"]))
+    }
+
     async fn upsert(&self, kind: Kind, id: &str, text: &str, payload: Value) -> Result<()> {
         let id = self.key.point_id(kind, id);
         let sealed = self.seal_payload(kind, &id, payload)?;
         self.inner.upsert(kind, &id, text, sealed).await
+    }
+
+    async fn upsert_source(
+        &self,
+        id: &str,
+        text: &str,
+        sparse: SparseVector,
+        payload: Value,
+    ) -> Result<()> {
+        let id = self.key.point_id(Kind::Source, id);
+        let sealed = self.seal_payload(Kind::Source, &id, payload)?;
+        self.inner.upsert_source(&id, text, sparse, sealed).await
+    }
+
+    async fn search_hybrid(&self, q: &HybridQuery<'_>) -> Result<Vec<HybridHit>> {
+        let f = self.filter(q.filter);
+        let hits = self
+            .inner
+            .search_hybrid(&HybridQuery { filter: &f, ..*q })
+            .await?;
+        // Points this key cannot open are skipped, as everywhere else.
+        Ok(hits
+            .into_iter()
+            .filter_map(|h| {
+                let vector = h.vector;
+                self.unseal(Kind::Source, h.hit)
+                    .map(|hit| HybridHit { hit, vector })
+            })
+            .collect())
+    }
+
+    async fn replace_payload(&self, kind: Kind, id: &str, payload: Value) -> Result<()> {
+        // `id` is a `Hit::id`, already keyed; the blob binds it as associated data.
+        let sealed = self.seal_payload(kind, id, payload)?;
+        self.inner.replace_payload(kind, id, sealed).await
     }
 
     async fn search(
@@ -543,7 +593,7 @@ fn is_stale(sealed: &SealedStore, kind: Kind, tenant: &str, id: &str, secret: &V
                 .collect();
             secret["labels_norm"].as_array() != Some(&want)
         }
-        Kind::Episode => false,
+        Kind::Episode | Kind::Source => false,
     }
 }
 

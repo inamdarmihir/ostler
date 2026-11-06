@@ -317,7 +317,7 @@ fn minted_tokens_scope_exactly_the_tenants_collections() {
             let claims: Value = serde_json::from_slice(&B64URL.decode(parts[1]).unwrap()).unwrap();
             assert_eq!(claims["exp"], 4_000_000_000u64);
             let access = claims["access"].as_array().unwrap();
-            assert_eq!(access.len(), 3);
+            assert_eq!(access.len(), Kind::ALL.len());
             for (a, k) in access.iter().zip(Kind::ALL) {
                 assert_eq!(
                     a["collection"],
