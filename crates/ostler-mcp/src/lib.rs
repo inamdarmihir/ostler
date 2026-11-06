@@ -5,6 +5,7 @@
 
 mod app;
 mod evidence;
+mod prompts;
 mod relevance;
 mod render;
 mod tools;
@@ -51,7 +52,7 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
                 id,
                 json!({
                     "protocolVersion": version,
-                    "capabilities": {"tools": {"listChanged": app.profile() == Profile::Auto}},
+                    "capabilities": {"tools": {"listChanged": app.profile() == Profile::Auto}, "prompts": {"listChanged": false}},
                     "serverInfo": {"name": "ostler", "version": env!("CARGO_PKG_VERSION")},
                     "instructions": INSTRUCTIONS,
                 }),
@@ -73,7 +74,17 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
             ok(id, app.call(name, &args).await.to_json())
         }
         "resources/list" => ok(id, json!({"resources": []})),
-        "prompts/list" => ok(id, json!({"prompts": []})),
+        "prompts/list" => ok(id, json!({"prompts": prompts::list()})),
+        "prompts/get" => {
+            let Some(name) = params.get("name").and_then(Value::as_str) else {
+                return Some(rpc_err(id, -32602, "prompts/get requires a prompt name"));
+            };
+            let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+            match prompts::get(name, &args) {
+                Ok(r) => ok(id, r),
+                Err(msg) => rpc_err(id, -32602, msg),
+            }
+        }
         other => rpc_err(id, -32601, format!("method not found: {other}")),
     })
 }
@@ -228,6 +239,22 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("memory is not configured"));
+    }
+
+    #[tokio::test]
+    async fn prompts_are_listed_and_served() {
+        let a = app();
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":1,"method":"prompts/list"}))
+            .await
+            .unwrap();
+        assert!(r["result"]["prompts"].as_array().unwrap().len() >= 4);
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"research_with_sources","arguments":{"question":"why is the sky blue"}}})).await.unwrap();
+        assert!(r["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("why is the sky blue"));
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"research_with_sources"}})).await.unwrap();
+        assert_eq!(r["error"]["code"], -32602);
     }
 
     #[tokio::test]

@@ -29,6 +29,29 @@ ostler start
 
 Then **quit and reopen your AI app**.
 
+## Path C: one-click links for Cursor and VS Code
+
+After installing the `ostler` command (Path B, first line), these links add it to the app:
+
+- [Add to Cursor](https://cursor.com/install-mcp?name=ostler&config=eyJjb21tYW5kIjoib3N0bGVyIiwiYXJncyI6WyJzZXJ2ZSJdfQ==)
+- [Add to VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=ostler&config=%7B%22name%22%3A%22ostler%22%2C%22command%22%3A%22ostler%22%2C%22args%22%3A%5B%22serve%22%5D%7D)
+
+They assume `ostler` is on your `PATH`; `ostler start` does not need that. The link formats follow the apps' published install-link schemes but have not been tested here.
+
+## Ready-made prompts
+
+Apps that show MCP prompts (Claude Desktop lists them under the **+** menu) offer five from Ostler: summarize a page, research with checked sources, fill in a form (review before sending), check my web page, compare pages. Pick one, fill in the blank, send.
+
+## Signing in to a website
+
+For tasks behind a login, sign in once yourself:
+
+```sh
+ostler login https://example.com/login
+```
+
+A Chrome window opens. Sign in, then press Enter in Terminal. Then connect Ostler with that saved session: `ostler install --client claude-desktop -- --profile-dir ~/.ostler/profile`. Anyone who can read that folder can use your sign-in, so use it on your own computer only.
+
 ## Things to ask
 
 - "Open this page and summarize it: <link>"

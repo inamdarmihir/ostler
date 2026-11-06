@@ -7,6 +7,10 @@
 - Claude Desktop extension bundle (`.mcpb`, macOS) built by the release workflow via `scripts/package-mcpb.sh`: download, double-click, done.
 - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) for non-technical users and [docs/ACCESSIBILITY-PLAN.md](docs/ACCESSIBILITY-PLAN.md) (who is blocked today, what this change fixes, what is left).
 
+- MCP prompts: five ready-made tasks (summarize a page, research with checked sources, fill a form and review before sending, check my page, compare pages) served over `prompts/list` and `prompts/get`, so clients can show them in a menu.
+- `ostler login <url>`: sign in once in a visible Chrome window; the session is kept in `~/.ostler/profile` for `--profile-dir`.
+- Cursor and VS Code install links in the getting-started guide.
+
 ### Changed
 
 - **Framework docs, a research demo, and a fix for the first release.** New page [LangChain, LlamaIndex and AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html): each snippet was run against Ostler 0.2.0 over stdio (tools loaded, `read` then `cite` returned VERIFIED and NOT VERIFIED), with no model in the loop. It records the one rule that matters: keep one Ostler session open, because LangChain's default `get_tools()` and LlamaIndex's `BasicMCPClient` start a new Ostler process per call, so `cite` answers `NOT READ`; AutoGen needs `mcp<2`. New `assets/demo-research.gif` (real replies and page screenshots: read, a VERIFIED and a NOT VERIFIED cite, an evidence report with a paywalled gap), now in the README and on the homepage beside the existing browse-and-forms GIF. The release workflow built the Intel macOS binary on `macos-13`, which GitHub has retired; it now uses `macos-15-intel`, so a tag will not wait for a runner that no longer exists. Adds `glama.json` for claiming the Glama listing. `docs/RELEASING.md` lists all eleven publishable crates, not eight.

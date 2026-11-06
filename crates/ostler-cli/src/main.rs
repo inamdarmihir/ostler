@@ -41,6 +41,18 @@ enum Cmd {
     ///
     /// No flags, no config files. Safe to run again. `ostler install --list` shows what it would touch.
     Start,
+    /// Sign in to a website once in a visible Chrome window; later runs with `--profile-dir` reuse the session.
+    ///
+    /// Example: `ostler login https://mail.example.com`. Sign in, then come back here and press Enter.
+    Login {
+        /// Page to open first.
+        url: String,
+        /// Where the sign-in is kept (default: ~/.ostler/profile).
+        #[arg(long)]
+        profile_dir: Option<PathBuf>,
+        #[arg(long, env = "OSTLER_CHROME")]
+        chrome_path: Option<PathBuf>,
+    },
     /// Serve the Agent2Agent (A2A) protocol so other agents can hand this one form tasks over HTTP.
     A2a(A2aArgs),
     /// Guided setup: save Qdrant URL/key and the privacy choices (sealing, local embeddings, retention), then verify.
@@ -142,6 +154,50 @@ fn install_cmd(a: InstallArgs) -> Result<()> {
     };
     let out = install::apply(client, &paths, &spec, mode, a.dry_run)?;
     install::report(client, &out, mode, a.dry_run);
+    Ok(())
+}
+
+async fn login_cmd(
+    url: String,
+    profile_dir: Option<PathBuf>,
+    chrome_path: Option<PathBuf>,
+) -> Result<()> {
+    let dir = match profile_dir {
+        Some(d) => d,
+        None => {
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .filter(|v| !v.is_empty())
+                .context("cannot find your home directory: pass --profile-dir <folder>")?;
+            PathBuf::from(home).join(".ostler").join("profile")
+        }
+    };
+    std::fs::create_dir_all(&dir)?;
+    let b = Browser::launch(
+        LaunchOptions {
+            chrome_path,
+            headless: false,
+            user_data_dir: Some(dir.clone()),
+            ..Default::default()
+        },
+        Policy::default(),
+    )
+    .await?;
+    b.page().navigate(&url).await?;
+    println!("A Chrome window is open at {url}.");
+    println!(
+        "Sign in there, then come back here and press Enter to save the session and close it."
+    );
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    b.close().await;
+    println!("\nSaved in {}", dir.display());
+    println!("To let your assistant use it, connect Ostler with that folder:");
+    println!(
+        "  ostler install --client <name> -- --profile-dir {}",
+        dir.display()
+    );
+    println!("(Only one Ostler or Chrome can use a profile at a time. Anyone with access to that folder can use your sign-in.)");
     Ok(())
 }
 
@@ -1476,6 +1532,11 @@ async fn main() -> Result<()> {
         Cmd::Doctor(d) => doctor(d).await?,
         Cmd::Install(a) => install_cmd(a)?,
         Cmd::Start => start_cmd()?,
+        Cmd::Login {
+            url,
+            profile_dir,
+            chrome_path,
+        } => login_cmd(url, profile_dir, chrome_path).await?,
         Cmd::Init(a) => init(a).await?,
         Cmd::Config { cmd } => config_cmd(cmd)?,
         Cmd::Setup {

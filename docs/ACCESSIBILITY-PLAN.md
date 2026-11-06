@@ -19,6 +19,9 @@ Analysis of what stops a non-developer from using Ostler, what this change fixes
 1. `ostler start`: detect, connect, check Chrome, print next steps. Tested end to end (detected-only, idempotent, empty case).
 2. `.mcpb` bundle for Claude Desktop on macOS: `scripts/package-mcpb.sh` and a release job step. Untested inside Claude Desktop itself (no macOS here); the zip and manifest were built and checked structurally. Verify on a Mac before announcing.
 3. Plain-English guide and README entry point.
+4. MCP prompt templates (`crates/ostler-mcp/src/prompts.rs`): five click-to-run tasks. Unit and JSON-RPC tested; not yet seen in a real client menu.
+5. `ostler login <url>`: sign in once, reuse the session. Builds and parses; not run against a real display here.
+6. Cursor and VS Code install links in the guide (formats not verified against the apps).
 
 ## Still open, in suggested order
 
