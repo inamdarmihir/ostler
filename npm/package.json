@@ -1,11 +1,11 @@
 {
   "name": "ostler",
   "version": "0.2.0",
-  "description": "Browser for AI agents (MCP): fills forms in one call, verifies every value, learns from each fill. Downloads the prebuilt Ostler binary on first run.",
+  "description": "Open-source MCP browser for AI agents (Claude Code, Codex, Cursor): research that cites only pages it read, forms filled in one call with every value read back. Downloads the prebuilt Ostler binary on first run.",
   "mcpName": "io.github.inamdarmihir/ostler",
   "bin": { "ostler": "bin/ostler.js" },
   "files": ["bin/ostler.js", "README.md", "LICENSE"],
-  "keywords": ["mcp", "model-context-protocol", "browser", "ai-agents", "forms", "qdrant", "automation"],
+  "keywords": ["mcp", "mcp-server", "model-context-protocol", "browser", "headless-browser", "ai-agents", "claude-code", "cursor", "deep-research", "citations", "web-scraping", "forms", "qdrant", "automation"],
   "license": "Apache-2.0",
   "author": "Mihir Inamdar",
   "homepage": "https://inamdarmihir.github.io/ostler/",

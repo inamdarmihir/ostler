@@ -92,12 +92,23 @@ prints the common `mcpServers` shape. The only requirement is that the client st
 
 ## A good agent workflow
 
+For forms:
+
 1. `navigate` returns the page's interactive elements.
 2. `form_inspect` returns typed fields and shows what memory knows about this form.
 3. `form_fill` with `{label: value}` for what you know; add `auto: "required"` to fill the rest from memory.
 4. `form_submit`, then read the status: *Submitted*, *Advanced* (next step: repeat 2 to 4), or *NOT ACCEPTED* with the page's validation messages.
 
 `ostler inspect <url>` prints the form model as JSON for debugging.
+
+For research with citations:
+
+1. `search` (or start from known URLs), then `open_many` with a `query` to read the best passages of up to 10 pages.
+2. `read` with a `query` to go deeper on one page; follow `links` or `extract` tables and lists.
+3. `cite` every quote you intend to use. Only `VERIFIED` quotes go in the answer.
+4. `evidence` before answering: it lists the verified citations and the pages that could not be read, which the answer should name as gaps.
+
+A prompt that works: *"Research X. Cite every claim with `cite`; call `evidence` before answering and list what you could not read."*
 
 ## Control what the agent sees and can do
 
