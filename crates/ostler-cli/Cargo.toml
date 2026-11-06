@@ -1,6 +1,6 @@
 [package]
 name = "ostler"
-description = "Headless browser for AI coding agents: MCP server with Qdrant-backed memory and reliable form filling"
+description = "Open-source MCP browser for AI coding agents: research that cites only pages it read, verified form filling, Qdrant memory"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ homepage.workspace = true
 authors.workspace = true
 readme = "../../README.md"
 rust-version.workspace = true
-keywords = ["mcp", "browser", "qdrant", "ai-agents", "automation"]
+keywords = ["mcp", "browser", "ai-agents", "research", "qdrant"]
 categories = ["command-line-utilities", "web-programming"]
 
 # `cargo binstall ostler` downloads the prebuilt binary from the GitHub release instead of compiling.

@@ -7,6 +7,8 @@ concurrency: { group: pages, cancel-in-progress: true }
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Public by design: it only proves we control site/<key>.txt (https://www.indexnow.org/documentation).
+    env: { INDEXNOW_KEY: f9643ca7df882e863c9e7240e9d18661 }
     environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
     steps:
       - uses: actions/checkout@v7
@@ -18,6 +20,16 @@ jobs:
       - name: Smoke test the live site
         run: |
           base="${{ steps.d.outputs.page_url }}"
-          for f in "" favicon.svg assets/og.png assets/icon-180.png; do
+          for f in "" favicon.svg assets/og.png assets/icon-180.png sitemap.xml llms.txt llms-full.txt "$INDEXNOW_KEY.txt"; do
             curl -fsS --retry 5 --retry-delay 3 -o /dev/null -w "%{http_code} $base$f\n" "$base$f"
           done
+      # Tell the IndexNow engines (Bing, Yandex, Seznam, Naver; Bing's index also backs Copilot)
+      # that every page in the sitemap may have changed. A failure here must not fail the deploy.
+      - name: Ping IndexNow
+        continue-on-error: true
+        run: |
+          base="${{ steps.d.outputs.page_url }}"
+          urls=$(grep -o '<loc>[^<]*</loc>' site/sitemap.xml | sed -e 's/<loc>//' -e 's#</loc>##' | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          host=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.urlsplit(sys.argv[1]).hostname)' "$base")
+          body=$(python3 -c 'import json,sys; print(json.dumps({"host": sys.argv[1], "key": sys.argv[2], "keyLocation": sys.argv[3], "urlList": json.loads(sys.argv[4])}))' "$host" "$INDEXNOW_KEY" "${base}${INDEXNOW_KEY}.txt" "$urls")
+          curl -sS -o /dev/null -w "IndexNow: HTTP %{http_code}\n" -X POST https://api.indexnow.org/indexnow -H 'Content-Type: application/json; charset=utf-8' --data "$body"

@@ -13,14 +13,16 @@
 </p>
 
 <p align="center">
-  <b>A headless browser for AI coding agents that checks its own work: it fills a whole form in one call and reads every value back.</b><br>
-  Rust · MCP · A2A · Chrome · <a href="https://qdrant.tech">Qdrant</a> memory
+  <b>An open-source MCP browser for AI coding agents that checks its own work: research that cites only pages it read, and forms filled in one call with every value read back.</b><br>
+  Rust · MCP · A2A · Chrome · <a href="https://qdrant.tech">Qdrant</a> memory · Claude Code · Codex · Cursor
 </p>
 
 <p align="center">
   <img src="assets/demo.gif" alt="Ostler's own tool output on a local test page: look boxes the one clickable button under a cookie wall and notes two more are hidden; one form_fill call is read back and the page's three validation errors are reported; a corrected fill is verified and the submit is classified from the page" width="720">
 </p>
 <p align="center"><sub>Real tool output, recorded against the bundled local test pages (<code>ostler fixtures</code>). Nothing real is submitted.</sub></p>
+
+**Ostler** is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It is one local Rust binary that drives Chrome on your machine; pages are not sent to a third party (a search provider or Qdrant Cloud only if you configure one).
 
 > **Status: v0.2, early.** Tested against real Chrome and a real Qdrant server, but mostly on local fixtures, not the open web. A [design review](docs/REVIEW-2026-10.md) found real flaws; they are listed openly with a fix order. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it. Nothing has been audited by a third party.
 
@@ -45,7 +47,10 @@ ostler setup cursor           # prints JSON for ~/.cursor/mcp.json
 
 Also `ostler setup vscode` and `ostler setup json` (generic `mcpServers`). Only Claude Code is applied automatically; other clients' files are never modified. See [docs/CLIENTS.md](docs/CLIENTS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-Try it: run `ostler fixtures` (synthetic test forms at http://127.0.0.1:8787), then ask your agent: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
+Try it: run `ostler fixtures` (synthetic test pages at http://127.0.0.1:8787), then ask your agent:
+
+- *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
+- *"Read http://127.0.0.1:8787/packs/research/kestrel-lock.html and the pages it links to. Who designed the Kestrel Lock and when did it open? Cite every claim with `cite` and call `evidence` before answering."*
 
 ## What it does
 
@@ -114,13 +119,39 @@ Tool definitions sent every turn:
 
 Read this carefully: on the small forms Chrome DevTools MCP returned fewer tokens than Ostler (Ostler's replies carry the read-back), the step gap against batch-fill tools is about 1.4x, wall time is not an end-to-end latency, and a real model may behave differently. Whether read-back pays off was not exercised, since every tool succeeded. Method, caveats and more tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#5-ostler-vs-playwright-mcp-vs-chrome-devtools-mcp-same-fixtures-scripted-agent). Reproduce with `scripts/bench-compare.sh`.
 
+## How it compares
+
+From each project's README and repository metadata; no head-to-head on identical real-site tasks has been run yet. The full table is on the [website](https://inamdarmihir.github.io/ostler/#compare).
+
+| | Ostler | Firecrawl | Playwright MCP | agent-browser |
+|---|---|---|---|---|
+| What it is | Local MCP browser in your Chrome | Hosted scrape, crawl and search API (MCP server MIT, engine AGPL-3.0) | Microsoft's browser automation MCP server | Vercel's browser CLI for agents |
+| Research | Query-ranked passages; quotes verified against pages read; unreadable pages reported as gaps | Pages to markdown at scale, with anti-bot handling | Accessibility snapshots | Snapshots and page text |
+| Forms | Whole form in one call, every value read back | Page actions through the API | Batch `browser_fill_form` | `fill` / `select` / `check`, batching |
+| Logged-in pages | Yes (log in once in a persistent `--profile-dir`) | Not your browser session | Yes (browser profile) | Yes (state, auth vault) |
+| Cost | Free, local | Credits per page | Free, local | Free, local |
+| Maturity | v0.2, fixture-tested | Mature, large | Mature, broad | Larger and more mature |
+
+Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which Ostler does not do. Pick Ostler when an agent must answer only from what it actually read, or must fill and verify forms.
+
 ## What Ostler is not
 
 - **Not a CAPTCHA solver or anti-bot tool.** CAPTCHAs and verification walls are reported with a `CHALLENGE:` line, never solved or bypassed; there is no stealth, user-agent spoofing or proxying. With `--headed`, `wait_for_human` lets a person clear the wall. See [docs/WEB-SEARCH.md](docs/WEB-SEARCH.md).
 - **Not a Windows build.** macOS and Linux only; Windows is not built or tested.
 - **Not a browser extension.** It launches its own Chrome and talks to it over a pipe.
 - **Not hosted browsers.** It drives one local Chrome on your machine; nothing runs in a cloud.
+- **Not a crawler or scraping API.** It reads tens of pages in a session, one at a time, in one Chrome, and obeys robots.txt.
 - **Not audited or proven on the open web.** Mostly fixture-tested; see the status note above.
+
+## FAQ
+
+**How do I give Claude Code a browser?** `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply`. For Codex, Cursor and VS Code see [docs/CLIENTS.md](docs/CLIENTS.md).
+
+**Can it do deep research with citations?** Yes, within limits. `read` returns the best passages for a query, `cite` marks a quote `VERIFIED` only if its words are on a page read in this session, and `evidence` lists the verified citations and the pages that could not be read. `cite` proves the words are on the page, not that the claim is true; search providers are tested against mock servers only. See [recipe 13](docs/COOKBOOK.md#13-research-with-citations-that-are-checked).
+
+**Does it solve CAPTCHAs or evade bot detection?** No. It reports them and, with `--headed`, hands them to you.
+
+**Is it free?** Yes, Apache-2.0, and it runs locally. Memory in Qdrant is optional; an encrypted local file works without a server.
 
 ## Documentation
 

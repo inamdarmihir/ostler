@@ -3,19 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ostler: a headless browser for AI agents that remembers</title>
-<meta name="description" content="Rust headless browser for AI coding agents. MCP server, Qdrant-backed memory, and a form engine that fills a 20-field form in 3 tool calls instead of 22. Measured, with the caveats.">
+<title>Ostler: MCP browser for AI agents with checked citations</title>
+<meta name="description" content="Open-source MCP browser for Claude Code, Codex and Cursor. Research cites only pages it read, every quote verified; forms are filled in one call and read back.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/">
+<link rel="alternate" type="text/plain" title="llms.txt" href="llms.txt">
+<link rel="sitemap" type="application/xml" href="sitemap.xml">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#14110f">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Ostler: a browser for AI agents that checks its own work">
-<meta property="og:description" content="Fills a whole form in one call, reads every value back, shows the agent where to click, and remembers with Qdrant. MCP and A2A. Rust.">
+<meta property="og:title" content="Ostler: an MCP browser for AI agents that checks its own work">
+<meta property="og:description" content="Research that cites only what it read, with every quote verified. Forms filled in one call, every value read back. Local, open source, Rust. MCP and A2A, Qdrant memory.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Ostler: a browser for AI agents that checks its own work"><meta property="og:locale" content="en_US">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler: a browser for AI agents that checks its own work"><meta name="twitter:description" content="Fills a whole form in one call, reads every value back, and remembers with Qdrant. MCP and A2A. Rust. Early (v0.2): measured on scripted fixtures, model-free."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta name="twitter:image:alt" content="Ostler: a browser for AI agents that checks its own work">
+<meta property="og:image:alt" content="Ostler: an MCP browser for AI agents that checks its own work"><meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler: an MCP browser for AI agents that checks its own work"><meta name="twitter:description" content="Research that cites only what it read, with every quote verified. Forms filled in one call, every value read back. Early (v0.2): measured on local fixtures."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta name="twitter:image:alt" content="Ostler: an MCP browser for AI agents that checks its own work">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+{"@type":"SoftwareApplication","@id":"https://inamdarmihir.github.io/ostler/#app","name":"Ostler","alternateName":"Ostler MCP browser","description":"Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked.","url":"https://inamdarmihir.github.io/ostler/","applicationCategory":"DeveloperApplication","applicationSubCategory":"Browser automation, MCP server","operatingSystem":"macOS, Linux","softwareVersion":"0.2.0","license":"https://www.apache.org/licenses/LICENSE-2.0","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/inamdarmihir/ostler","installUrl":"https://inamdarmihir.github.io/ostler/docs/install.html","softwareHelp":"https://inamdarmihir.github.io/ostler/docs/index.html","featureList":["MCP server for Claude Code, Codex, Cursor and VS Code","Research with checked citations: read, cite, evidence, search, open_many","Pages that could not be read are reported as gaps","Whole-form fill in one call with read-back verification","Optional memory in Qdrant, sealed on your machine","Domain allowlist and untrusted-content fencing","A2A server for other agents"],"author":{"@type":"Person","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir"},"sameAs":["https://github.com/inamdarmihir/ostler","https://www.npmjs.com/package/ostler"]},
+{"@type":"SoftwareSourceCode","name":"Ostler","codeRepository":"https://github.com/inamdarmihir/ostler","programmingLanguage":"Rust","runtimePlatform":"Chrome","license":"https://www.apache.org/licenses/LICENSE-2.0","targetProduct":{"@id":"https://inamdarmihir.github.io/ostler/#app"}},
+{"@type":"WebSite","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/","inLanguage":"en"},
+{"@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"What is Ostler?","acceptedAnswer":{"@type":"Answer","text":"Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It is one local Rust binary that runs Chrome; pages are not sent to a third party (a search provider or Qdrant Cloud only if you configure one)."}},
+{"@type":"Question","name":"How do I give Claude Code a browser?","acceptedAnswer":{"@type":"Answer","text":"Install Ostler with cargo install --git https://github.com/inamdarmihir/ostler ostler, then run ostler setup claude --apply, which registers it with claude mcp add. Codex, Cursor and VS Code are covered on the Use with your agent page."}},
+{"@type":"Question","name":"Can it do deep research with citations?","acceptedAnswer":{"@type":"Answer","text":"Yes, within limits. read returns the best passages for a query, cite marks a quote VERIFIED only if its words are on a page read in this session and returns a link to check it, and evidence lists the verified citations and the pages that could not be read (paywall, bot wall, robots.txt, errors). cite proves the words are on the page, not that the claim is true, and search providers have been tested against mock servers only."}},
+{"@type":"Question","name":"Why not Firecrawl?","acceptedAnswer":{"@type":"Answer","text":"Use Firecrawl for scale: it is a hosted scrape, crawl and search API with anti-bot handling, billed in credits. Ostler is for an agent that must answer from what it actually read: it runs locally, so internal pages and sites you log into (with a persistent profile) work, it refuses to cite a quote that is not on a page it read, and it reports pages it could not read as gaps. No head-to-head has been run yet."}},
+{"@type":"Question","name":"Why not Playwright MCP?","acceptedAnswer":{"@type":"Answer","text":"Playwright MCP is mature and broad and already has a batched browser_fill_form. Ostler adds verified fills that read each value back, dependent fields and wizards, research tools with checked citations, and optional memory in Qdrant. In a scripted, model-free run on the same 5 fixture tasks Ostler took 19 steps against 27; no head-to-head on real sites has been run."}},
+{"@type":"Question","name":"Is my data safe?","acceptedAnswer":{"@type":"Answer","text":"Memory is optional and off until you configure it; it stores structure, never passwords, card numbers or other secrets. Page text is marked untrusted in tool output, and a domain allowlist holds every request the browser makes. There has been no external security audit."}}
+]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="assets/site.css">
 <script defer src="assets/site.js"></script>
@@ -26,7 +40,8 @@
 <div class="topbar-inner">
 <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
-<a href="#how">How it works</a>
+<a href="#research">Research</a>
+<a href="#how">Forms</a>
 <a href="#memory">Memory</a>
 <a href="#numbers">Numbers</a>
 <a href="#integrations">Integrations</a>
@@ -44,9 +59,9 @@
 <main id="main" class="landing-main" tabindex="-1">
 <div class="wrap">
 <section class="hero" aria-labelledby="hero-title">
-<a class="eyebrow" href="docs/review.html"><b>v0.2, early</b><span>Rust &middot; MCP &middot; A2A &middot; Qdrant memory &middot; Apache-2.0</span></a>
-<h1 id="hero-title">A browser for AI agents that <em>checks its own work</em>.</h1>
-<p class="lead">Ostler is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It browses, reads, clicks and tests, and fills a whole form in one call, reading every value back to check it. Qdrant remembers what worked. <a href="docs/cookbook.html">See the recipes</a>.</p>
+<a class="eyebrow" href="docs/review.html"><b>v0.2, early</b><span>Open source &middot; Rust &middot; MCP &middot; A2A &middot; Qdrant memory &middot; Apache-2.0</span></a>
+<h1 id="hero-title">An MCP browser for AI agents that <em>checks its own work</em>.</h1>
+<p class="lead">Ostler is an open-source browser server for Claude Code, Codex, Cursor and any MCP client. Research answers cite only pages it actually read, with every quote verified. Forms are filled in one call, with every value read back. Qdrant remembers what worked. It runs locally, in Chrome on your machine. <a href="docs/cookbook.html">See the recipes</a>.</p>
 <div class="install-bar" role="group" aria-label="Install command">
 <span class="prompt" aria-hidden="true">$</span>
 <code id="hero-install">cargo install --git https://github.com/inamdarmihir/ostler ostler</code>
@@ -54,7 +69,7 @@
 </div>
 <p style="margin:0;color:var(--mut);font-size:13.5px">Needs Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.</p>
 <div class="btns"><a class="btn primary" href="docs/quickstart.html">Get started</a><a class="btn" href="docs/index.html">Read the docs</a><a class="btn" href="#numbers">See the numbers</a></div>
-<ul class="trust"><li>Every fill verified by read-back</li><li>Wrong keys reported, never guessed</li><li>Domain allowlist enforced in the browser</li><li>CAPTCHAs handed to you, never solved</li></ul>
+<ul class="trust"><li>Quotes cited only if they are on a page it read</li><li>Unreadable pages reported as gaps</li><li>Every fill verified by read-back</li><li>Domain allowlist enforced in the browser</li><li>CAPTCHAs handed to you, never solved</li></ul>
 <div class="hero-term term" role="img" aria-label="Example form_fill output: two fields verified, one unmatched key reported, submit blocked with the page's own message">
 <div class="bar"><i></i><i></i><i></i>&nbsp;ostler serve --tools forms</div>
 <pre aria-hidden="true"><span class="p">&gt;</span> form_fill {"Country": "Germany",
@@ -82,6 +97,36 @@ Still empty and required:
 <p class="stat-note">Local fixtures, one Apple M2, a scripted agent with no LLM in the loop. The comparison column is Ostler itself driven one field at a time, not another product. <a href="docs/benchmarks.html">Read the caveats</a>.</p>
 </section>
 </div>
+
+<section class="section" id="research"><div class="wrap">
+<p class="kicker">Deep research</p>
+<h2>Research answers that cite only what was read</h2>
+<p class="sub">A page-to-markdown API hands the agent text and trusts it to quote honestly. Ostler keeps the session: it remembers every page it read, checks every quote against it, and tells the agent what it could not read.</p>
+<div class="grid g3" style="margin-top:20px">
+<div class="card"><h3>Cheap, focused reads</h3><p><code>read</code> with a <code>query</code> returns only the best passages, ranked locally (BM25 and MMR), so a page costs a few hundred tokens instead of the whole text. <code>open_many</code> reads up to 10 pages in a scratch tab and obeys robots.txt.</p></div>
+<div class="card"><h3>Citations that are checked</h3><p><code>cite</code> says <b>VERIFIED</b> only if the quote's words are on a page read this session, and returns a link that highlights them. A claim the page does not make is refused, with the closest text shown. If the page changes, earlier citations are marked stale.</p></div>
+<div class="card"><h3>Gaps, not guesses</h3><p>Paywalls, bot walls, robots.txt refusals and errors are recorded, never silently dropped. <code>evidence</code> lists them next to the verified citations, so the answer can say what it could not read. Text aimed at the agent is flagged, not obeyed.</p></div>
+</div>
+<div class="term" style="margin-top:22px" role="img" aria-label="Example: cite verifies a quote that is on the page, refuses a decoy claim, and evidence lists the gaps">
+<div class="bar"><i></i><i></i><i></i>&nbsp;ostler serve (research pages from ostler fixtures)</div>
+<pre aria-hidden="true"><span class="p">&gt;</span> cite {"url": ".../kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
+<span class="ok">VERIFIED [1]</span> .../kestrel-lock.html (read 2026-11-06T15:10:58Z, sha256:9f602117)
+opened in 1887 and was designed by Marta Ilves
+Check it yourself (best effort): .../kestrel-lock.html#:~:text=opened%20in%201887%20and...
+
+<span class="p">&gt;</span> cite {"url": ".../kestrel-lock.html", "quote": "designed by Tomas Reyes"}
+<span class="bad">NOT VERIFIED</span>: these words are not on The Kestrel Lock. Do not state this
+claim as sourced; quote the page's own words, not a summary.
+
+<span class="p">&gt;</span> evidence
+EVIDENCE: 3 page(s) read, 1 verified citation(s), 3 gap kind(s).
+Gaps (not read; say so rather than guess what they contain):
+- blocked: .../protected.html
+- paywalled: .../paywall.html
+- robots_disallowed: .../private/report.html</pre>
+</div>
+<p class="stat-note">Real output from the bundled synthetic research pages (<code>ostler fixtures</code>), trimmed: URLs shortened, untrusted-content fences removed. <code>cite</code> proves the words are on the page, not that the claim is true. Search providers are tested against mock servers only. <a href="docs/cookbook.html#13-research-with-citations-that-are-checked">The research recipe</a> &middot; <a href="docs/tools.html#research-profile-research">tool reference</a></p>
+</div></section>
 
 <section class="section" id="why"><div class="wrap">
 <p class="kicker">The problem</p>
@@ -301,15 +346,16 @@ ostler setup vscode</code></pre></div>
 <section class="section" id="compare"><div class="wrap">
 <p class="kicker">How it compares</p>
 <h2>Honest about the neighbours</h2>
-<p class="sub">From each project's README (snapshot 2026-10-30; star counts move). We have not run a head-to-head on identical real-site tasks yet.</p>
+<p class="sub">From each project's README and repository metadata (snapshot 2026-10-30; Firecrawl row 2026-11-06; star counts move). We have not run a head-to-head on identical real-site tasks yet.</p>
 <div class="compare"><div class="table-wrap"><table>
-<thead><tr><th scope="col">Project</th><th scope="col">Language</th><th scope="col">Form handling</th><th scope="col">Memory</th><th scope="col">Notes</th></tr></thead>
+<thead><tr><th scope="col">Project</th><th scope="col">Language</th><th scope="col">Reading and research</th><th scope="col">Form handling</th><th scope="col">Memory</th><th scope="col">Notes</th></tr></thead>
 <tbody>
-<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none">Ostler</th><td>Rust</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.2; fixtures only; Chrome only</td></tr>
-<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">agent-browser (Vercel)</th><td>Rust CLI</td><td><code>fill</code> / <code>select</code> / <code>check</code>, command batching</td><td>Cookie/storage state, auth vault</td><td>Larger and more mature. Closest competitor.</td></tr>
-<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">Playwright MCP (Microsoft)</th><td>Node</td><td>Accessibility snapshots, batch <code>browser_fill_form</code></td><td>Browser profile</td><td>Mature and broad</td></tr>
-<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">chrome-devtools-mcp (Google)</th><td>Node</td><td>Automation plus debugging and performance tooling</td><td>None</td><td>Built for debugging</td></tr>
-<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">Lightpanda</th><td>Zig</td><td>n/a (an engine, no rendering)</td><td>n/a</td><td>Fast engine, AGPL; a possible future backend</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none">Ostler</th><td>Rust</td><td>Query-ranked passages; quotes verified against pages read; gaps reported; local Chrome, logins kept in a persistent profile</td><td>Typed model, verified fill, wizards, dependent fields, shadow DOM, same-origin iframes</td><td>Qdrant: profile, playbooks, episodes</td><td>v0.2; fixtures only; Chrome only</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">Firecrawl</th><td>TypeScript (MCP server, MIT; engine AGPL-3.0)</td><td>Hosted scrape, crawl, map and search to markdown</td><td>Page actions through the API</td><td>None</td><td>Hosted, billed in credits; built for scale and anti-bot, which Ostler does not do</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">agent-browser (Vercel)</th><td>Rust CLI</td><td>Snapshots and page text</td><td><code>fill</code> / <code>select</code> / <code>check</code>, command batching</td><td>Cookie/storage state, auth vault</td><td>Larger and more mature. Closest competitor.</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">Playwright MCP (Microsoft)</th><td>Node</td><td>Accessibility snapshots</td><td>Accessibility snapshots, batch <code>browser_fill_form</code></td><td>Browser profile</td><td>Mature and broad</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">chrome-devtools-mcp (Google)</th><td>Node</td><td>Snapshots, console and network</td><td>Automation plus debugging and performance tooling</td><td>None</td><td>Built for debugging</td></tr>
+<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:inherit;color:var(--fg);background:none;font-weight:500">Lightpanda</th><td>Zig</td><td>n/a (an engine)</td><td>n/a (an engine, no rendering)</td><td>n/a</td><td>Fast engine, AGPL; a possible future backend</td></tr>
 </tbody></table></div></div>
 </div></section>
 
@@ -318,7 +364,7 @@ ostler setup vscode</code></pre></div>
 <h2>What Ostler is not</h2>
 <div class="grid g2" style="margin-top:20px">
 <div class="card"><h3>Not proven on the open web</h3><p>v0.2 is early. It is evaluated on local fixtures built to reproduce known form-filling failures. A real-site success rate has not been published, so read "reliable" as "reliable on the failure modes in our fixtures".</p></div>
-<div class="card"><h3>Not a general-purpose test framework</h3><p>It is a browser for agents that fill forms, driven over MCP and A2A. It runs Chrome only; Windows is not built or tested.</p></div>
+<div class="card"><h3>Not a crawler or a scraping API</h3><p>It reads tens of pages in an agent's session, in one Chrome, one page at a time, and obeys robots.txt. For millions of pages, hosted scale or anti-bot handling, use a crawler. It is not a general-purpose test framework either. It runs Chrome only; Windows is not built or tested.</p></div>
 <div class="card"><h3>Not a CAPTCHA, 2FA or anti-bot tool</h3><p>It never solves CAPTCHAs (it hands them to you) and does not handle 2FA. Cross-origin iframes and closed shadow roots are not supported.</p></div>
 <div class="card"><h3>Not a benchmark winner on real tasks</h3><p>Our numbers are <b>scripted fixtures, model-free</b>: call counts and bytes, not whether a model succeeds. No head-to-head on identical real-site tasks has been run. It is also not an externally audited security product.</p></div>
 </div>
@@ -328,8 +374,8 @@ ostler setup vscode</code></pre></div>
 <p class="kicker">Limits and roadmap</p>
 <h2>What it does not do yet</h2>
 <div class="grid g2" style="margin-top:20px">
-<div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. It runs Chrome only, and is tested on macOS locally and Linux in CI. Windows is not built or tested.</p></div>
-<div class="card"><h3>Next</h3><p>Real-site form evaluation with published failures &middot; head-to-head benchmark &middot; live Qdrant Cloud Inference validation &middot; Qdrant sizing study &middot; per-site click paths remembered in Qdrant &middot; cross-origin frames &middot; an optional Lightpanda backend if it earns its keep.</p><a class="more" href="docs/review.html">The design review, with its findings &rarr;</a></div>
+<div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. Research reads pages one at a time, has no PDF text layer, does not keep sources across sessions, and its search providers are tested against mock servers only. It runs Chrome only, and is tested on macOS locally and Linux in CI. Windows is not built or tested.</p></div>
+<div class="card"><h3>Next</h3><p>Head-to-head research benchmark with a real model (answer accuracy, citation precision, tokens per answer) &middot; real-site form evaluation with published failures &middot; sources remembered in Qdrant across sessions &middot; PDF text &middot; live Qdrant Cloud Inference validation &middot; cross-origin frames &middot; an optional Lightpanda backend if it earns its keep.</p><a class="more" href="docs/review.html">The design review, with its findings &rarr;</a></div>
 </div>
 </div></section>
 
@@ -337,6 +383,14 @@ ostler setup vscode</code></pre></div>
 <p class="kicker">FAQ</p>
 <h2>Questions people ask first</h2>
 <div class="faq" style="margin-top:20px;max-width:820px">
+<details id="faq-what" open><summary><b>What is Ostler?</b></summary>
+<p>Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It is one local Rust binary that runs Chrome; pages are not sent to a third party (a search provider or Qdrant Cloud only if you configure one). <a href="docs/quickstart.html">Quickstart</a></p></details>
+<details id="faq-claude"><summary><b>How do I give Claude Code a browser?</b></summary>
+<p>Install Ostler with <code>cargo install --git https://github.com/inamdarmihir/ostler ostler</code>, then run <code>ostler setup claude --apply</code>, which registers it with <code>claude mcp add</code>. Codex, Cursor and VS Code are covered on <a href="docs/agents.html">Use with your agent</a>.</p></details>
+<details id="faq-research"><summary><b>Can it do deep research with citations?</b></summary>
+<p>Yes, within limits. <code>read</code> returns the best passages for a query, <code>cite</code> marks a quote <b>VERIFIED</b> only if its words are on a page read in this session and returns a link to check it, and <code>evidence</code> lists the verified citations and the pages that could not be read (paywall, bot wall, robots.txt, errors). <code>cite</code> proves the words are on the page, not that the claim is true, and search providers have been tested against mock servers only. <a href="#research">Research</a> &middot; <a href="docs/cookbook.html#13-research-with-citations-that-are-checked">recipe</a></p></details>
+<details id="faq-firecrawl"><summary><b>Why not Firecrawl?</b></summary>
+<p>Use Firecrawl for scale: it is a hosted scrape, crawl and search API with anti-bot handling, billed in credits. Ostler is for an agent that must answer from what it actually read: it runs locally, so internal pages and sites you log into (with a persistent profile) work, it refuses to cite a quote that is not on a page it read, and it reports pages it could not read as gaps. No head-to-head has been run yet. <a href="#compare">Comparison</a></p></details>
 <details id="faq-playwright"><summary><b>Why not Playwright MCP?</b></summary>
 <p>You may well want it: it is mature and broad, and it already has a batched <code>browser_fill_form</code>, so it is closer to Ostler than a one-field-at-a-time baseline suggests. Ostler adds form-specific behaviour: verified fills that read each value back, dependent fields and wizards, and optional memory in Qdrant. In our scripted-fixtures, model-free run (5 tasks, same fixtures for each server) Ostler took 19 steps against 27 for Playwright MCP, and all three finished every task correctly. That shows step counts and bytes, not whether a real model succeeds, and the step sequences are our best attempt per server. No head-to-head on real sites has been run. <a href="docs/benchmarks.html">Benchmarks</a> &middot; <a href="#compare">comparison</a></p></details>
 <details id="faq-safe"><summary><b>Is my data safe?</b></summary>
@@ -354,7 +408,8 @@ ostler setup vscode</code></pre></div>
 <div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:22px">
 <a class="doc-card" href="docs/quickstart.html"><strong>Quickstart</strong><span>Install, check, connect and fill a demo form.</span></a>
 <a class="doc-card" href="docs/agents.html"><strong>Use with your agent</strong><span>Claude Code, Codex, Cursor, VS Code.</span></a>
-<a class="doc-card" href="docs/tools.html"><strong>Tools reference</strong><span>All 21 tools and their parameters.</span></a>
+<a class="doc-card" href="docs/tools.html"><strong>Tools reference</strong><span>All 30 tools and their parameters.</span></a>
+<a class="doc-card" href="docs/cookbook.html"><strong>Cookbook</strong><span>Research with checked citations, QA, logins, forms.</span></a>
 <a class="doc-card" href="docs/forms.html"><strong>Forms and verification</strong><span>How a fill is resolved, verified and judged.</span></a>
 <a class="doc-card" href="docs/memory.html"><strong>Memory and privacy</strong><span>Sealing, local embeddings, per-tenant tokens.</span></a>
 <a class="doc-card" href="docs/security.html"><strong>Security model</strong><span>What it does, and what it does not.</span></a>
@@ -370,7 +425,7 @@ ostler setup vscode</code></pre></div>
 </main>
 
 <footer class="site-footer"><div class="footer-inner">
-<p>Ostler is Apache-2.0 open source. Benchmarks measured 2026-10-30 on an Apple M2. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<p>Ostler is an open-source (Apache-2.0) MCP browser for AI agents. Benchmarks measured 2026-10-30 on an Apple M2. v0.2, early: tested on local fixtures, not yet on the open web.</p>
 <nav aria-label="Footer"><a href="docs/index.html">Docs</a><a href="docs/architecture.html">Architecture</a><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a><a href="docs/security.html">Security</a><a href="docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
 </div></footer>
 
@@ -385,7 +440,7 @@ ostler setup vscode</code></pre></div>
 <p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
 </dialog>
 
-<textarea id="prompt-claude" hidden>Set up Ostler (headless-browser MCP server for form filling) on this machine. Work step by step and stop at any failure.
+<textarea id="prompt-claude" hidden>Set up Ostler (open-source headless-browser MCP server: research with checked citations, form filling) on this machine. Work step by step and stop at any failure.
 
 1. Inspect first, change nothing yet:
    - OS and package manager available
@@ -402,7 +457,7 @@ ostler setup vscode</code></pre></div>
    (this runs claude mcp add with the binary's absolute path)
 5. Verify the registration with `claude mcp list` - it should show ostler connected. If you are running inside an older session that does not see the new server yet, tell me to start a new session or run /mcp to check.
 6. Demo, localhost fixtures only: run `ostler fixtures` in the background, then use the ostler tools to open http://127.0.0.1:8787/dependent.html and fill the shipping form for Ada Lovelace in Germany, Bavaria. These are synthetic demo pages on localhost; do not browse real websites, do not fill or submit any real form, and do not use any real personal data. Submit only this fixture form. Show me the read-back verification and the submit result.</textarea>
-<textarea id="prompt-codex" hidden>Set up Ostler (headless-browser MCP server for form filling) on this machine. Work step by step and stop at any failure.
+<textarea id="prompt-codex" hidden>Set up Ostler (open-source headless-browser MCP server: research with checked citations, form filling) on this machine. Work step by step and stop at any failure.
 
 1. Inspect first, change nothing yet:
    - OS and package manager available

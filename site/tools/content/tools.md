@@ -1,12 +1,14 @@
 # Tools reference
 
-Ostler exposes 21 MCP tools in three profiles. `--tools core|forms|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The full set is about 5.9 KB of schema, roughly 1.5k tokens on every turn, and a test keeps it under 7 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+Ostler exposes 30 MCP tools in five profiles. `--tools auto|core|forms|research|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The default, `auto`, starts with the 15 core tools (4.9 KB of schema), adds the research tools after the first `read` or `search`, and adds the form and memory tools once a page shows form fields. The server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set is about 9.7 KB of schema, roughly 2.4k tokens on every turn, and a test keeps it under 10 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 | profile | tools | count |
 |---|---|---:|
-| `core` | browse, tabs and context tools | 12 |
-| `forms` | core plus the form tools | 16 |
-| `all` (default) | forms plus memory tools and `stats` | 21 |
+| `auto` (default) | core, growing to research, forms and memory as the session needs them | 15 to 30 |
+| `core` | browse, `read`, tabs and context tools | 15 |
+| `forms` | core plus the form tools | 19 |
+| `research` | core plus the research tools | 21 |
+| `all` | everything, including memory and `stats` | 30 |
 
 Page-derived text in results (page content, titles, URLs, dialog text, the `look` legend) is wrapped in `<page_content untrusted="true">`. The server instructions tell the model not to follow it. See [Security model](security.html).
 
@@ -35,6 +37,19 @@ Read the page as text with element refs (`e1`, `e2`, …). Use delta to see only
 
 Long text is split into several lines with an explicit `… [N more chars cut]` marker. Text a person cannot see is left out and counted.
 
+### `read`
+
+Read a page for research (opens `url` if given). With `query`: only the best passages, ranked locally with BM25 and MMR, so a page costs a few hundred tokens instead of the whole text. Without: the start of the page. Only pages read this session can be cited.
+
+| parameter | type | notes |
+|---|---|---|
+| `url` | string | opens it first; omit to read the current tab |
+| `query` | string | what you are looking for |
+| `k` | integer | passages, default 5, max 12 |
+| `max_chars` | integer | default 8000 |
+
+The header names the page, its size, fetch time and content hash, and flags what a reader must know first: `PAYWALL`, `CHANGED` (the page differs from an earlier read; earlier citations from it are re-checked), the page's own paging text (`showing 1-5 of 13`), and `ATTENTION` when the page contains text aimed at an AI. A bot wall, robots.txt refusal, HTTP error or empty page is `NOT READ` and is recorded as a gap, never as a source.
+
 ### `click`
 
 Click an element by ref. The result ends with a `Result:` line: navigated, popup opened as tab `tN`, page updated, or no visible change.
@@ -42,6 +57,26 @@ Click an element by ref. The result ends with a `Result:` line: navigated, popup
 | parameter | type | notes |
 |---|---|---|
 | `ref` | string, **required** | |
+| `observe` | `delta` \| `full` \| `none` | default `delta` |
+
+### `hover`
+
+Move the pointer over an element by ref (opens menus and tooltips).
+
+| parameter | type | notes |
+|---|---|---|
+| `ref` | string, **required** | |
+| `observe` | `delta` \| `full` \| `none` | default `delta` |
+
+### `scroll`
+
+Scroll an element into view (`ref`) or the page (`direction`). Reports the position as scrolled/max, so the agent knows when it has reached the end of an infinite list.
+
+| parameter | type | notes |
+|---|---|---|
+| `ref` | string | element to bring into view |
+| `direction` | `up` \| `down` \| `top` \| `bottom` | |
+| `amount` | integer | pixels |
 | `observe` | `delta` \| `full` \| `none` | default `delta` |
 
 ### `type`
@@ -172,6 +207,65 @@ Set one field by ref (any kind, including custom widgets).
 |---|---|---|
 | `ref` | string, **required** | |
 | `value` | any, **required** | |
+
+## Research (profile: research)
+
+Built around one contract: **an answer can only contain what was read and verified.** See the [Cookbook](cookbook.html#13-research-with-citations-that-are-checked) for the workflow.
+
+### `cite`
+
+Check a quote against a page read this session. `VERIFIED` returns the page's exact words and a `#:~:text=` link a person can open to check them. `NOT READ` (the page was never read), `NOT VERIFIED` (with the closest text on the page) and `TOO SHORT` are errors: do not use that claim. Markdown on either side is ignored, so `**1887**` and `[Marta Ilves](/m)` still verify.
+
+| parameter | type | notes |
+|---|---|---|
+| `url` | string, **required** | a page read with `read` or `open_many` |
+| `quote` | string, **required** | words from the page, 12+ characters; `...` marks an omission |
+
+### `evidence`
+
+What the agent has read and may state: verified citations, citations made stale by a changed page, pages read but not cited, and the gaps (paywall, bot wall, robots.txt, HTTP error, empty page). Call it before answering. Takes no parameters.
+
+### `search`
+
+Web search through SearXNG (`OSTLER_SEARXNG_URL`) or Brave (`OSTLER_SEARCH_PROVIDER=brave` and `OSTLER_BRAVE_API_KEY`). Returns titles, URLs and snippets; a snippet is not evidence until the page is read.
+
+| parameter | type | notes |
+|---|---|---|
+| `query` | string, **required** | |
+| `limit` | integer | default 8, max 20 |
+| `recency` | `day` \| `week` \| `month` \| `year` | |
+| `site` | string | host name, for example `example.com` |
+
+### `open_many`
+
+Read up to 10 URLs in a scratch tab; the agent's current tab is untouched. The domain policy is checked before robots.txt is fetched, robots.txt (RFC 9309) is obeyed, requests to one host are spaced, and the call has a time budget. Each page's outcome is reported.
+
+| parameter | type | notes |
+|---|---|---|
+| `urls` | string array, **required** | |
+| `query` | string | best passages from each page |
+| `k` | integer | passages per page, default 2, max 5 |
+| `force` | boolean | re-read pages already read |
+
+### `extract`
+
+Structured data from the current page: `tables` as rows, or `lists` of repeated cards with pagination hints and a completeness verdict (`PARTIAL: 5 of 13` when the page states a total it does not show).
+
+| parameter | type | notes |
+|---|---|---|
+| `kind` | `tables` \| `lists`, **required** | |
+| `max_rows` | integer | per table or list, default 30 |
+
+### `links`
+
+Links on the current page with anchor text and context, optionally filtered.
+
+| parameter | type | notes |
+|---|---|---|
+| `same_origin` | boolean | |
+| `text_contains` | string | |
+| `href_contains` | string | |
+| `limit` | integer | default 30 |
 
 ## Memory (profile: all)
 

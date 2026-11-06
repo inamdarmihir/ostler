@@ -3,17 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Cookbook - Ostler docs</title>
-<meta name="description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<title>Cookbook - Ostler MCP browser docs</title>
+<meta name="description" content="Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/cookbook.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Cookbook - Ostler docs"><meta property="og:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Cookbook - Ostler MCP browser docs"><meta property="og:description" content="Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/cookbook.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
 <meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Cookbook - Ostler docs"><meta name="twitter:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Cookbook - Ostler MCP browser docs"><meta name="twitter:description" content="Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Cookbook","description":"Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.","url":"https://inamdarmihir.github.io/ostler/docs/cookbook.html","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"about":{"@type":"SoftwareApplication","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"author":{"@type":"Person","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir"},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Cookbook","item":"https://inamdarmihir.github.io/ostler/docs/cookbook.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -73,7 +75,7 @@
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Guides</p>
 <article class="prose"><h1>Cookbook</h1>
-<p class="lede">Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.</p>
+<p class="lede">Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#contents">Contents</a></li><li class="toc-l2"><a href="#1-read-a-page-and-answer-a-question">1. Read a page and answer a question</a></li><li class="toc-l2"><a href="#2-compare-several-pages-side-by-side">2. Compare several pages side by side</a></li><li class="toc-l2"><a href="#3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)</a></li><li class="toc-l2"><a href="#4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal</a></li><li class="toc-l2"><a href="#5-log-in-once-reuse-the-session">5. Log in once, reuse the session</a></li><li class="toc-l2"><a href="#6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly</a></li><li class="toc-l2"><a href="#7-fill-a-form-and-verify-it">7. Fill a form and verify it</a></li><li class="toc-l2"><a href="#8-fill-a-multi-step-wizard">8. Fill a multi-step wizard</a></li><li class="toc-l2"><a href="#9-never-fill-the-same-form-twice">9. Never fill the same form twice</a></li><li class="toc-l2"><a href="#10-submit-only-with-your-approval">10. Submit only with your approval</a></li><li class="toc-l2"><a href="#11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A</a></li><li class="toc-l2"><a href="#12-keep-a-run-cheap">12. Keep a run cheap</a></li><li class="toc-l2"><a href="#13-research-with-citations-that-are-checked">13. Research with citations that are checked</a></li><li class="toc-l2"><a href="#planned-not-yet-mcp-tools">Planned, not yet MCP tools</a></li></ul></details>
 <p>Recipes for what you can do with Ostler <strong>today</strong>. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md" rel="noopener">README</a>; tool details are in <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md" rel="noopener">TOOLS.md</a>.</p>
 <p>Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 15 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all. Recipe 13 is deep research with citations that are checked.</p>

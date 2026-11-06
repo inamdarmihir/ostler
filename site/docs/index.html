@@ -3,17 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ostler documentation</title>
-<meta name="description" content="Documentation for Ostler: a Rust MCP browser server for AI coding agents that browses, fills forms, verifies, and remembers.">
+<title>Ostler documentation: MCP browser for AI agents</title>
+<meta name="description" content="Documentation for Ostler, an open-source MCP browser for AI coding agents: research with checked citations, verified form filling, Qdrant memory.">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/index.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Ostler documentation"><meta property="og:description" content="Documentation for Ostler: a Rust MCP browser server for AI coding agents that browses, fills forms, verifies, and remembers.">
+<meta property="og:title" content="Ostler documentation: MCP browser for AI agents"><meta property="og:description" content="Documentation for Ostler, an open-source MCP browser for AI coding agents: research with checked citations, verified form filling, Qdrant memory.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/index.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
 <meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler documentation"><meta name="twitter:description" content="Documentation for Ostler: a Rust MCP browser server for AI coding agents that browses, fills forms, verifies, and remembers."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler documentation: MCP browser for AI agents"><meta name="twitter:description" content="Documentation for Ostler, an open-source MCP browser for AI coding agents: research with checked citations, verified form filling, Qdrant memory."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -72,22 +74,22 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <article class="prose"><h1>Ostler documentation</h1>
-<p class="lede">Ostler is a headless browser server for AI coding agents. It fills a whole form in one call, reads every value back to check it, and remembers what worked in Qdrant. It speaks MCP to coding agents and A2A to other agents.</p>
+<p class="lede">Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It speaks MCP to coding agents and A2A to other agents.</p>
 <aside class="callout callout-note" role="note"><p class="callout-title">Status: v0.2, early</p><p>Tested end to end against real Chrome and a real Qdrant server, but evaluated on local fixtures, not the open web. The docs say what was measured and what was not. Features marked <span class="badge badge-unreleased">Unreleased</span> are on the main branch and not in a tagged release.</p></aside>
 <div class="start-row"><a class="btn primary" href="quickstart.html">Quickstart</a><a class="btn" href="agents.html">Use with your agent</a><a class="btn" href="tools.html">Tools reference</a></div>
 <h2 id="get-started">Get started</h2><div class="card-grid">
 <a class="doc-card" href="quickstart.html"><strong>Quickstart</strong><span>Install, check, connect, and fill a demo form in five minutes.</span></a>
 <a class="doc-card" href="install.html"><strong>Install</strong><span>Every way to get the binary, what works today, update and uninstall.</span></a>
-<a class="doc-card" href="agents.html"><strong>Use with your agent</strong><span>Claude Code, Codex, Cursor, VS Code and any MCP client.</span></a>
+<a class="doc-card" href="agents.html"><strong>Use with your agent</strong><span>Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.</span></a>
 </div>
 <h2 id="guides">Guides</h2><div class="card-grid">
-<a class="doc-card" href="cookbook.html"><strong>Cookbook</strong><span>Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.</span></a>
+<a class="doc-card" href="cookbook.html"><strong>Cookbook</strong><span>Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.</span></a>
 <a class="doc-card" href="forms.html"><strong>Forms and verification</strong><span>How keys become fields, how values are verified by read-back, and what submit results mean.</span></a>
 <a class="doc-card" href="memory.html"><strong>Memory and privacy</strong><span>What is stored, what sealing hides and does not, local embeddings, per-tenant tokens.</span></a>
 <a class="doc-card" href="configuration.html"><strong>Configuration and CLI</strong><span>Config file, environment variables, every serve and a2a flag.</span></a>
 </div>
 <h2 id="reference">Reference</h2><div class="card-grid">
-<a class="doc-card" href="tools.html"><strong>Tools reference</strong><span>All 21 MCP tools, their parameters and profiles.</span></a>
+<a class="doc-card" href="tools.html"><strong>Tools reference</strong><span>All 30 MCP tools: browse, read and cite, search, extract, forms and memory, with parameters and profiles.</span></a>
 <a class="doc-card" href="security.html"><strong>Security model</strong><span>The threat model: what Ostler does, and what it does not do.</span></a>
 <a class="doc-card" href="a2a.html"><strong>A2A</strong><span>Let other agents hand Ostler forms over Agent2Agent v1.0.</span></a>
 <a class="doc-card" href="architecture.html"><strong>Architecture</strong><span>Crates, the injected runtime, the form model, and the decisions behind them.</span></a>

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.inamdarmihir/ostler",
+  "title": "Ostler",
+  "description": "Browser for AI agents: research that cites only pages it read, forms filled and read back.",
+  "websiteUrl": "https://inamdarmihir.github.io/ostler/",
+  "repository": {
+    "url": "https://github.com/inamdarmihir/ostler",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "ostler",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "OSTLER_TOOLS",
+          "description": "Tools to list: auto (default), core, forms, research or all",
+          "default": "auto"
+        },
+        {
+          "name": "OSTLER_SEARXNG_URL",
+          "description": "SearXNG instance for the search tool"
+        },
+        {
+          "name": "OSTLER_SEARCH_PROVIDER",
+          "description": "Set to brave to use the Brave Search API"
+        },
+        {
+          "name": "OSTLER_BRAVE_API_KEY",
+          "description": "Brave Search API key",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
