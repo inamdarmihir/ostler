@@ -48,6 +48,7 @@
 <li><a href="quickstart.html">Quickstart</a></li>
 <li><a href="install.html">Install</a></li>
 <li><a href="agents.html" aria-current="page">Use with your agent</a></li>
+<li><a href="frameworks.html">LangChain, LlamaIndex, AutoGen</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
 <li><a href="research-with-citations.html">Research with checked citations</a></li>
@@ -122,6 +123,7 @@ args = ["serve"]</code></pre></div>
 <h2 id="any-other-mcp-client">Any other MCP client<a class="anchor" href="#any-other-mcp-client" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup json</code></pre></div>
 <p>prints the common <code>mcpServers</code> shape. The only requirement is that the client starts <code>ostler serve</code> and speaks MCP over stdio. <code>ostler serve</code> should print one <code>ready</code> line on stderr and wait; stdout carries only MCP messages.</p>
+<p>Building your own agent in Python? See <a href="frameworks.html">LangChain, LlamaIndex and AutoGen</a> for tested code. Keep one Ostler session open for the whole task, or <code>cite</code> will not see what <code>read</code> fetched.</p>
 <h2 id="a-good-agent-workflow">A good agent workflow<a class="anchor" href="#a-good-agent-workflow" aria-label="Link to this section">#</a></h2>
 <p>For research with citations:</p>
 <ol><li><code>search</code> (or start from known URLs), then <code>open_many</code> with a <code>query</code> to read the best passages of up to 10 pages.</li><li><code>read</code> with a <code>query</code> to go deeper on one page; follow <code>links</code> or <code>extract</code> tables and lists.</li><li><code>cite</code> every quote you intend to use. Only <code>VERIFIED</code> quotes go in the answer.</li><li><code>evidence</code> before answering: it lists the verified citations and the pages that could not be read, which the answer should name as gaps.</li></ol>
@@ -148,7 +150,7 @@ args = ["serve"]</code></pre></div>
 </article>
 <nav class="pager" aria-label="Previous and next pages">
 <a class="pager-prev" rel="prev" href="install.html"><span>Previous</span><strong>Install</strong></a>
-<a class="pager-next" rel="next" href="research-with-citations.html"><span>Next</span><strong>Research with checked citations</strong></a>
+<a class="pager-next" rel="next" href="frameworks.html"><span>Next</span><strong>LangChain, LlamaIndex, AutoGen</strong></a>
 </nav>
 </main>
 <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li><li class="toc-l2"><a href="#use-the-chrome-you-already-have">Use the Chrome you already have</a></li></ul></aside>

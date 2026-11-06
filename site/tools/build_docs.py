@@ -112,6 +112,9 @@ SEO = {
     "changelog": ("Ostler Changelog: Released and Unreleased Changes",
                   "What changed in Ostler, including the Unreleased section that is on the main branch but not in a tagged release.",
                   "Ostler changelog"),
+    "frameworks": ("Use Ostler from LangChain, LlamaIndex and AutoGen (MCP)",
+                   "Load Ostler's browser, research and form tools in LangChain, LlamaIndex or AutoGen over MCP. Tested code and the one-session rule for cite.",
+                   "Use Ostler from LangChain, LlamaIndex and AutoGen"),
     "ostler-vs-playwright-mcp": ("Ostler vs Playwright MCP: Forms, Evidence and Trade-offs",
                                  "Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.",
                                  "Ostler vs Playwright MCP"),
@@ -133,6 +136,7 @@ GROUPS = [
         ("quickstart", "Quickstart", "Install, check, connect, then read and cite a demo page or fill a demo form, in five minutes.", ("content", "quickstart.md")),
         ("install", "Install", "Every way to get the binary, what works today, update and uninstall.", ("content", "install.md")),
         ("agents", "Use with your agent", "Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.", ("content", "agents.md")),
+        ("frameworks", "LangChain, LlamaIndex, AutoGen", "Use Ostler's tools from three Python agent frameworks: tested code, real output, and the one-session rule for cite.", ("content", "frameworks.md")),
     ]),
     ("Guides", [
         ("research-with-citations", "Research with checked citations", "Read pages, check each quote against them, and report what could not be read, with real tool output.", ("content", "research-with-citations.md")),
