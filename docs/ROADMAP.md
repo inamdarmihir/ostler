@@ -1,5 +1,7 @@
 # Roadmap: where Ostler stands and what is left
 
+> The plan of record from v0.3 to launch is [BUILD-PLAN.md](BUILD-PLAN.md). This page tracks the current state.
+
 Status as of 2026-11-02. "Have" is covered by tests in this repo; "Gap" is what developers get from other
 browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does not yet do.
 

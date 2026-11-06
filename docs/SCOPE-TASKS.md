@@ -1,6 +1,6 @@
 # Scope proposal: a holistic task and domain model
 
-Status: **draft for discussion**, 2026-11-06. Companion to [SCOPE-RESEARCH.md](SCOPE-RESEARCH.md), which covers the research half in detail. This page widens the frame: which tasks and domains Ostler should support, what they share, and what a workflow (as opposed to a single call) needs. Nothing here is built.
+Status: **background**, 2026-11-06; the plan of record is [BUILD-PLAN.md](BUILD-PLAN.md). Companion to [SCOPE-RESEARCH.md](SCOPE-RESEARCH.md), which covers the research half in detail. This page widens the frame: which tasks and domains Ostler should support, what they share, and what a workflow (as opposed to a single call) needs. Nothing here is built.
 
 ## 1. Approach: few primitives, one verification idea
 
