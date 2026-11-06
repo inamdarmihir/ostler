@@ -1,0 +1,14 @@
+{
+  "_comment": "Each server is spawned fresh per run (see --reuse-server). Pin versions for a published run: replace @latest with the exact version you tested and record it. The harness stores whatever serverInfo each server reports in config.json.",
+  "servers": {
+    "ostler": {
+      "command": ["ostler", "serve", "--memory", "ephemeral"]
+    },
+    "playwright": {
+      "command": ["npx", "-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+    },
+    "chrome-devtools": {
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest", "--headless", "--isolated"]
+    }
+  }
+}
