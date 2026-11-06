@@ -1,9 +1,12 @@
 //! Browser control for agents: launch Chrome, drive pages, and fill forms reliably.
 
+mod diagnostics;
 mod fill;
 mod page;
 mod policy;
+mod read;
 
+pub use diagnostics::{Cursor, DiagEntry, DiagKind, Diagnostics};
 pub use fill::{
     AutoMode, FieldDrift, FieldError, FieldResult, FillReport, FillRequest, FillStatus,
     MissingField, SubmitOutcome, SubmitStatus, Suggester, Suggestion,
@@ -13,6 +16,11 @@ pub use page::{
     ActionOutcome, BrowserError, Challenge, Page, PageInfo, SnapshotMode, SnapshotOpts, SnapshotOut,
 };
 pub use policy::Policy;
+pub use read::{
+    ExpectElement, ExpectObservation, ExtractedLists, LinkFilter, LinkInfo, LinksResult, ListBlock,
+    ListRow, NextControl, PaginationHints, ReadKind, ReadLink, ReadMeta, ReadOptions, ReadResult,
+    RowLink, Table,
+};
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
