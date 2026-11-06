@@ -75,3 +75,7 @@ Qdrant is treated as honest-but-curious: it may be read by its operator, leaked,
 ## Verifying
 
 The commands in [SECURITY.md](../SECURITY.md#verify-it-yourself) and the soak harness (`scripts/soak/`, see [OPERATIONS.md](OPERATIONS.md)) exercise B2 end to end, including a control run that must reach the canary.
+
+## Research mode (planned, partly built as libraries)
+
+Reading many untrusted pages makes prompt injection the main threat, and memory raises the stakes. Built as libraries and not yet reachable over MCP: injection-pattern flags on chunks (reported, never relied on), a risk-classed action gate (read / reversible write / irreversible / money-identity, stricter class when unsure), a double-submit guard, a redacted action trace, and sealed sparse vectors for source memory. Fixture packs include an exfiltration endpoint (`/exfil`) and a payment endpoint (`/pay`) to test that nothing is sent. Open: gate policy per domain, memory writes sourced from page text, and navigations containing recalled values are designed in [BUILD-PLAN.md](BUILD-PLAN.md) but not enforced. Do not treat research mode as safe against a hostile page until they are.

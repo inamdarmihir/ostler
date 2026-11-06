@@ -45,3 +45,7 @@ Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qd
 `ostler doctor` prints this state for your setup (sealing, key location, embeddings, isolation, transport). The sealing, local-embedding, token, retention and transport features are on `main`, not in a tagged release yet. Nothing here has been audited by a third party.
 
 Details: [ARCHITECTURE](ARCHITECTURE.md), [ADRs](adr/).
+
+### Source memory (library only; not yet reachable over MCP)
+
+A fourth kind, `source`, stores chunks of pages an agent has read, for "what did I already read about X". Chunks are sealed like every other kind (AES-GCM payloads, HMAC-keyed ids). Each point carries a dense vector and a sparse BM25 vector whose term ids are HMAC-derived (truncated to 32 bits), so the server never sees plaintext terms; the cost is rare hash collisions and no cross-tenant term statistics. Search uses one hybrid Query API call with weighted RRF on Qdrant 1.17 or newer and client-side fusion plus MMR on older servers. Retention is short by default (`Memory::with_source_retain_days`), and `forget`/wipe covers the kind. It is tested against Qdrant 1.20.0. The configuration key and the MCP tools are not wired yet.

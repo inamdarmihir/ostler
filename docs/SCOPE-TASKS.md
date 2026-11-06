@@ -73,7 +73,7 @@ Qdrant playbooks already record which fact fills which field per site. Generalis
 
 A broad claim needs a broad, honest benchmark ([ADR-0007](adr/0007-measurement-first.md)):
 
-- One **task suite per class**, on local fixtures replicating widget classes and domain shapes (the fixture server already hosts 49 pages), each with a stated outcome check. Scored on success, wrong-but-claimed-success (the metric that matters most), calls, tokens and gaps reported.
+- One **task suite per class**, on local fixtures replicating widget classes and domain shapes (the fixture server hosted 49 form pages when this was written; the domain packs have since added 29 more), each with a stated outcome check. Scored on success, wrong-but-claimed-success (the metric that matters most), calls, tokens and gaps reported.
 - A **small live smoke set** that never submits: read-only tasks on real sites, run manually and reported separately, because fixture results do not transfer automatically (the README already says Ostler is mostly fixture-tested).
 - Baselines: the same scripted-agent method as `scripts/bench-compare`, adding a real model in the loop once; the review flagged its absence as an open flaw.
 

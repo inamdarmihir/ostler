@@ -1,0 +1,4 @@
+# Test threads default to a 2 MiB stack. ostler-bench's pack tests drive Chrome
+# and build large JSON reports in parallel and overflow it; serial runs pass.
+[env]
+RUST_MIN_STACK = { value = "16777216", force = false }
