@@ -1,0 +1,31 @@
+# Reaching non-technical users
+
+Analysis of what stops a non-developer from using Ostler, what this change fixes, and what is still open. Back to the [README](../README.md).
+
+## Who is blocked, and where
+
+| step today | who it stops | fix |
+|---|---|---|
+| `cargo install` needs Rust 1.89+, minutes of compiling | everyone who is not a Rust developer | prebuilt binaries and one-click bundle (below); nothing is published until the first tagged release |
+| Terminal, `PATH`, absolute binary paths | most people | `ostler start` needs no flags and no client name |
+| Naming a client and editing its JSON/TOML | anyone unsure which app or file | `ostler start` detects installed apps; `ostler install` already edits safely with backups |
+| No double-click path for Claude Desktop, the largest non-developer MCP client | the main target audience | `.mcpb` extension bundle built by the release workflow |
+| Docs are written for developers (ADRs, benchmarks first) | newcomers | [GETTING-STARTED.md](GETTING-STARTED.md), linked at the top of the README |
+| "What do I ask it?" | people without an MCP mental model | example prompts in the guide and printed by `ostler start` |
+| Windows not built or tested | roughly half of desktop users | open, see below |
+
+## Done in this change
+
+1. `ostler start`: detect, connect, check Chrome, print next steps. Tested end to end (detected-only, idempotent, empty case).
+2. `.mcpb` bundle for Claude Desktop on macOS: `scripts/package-mcpb.sh` and a release job step. Untested inside Claude Desktop itself (no macOS here); the zip and manifest were built and checked structurally. Verify on a Mac before announcing.
+3. Plain-English guide and README entry point.
+
+## Still open, in suggested order
+
+1. **Cut the first release.** Everything above depends on it: nothing downloadable exists until a `v*` tag is pushed ([RELEASING](RELEASING.md)). Highest value, no code.
+2. **Windows build and `.mcpb`.** Claude Desktop is mostly used on Windows and macOS. Needs a Windows CI job, Chrome discovery and `ostler install` path checks on a real Windows machine; the install code already has Windows paths but nothing has run there.
+3. **Sign and notarize the macOS binary.** An unsigned download triggers Gatekeeper warnings that will stop non-technical users. Needs an Apple Developer account.
+4. **Submit to the Claude Desktop extension directory** and the MCP registry so it can be found without the GitHub releases page.
+5. **Bundle or auto-fetch Chrome for Testing** so "install Chrome first" disappears (trade-off: download size, licensing review).
+6. **A small desktop installer or web page** that wraps `ostler start` with buttons, if usage justifies maintaining a GUI.
+7. **Task-shaped prompt library** (research report, price check, form filling) in the docs and the site.

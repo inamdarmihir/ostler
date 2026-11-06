@@ -33,6 +33,8 @@
 
 ## Install
 
+**Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds. (Downloads begin with the first release; see below.) The steps that follow are for developers.
+
 Needs **Chrome or Chromium** and Rust 1.89+.
 
 ```sh
@@ -174,6 +176,7 @@ Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which
 
 | topic | where |
 |---|---|
+| Getting started without programming | [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md), [plan](docs/ACCESSIBILITY-PLAN.md) |
 | Install options, update, uninstall | [docs/INSTALL.md](docs/INSTALL.md) |
 | Config file, env vars, which keys you need | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
 | Recipes for each use case | [docs/COOKBOOK.md](docs/COOKBOOK.md) |

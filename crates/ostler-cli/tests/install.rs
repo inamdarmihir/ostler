@@ -320,3 +320,27 @@ async fn attach_to_an_existing_chrome_leaves_it_running() {
     );
     let _ = browser.kill().await;
 }
+
+#[test]
+fn start_connects_detected_apps_only_and_is_idempotent() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join(".cursor")).unwrap();
+    let (ok, out, _) = run(ostler(d.path()).arg("start"));
+    assert!(ok, "{out}");
+    assert!(out.contains("cursor: connected"), "{out}");
+    assert!(!out.contains("codex"), "{out}");
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(d.path().join(".cursor/mcp.json")).unwrap())
+            .unwrap();
+    assert_eq!(v["mcpServers"]["ostler"]["args"], json!(["serve"]));
+    let (ok, out, _) = run(ostler(d.path()).arg("start"));
+    assert!(ok && out.contains("already connected"), "{out}");
+}
+
+#[test]
+fn start_with_no_apps_explains_instead_of_failing() {
+    let d = tempfile::tempdir().unwrap();
+    let (ok, out, _) = run(ostler(d.path()).arg("start"));
+    assert!(ok, "{out}");
+    assert!(out.contains("No supported AI app found"), "{out}");
+}

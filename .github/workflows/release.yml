@@ -39,6 +39,9 @@ jobs:
         run: ./target/release/ostler --version
       - name: Package
         run: scripts/package.sh "${{ matrix.target }}" target/release/ostler dist
+      - name: Package the Claude Desktop extension (macOS only; one double-click install)
+        if: contains(matrix.target, 'apple-darwin')
+        run: scripts/package-mcpb.sh "${{ matrix.target }}" target/release/ostler dist
       - uses: actions/upload-artifact@v7
         with:
           name: ostler-${{ matrix.target }}
@@ -57,7 +60,7 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "Ostler ${GITHUB_REF_NAME}" \
-            --notes "Install: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+            --notes "Easiest (Claude Desktop, macOS): download the \`.mcpb\` for your Mac and double-click it. Terminal: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
   homebrew:
     # Updates the Homebrew tap (inamdarmihir/homebrew-ostler) after the release exists.
     # Skipped, not failed, until the HOMEBREW_TAP_TOKEN secret is set (fine-grained token with
