@@ -1,0 +1,22 @@
+[package]
+name = "ostler-extract"
+description = "Pure-logic page chunking, BM25 retrieval, quote verification and extraction checks for Ostler (internal crate)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.1"
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1.0.154"

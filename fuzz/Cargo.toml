@@ -13,6 +13,7 @@ serde_json = "1"
 url = "2"
 ostler-browser = { path = "../crates/ostler-browser" }
 ostler-forms = { path = "../crates/ostler-forms" }
+ostler-extract = { path = "../crates/ostler-extract" }
 
 # Not a member of the root workspace.
 [workspace]
@@ -32,5 +33,17 @@ doc = false
 [[bin]]
 name = "formir_json"
 path = "fuzz_targets/formir_json.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "extract_chunk"
+path = "fuzz_targets/extract_chunk.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "extract_quote"
+path = "fuzz_targets/extract_quote.rs"
 test = false
 doc = false
