@@ -7,9 +7,11 @@ Ostler is one local Rust binary (Apache-2.0) that runs Chrome and speaks MCP ove
 Key facts:
 
 - Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.
+- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.
+- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.
 - Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).
-- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (scripted, model-free).
-- Memory: optional, in Qdrant or an encrypted local file; stores facts and per-site playbooks, never secrets.
+- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).
+- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic.
 - Safety: page text is fenced as untrusted, a domain allowlist holds every request, CAPTCHAs are handed to a person.
 
 ## Docs

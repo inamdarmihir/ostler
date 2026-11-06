@@ -7,9 +7,11 @@ Ostler is one local Rust binary (Apache-2.0) that runs Chrome and speaks MCP ove
 Key facts:
 
 - Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.
+- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.
+- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.
 - Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).
-- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (scripted, model-free).
-- Memory: optional, in Qdrant or an encrypted local file; stores facts and per-site playbooks, never secrets.
+- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).
+- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic.
 - Safety: page text is fenced as untrusted, a domain allowlist holds every request, CAPTCHAs are handed to a person.
 
 
@@ -22,7 +24,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/quickstart.html
 Install Ostler, check that it can drive Chrome, connect your agent, and fill a demo form. About five minutes, most of it compiling.
 
 > [!NOTE]
-> **Status: v0.2, early.** Ostler is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](review.html) found real flaws and lists them openly with a fix order. Read [what that means](economics.html#6-what-can-go-wrong) before relying on it.
+> **Status: v0.2, early.** Ostler is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](https://inamdarmihir.github.io/ostler/docs/review.html) found real flaws and lists them openly with a fix order. Read [what that means](https://inamdarmihir.github.io/ostler/docs/economics.html#6-what-can-go-wrong) before relying on it.
 
 ## 1. Install
 
@@ -32,7 +34,7 @@ You need **Chrome or Chromium** (Ostler drives a real browser) and Rust 1.89 or 
 cargo install --git https://github.com/inamdarmihir/ostler ostler
 ```
 
-Prebuilt binaries, `npx` and crates.io are described on the [Install](install.html) page. Nothing is published to crates.io or npm yet, so building from source is the path that works today.
+Prebuilt binaries, `npx` and crates.io are described on the [Install](https://inamdarmihir.github.io/ostler/docs/install.html) page. Nothing is published to crates.io or npm yet, so building from source is the path that works today.
 
 ## 2. Check it works
 
@@ -40,7 +42,7 @@ Prebuilt binaries, `npx` and crates.io are described on the [Install](install.ht
 ostler doctor
 ```
 
-`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the command that fixes it; `ostler doctor --fix` applies the safe ones (creating the config directory). With no config at all, memory is in-process for the session and nothing needs Qdrant or a key. See [Troubleshooting](troubleshooting.html) if it does not pass.
+`ostler doctor` launches Chrome, round-trips a page and, if you configured Qdrant, prints a memory report (sealing, key location, where embeddings are computed, isolation, transport) and checks that Qdrant is reachable. When something is wrong it prints the command that fixes it; `ostler doctor --fix` applies the safe ones (creating the config directory). With no config at all, memory is in-process for the session and nothing needs Qdrant or a key. See [Troubleshooting](https://inamdarmihir.github.io/ostler/docs/troubleshooting.html) if it does not pass.
 
 ## 3. Connect your agent
 
@@ -48,7 +50,7 @@ ostler doctor
 ostler install --client claude-code      # or claude-desktop | cursor | vscode | windsurf | codex
 ```
 
-That writes the entry into the client's config file with the binary's absolute path: it backs the file up first, keeps your other servers, refuses a malformed file and prints what changed (`--dry-run` previews, `--uninstall` removes). `ostler install --list` shows every client. To only print a snippet instead, use `ostler setup <client>`. Prefer your own Chrome window? See "Use your own Chrome" on the [Install](install.html) page. Details for every client are in [Use with your agent](agents.html).
+That writes the entry into the client's config file with the binary's absolute path: it backs the file up first, keeps your other servers, refuses a malformed file and prints what changed (`--dry-run` previews, `--uninstall` removes). `ostler install --list` shows every client. To only print a snippet instead, use `ostler setup <client>`. Prefer your own Chrome window? See "Use your own Chrome" on the [Install](https://inamdarmihir.github.io/ostler/docs/install.html) page. Details for every client are in [Use with your agent](https://inamdarmihir.github.io/ostler/docs/agents.html).
 
 After installing or rebuilding `ostler`, reconnect the MCP client (Claude Code: `/mcp`; others: restart it) so it starts the new binary.
 
@@ -90,7 +92,7 @@ NOT ACCEPTED: the page reported problems.
   e3 "Recipient": "Please fill in this field."
 ```
 
-A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words. More on how this works in [Forms and verification](forms.html).
+A key that matches nothing is reported, not guessed. A rejected submit says why, in the page's words. More on how this works in [Forms and verification](https://inamdarmihir.github.io/ostler/docs/forms.html).
 
 ## Things to ask your agent
 
@@ -108,13 +110,13 @@ ostler init                                   # saves your Qdrant URL, key and p
 ostler install --client claude-code -- --learn --lean # re-register with memory flags
 ```
 
-See [Memory and privacy](memory.html) for exactly what is stored and what is hidden.
+See [Memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html) for exactly what is stored and what is hidden.
 
 ## Next steps
 
-- [Use with your agent](agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
-- [Tools reference](tools.html): all 23 tools and their parameters.
-- [Security model](security.html): the allowlist, uploads, dialogs, CAPTCHAs.
+- [Use with your agent](https://inamdarmihir.github.io/ostler/docs/agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
+- [Tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html): all 23 tools and their parameters.
+- [Security model](https://inamdarmihir.github.io/ostler/docs/security.html): the allowlist, uploads, dialogs, CAPTCHAs.
 
 
 ---
@@ -133,7 +135,7 @@ Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You n
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
 
 > [!WARNING]
-> **Availability:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [RELEASING.md](repo:docs/RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
+> **Availability:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [RELEASING.md](https://github.com/inamdarmihir/ostler/blob/main/docs/RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
 
 ## Verify
 
@@ -168,7 +170,7 @@ Only loopback is accepted. Ostler never opens the port for you, works in its own
 ## Platforms
 
 - **macOS:** tested locally.
-- **Linux:** tested in CI. In containers or as root you may need `OSTLER_NO_SANDBOX=1`, plus a larger `/dev/shm` (`--shm-size=1g`) for Chrome. See [Troubleshooting](troubleshooting.html).
+- **Linux:** tested in CI. In containers or as root you may need `OSTLER_NO_SANDBOX=1`, plus a larger `/dev/shm` (`--shm-size=1g`) for Chrome. See [Troubleshooting](https://inamdarmihir.github.io/ostler/docs/troubleshooting.html).
 - **Windows:** not built or tested.
 - **Browser:** Chrome or Chromium only. If Chrome is in a non-standard place, set `OSTLER_CHROME=/path/to/chrome` or pass `--chrome-path`.
 
@@ -188,7 +190,7 @@ By default, nothing apart from the binary and, if you run `ostler init`, the con
 
 ## The prebuilt installer
 
-`install.sh` is served from this site and verifies a checksum before installing; on a mismatch it installs nothing and runs nothing. It installs to `~/.local/bin` by default (`OSTLER_INSTALL_DIR` changes that, `OSTLER_VERSION` pins a version) and never edits your shell profile or your agent's config. You can read the script first: [install.sh](../install.sh).
+`install.sh` is served from this site and verifies a checksum before installing; on a mismatch it installs nothing and runs nothing. It installs to `~/.local/bin` by default (`OSTLER_INSTALL_DIR` changes that, `OSTLER_VERSION` pins a version) and never edits your shell profile or your agent's config. You can read the script first: [install.sh](https://inamdarmihir.github.io/ostler/install.sh).
 
 
 ---
@@ -322,7 +324,7 @@ A prompt that works: *"Research X. Cite every claim with `cite`; call `evidence`
 | `--headed` | visible browser, for watching it work and for `wait_for_human` |
 | `--learn` | save non-sensitive values typed after an accepted submit (off by default) |
 
-The full flag list is on the [Configuration and CLI](configuration.html) page, and the reasoning is in the [Security model](security.html).
+The full flag list is on the [Configuration and CLI](https://inamdarmihir.github.io/ostler/docs/configuration.html) page, and the reasoning is in the [Security model](https://inamdarmihir.github.io/ostler/docs/security.html).
 
 ## Tabs share one browser context
 
@@ -330,7 +332,7 @@ Cookies and logins carry across tabs. The `context` tool is a small key/value no
 
 ## Other agents: A2A
 
-If another agent, rather than a coding agent, should hand Ostler a form, use [A2A](a2a.html) instead of MCP.
+If another agent, rather than a coding agent, should hand Ostler a form, use [A2A](https://inamdarmihir.github.io/ostler/docs/a2a.html) instead of MCP.
 
 ## Use the Chrome you already have
 
@@ -353,7 +355,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/cookbook.html
 
 # Cookbook
 
-Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](../README.md); tool details are in [TOOLS.md](TOOLS.md).
+Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](https://github.com/inamdarmihir/ostler/blob/main/README.md); tool details are in [TOOLS.md](https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md).
 
 Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 15 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all. Recipe 13 is deep research with citations that are checked.
 
@@ -423,7 +425,7 @@ Log in yourself in the visible window (including any 2FA). Later runs with the s
 
 ## 6. Handle a CAPTCHA honestly
 
-When a CAPTCHA or verification wall blocks the page, Ostler reports it (a `CHALLENGE:` line) and does not try to solve or disguise itself ([ADR-0009](adr/0009-challenges-are-handed-off.md)). With `--headed`, `wait_for_human` pauses until you complete it in the browser window, then the agent continues. Over A2A the task moves to `input-required`.
+When a CAPTCHA or verification wall blocks the page, Ostler reports it (a `CHALLENGE:` line) and does not try to solve or disguise itself ([ADR-0009](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0009-challenges-are-handed-off.md)). With `--headed`, `wait_for_human` pauses until you complete it in the browser window, then the agent continues. Over A2A the task moves to `input-required`.
 
 ## 7. Fill a form and verify it
 
@@ -450,7 +452,7 @@ Call `form_fill` then `form_submit` per step. A result of `Advanced` means the p
 ostler serve --learn
 ```
 
-Save facts once (`memory_remember email ada@example.com`) or let `--learn` save non-sensitive values after an accepted submit. Memory defaults to `--memory auto` (Qdrant if reachable, else a local file). With `auto`, `form_fill` fills the remaining required fields from memory, and `form_inspect` tells the agent what worked on this site before. Memory lives in Qdrant or an encrypted local file, is scoped per `--tenant`, and secrets are refused. See [MEMORY.md](MEMORY.md).
+Save facts once (`memory_remember email ada@example.com`) or let `--learn` save non-sensitive values after an accepted submit. Memory defaults to `--memory auto` (Qdrant if reachable, else a local file). With `auto`, `form_fill` fills the remaining required fields from memory, and `form_inspect` tells the agent what worked on this site before. Memory lives in Qdrant or an encrypted local file, is scoped per `--tenant`, and secrets are refused. See [MEMORY.md](https://github.com/inamdarmihir/ostler/blob/main/docs/MEMORY.md).
 
 ## 10. Submit only with your approval
 
@@ -466,7 +468,7 @@ The agent can fill and verify, but `form_submit` is held until you confirm. Use 
 ostler a2a --allow-domain example.com
 ```
 
-Another agent sends a task over A2A v1.0 and gets `input-required` back when a field is missing or a submit needs confirmation. See [A2A.md](A2A.md).
+Another agent sends a task over A2A v1.0 and gets `input-required` back when a field is missing or a submit needs confirmation. See [A2A.md](https://inamdarmihir.github.io/ostler/docs/a2a.html).
 
 ## 12. Keep a run cheap
 
@@ -474,7 +476,7 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 - `read` with a `query` returns only the best-matching passages, so a long page costs a few hundred tokens instead of the whole page.
 - Use `snapshot` with `delta` and heading refs rather than re-reading whole pages.
 - Call `stats` to see calls, time and estimated tokens for the session.
-- Form recipes beat per-field clicking: 3 calls versus 22 on the 20-field fixture, measured on a scripted agent ([BENCHMARKS.md](BENCHMARKS.md)).
+- Form recipes beat per-field clicking: 3 calls versus 22 on the 20-field fixture, measured on a scripted agent ([BENCHMARKS.md](https://inamdarmihir.github.io/ostler/docs/benchmarks.html)).
 
 ## 13. Research with citations that are checked
 
@@ -485,7 +487,7 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 ```text
 > read {"url": ".../kestrel-lock.html", "query": "who designed the lock"}
 Read: "The Kestrel Lock" — .../kestrel-lock.html · page · 297 chars · fetched 2026-11-06T14:44:22Z · sha256:9f602117
-[p1 · The Kestrel Lock] ... It opened in 1887 and was designed by [Marta Ilves](.../marta-ilves.html). ...
+[p1 · The Kestrel Lock] ... It opened in 1887 and was designed by [Marta Ilves](https://github.com/inamdarmihir/ostler/blob/main/docs/.../marta-ilves.html). ...
 
 > cite {"url": ".../kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
 VERIFIED [1] .../kestrel-lock.html (read 2026-11-06T14:44:22Z, sha256:9f602117)
@@ -517,7 +519,7 @@ These exist as libraries in the workspace (`ostler-workflow`, the memory `source
 | See console errors and failed requests | `diagnostics` | per-tab capture built, no tool |
 | Remember what you read across sessions | source memory | library only |
 
-Tracking: [BUILD-PLAN.md](BUILD-PLAN.md).
+Tracking: [BUILD-PLAN.md](https://github.com/inamdarmihir/ostler/blob/main/docs/BUILD-PLAN.md).
 
 
 ---
@@ -534,7 +536,7 @@ Ostler's form engine is built so the model states intent once and the engine doe
 2. **`form_fill`** takes `{label | name | ref: value}` for the whole form.
 3. **`form_submit`** clicks the submit or next control and reports the outcome.
 
-Dependent dropdowns, multi-step wizards, input masks, comboboxes, shadow DOM and same-origin iframes are handled inside these calls. See the [tools reference](tools.html#forms-profile-forms) for parameters.
+Dependent dropdowns, multi-step wizards, input masks, comboboxes, shadow DOM and same-origin iframes are handled inside these calls. See the [tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html#forms-profile-forms) for parameters.
 
 ## How a key becomes a field
 
@@ -605,21 +607,21 @@ Two tools help when a form is not obvious:
 - **`look`** returns a screenshot with every clickable element boxed and numbered, and a legend such as `e6 button "Send" -> submits the form`.
 - **`snapshot`** with a heading's ref reads just that section.
 
-A CAPTCHA, hCaptcha, Turnstile or "verify you are human" wall is reported with a `CHALLENGE:` line at the top of the result. The agent should stop retrying and ask you; with `--headed`, `wait_for_human` waits while you complete it. Ostler never solves or bypasses these ([ADR-0009](repo:docs/adr/0009-challenges-are-handed-off.md)).
+A CAPTCHA, hCaptcha, Turnstile or "verify you are human" wall is reported with a `CHALLENGE:` line at the top of the result. The agent should stop retrying and ask you; with `--headed`, `wait_for_human` waits while you complete it. Ostler never solves or bypasses these ([ADR-0009](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0009-challenges-are-handed-off.md)).
 
 ## What it does not handle
 
 - Cross-origin iframes and closed shadow roots are invisible to the injected runtime.
 - 2FA, CAPTCHA solving and anti-bot evasion are out of scope.
 - Fill on very large forms (thousands of fields) is slow, because every key re-reads the form.
-- It has been evaluated on local fixtures, not on the open web. See [Benchmarks](benchmarks.html).
+- It has been evaluated on local fixtures, not on the open web. See [Benchmarks](https://inamdarmihir.github.io/ostler/docs/benchmarks.html).
 
 ## When not to use Ostler
 
 Ostler is a form-filling browser for an agent working on your behalf, on one machine. It is the wrong tool when:
 
 - **The site walls off automation.** CAPTCHA, Cloudflare/Turnstile, "verify you are human" pages and search-engine bot checks are reported with a `CHALLENGE:` line and handed to a person. Ostler never solves or bypasses them, and it is not built to avoid detection: there is no stealth patching, fingerprint spoofing, residential proxy or IP rotation. A site that blocks headless or datacenter Chrome will block Ostler. `--headed` plus a persistent `--profile-dir` lets *you* pass a check once; it does not make a bot wall go away.
-- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](benchmarks.html)).
+- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](https://inamdarmihir.github.io/ostler/docs/benchmarks.html)).
 - **The flow needs an identity Ostler does not have.** There is no mailbox, phone number, SMS/OTP receiver or authenticator: one-time codes, email-link verification, passkeys, hardware keys and 2FA prompts need a person. Passwords and card numbers are never read back or remembered; sensitive fields are refused and the agent is told to ask you. It does not create accounts on your behalf out of thin air.
 - **The page is outside what the injected runtime can see.** Cross-origin iframes (many hosted card fields), closed shadow roots, canvas-drawn UIs, native OS dialogs and file pickers, and desktop apps are not reachable. A control that stays disabled until a person scrolls or hovers is reported as disabled rather than worked around.
 - **A wrong submit is expensive and nobody is checking.** Ostler verifies every value by reading it back and refuses to call a submit a success without evidence, but it cannot know whether a form means what it says. For payments, legal acceptance and anything irreversible, run with `--require-confirm-submit` and review the result yourself.
@@ -628,7 +630,7 @@ When Ostler cannot finish, it says which field and why (rejected value with the 
 
 ## Design records
 
-The reasoning, with the alternatives that were rejected, is in [ADR-0004](repo:docs/adr/0004-injected-runtime.md) (injected runtime) and [ADR-0005](repo:docs/adr/0005-form-ir-and-verification.md) (form model and verification). A summary is on the [Architecture](architecture.html) page.
+The reasoning, with the alternatives that were rejected, is in [ADR-0004](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0004-injected-runtime.md) (injected runtime) and [ADR-0005](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0005-form-ir-and-verification.md) (form model and verification). A summary is on the [Architecture](https://inamdarmihir.github.io/ostler/docs/architecture.html) page.
 
 
 ---
@@ -639,7 +641,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/memory.html
 
 Memory is optional. Browsing and form filling need no account and no key. When you turn it on, Ostler saves facts you told it, which fact fills which field on which site, and what went wrong on a form, in your own [Qdrant](https://qdrant.tech).
 
-This page is exact about what is stored, what is encrypted, and what is **not** hidden. The sealing, local-embedding and per-tenant-token features below are described in the changelog's *Unreleased* section: they are on `main` and not in a tagged release yet. :unreleased:
+This page is exact about what is stored, what is encrypted, and what is **not** hidden. The sealing, local-embedding and per-tenant-token features below are described in the changelog's *Unreleased* section: they are on `main` and not in a tagged release yet. **Unreleased: main branch, not a tagged release.**
 
 ## What is stored
 
@@ -659,7 +661,7 @@ Secrets are refused by the memory API (password, token and card-like keys, and c
 
 ## Sealing: encrypt before it reaches Qdrant
 
-With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). :unreleased:
+With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). **Unreleased: main branch, not a tagged release.**
 
 - Fact values, descriptions, playbooks and episodes are encrypted with **AES-256-GCM**, with the point id bound in as associated data.
 - Site names, field labels, profile keys and fingerprints are replaced by **keyed hashes (HMAC-SHA-256)**, and point ids are keyed too, so filters still work but the server cannot test guesses ("passport number") against what it stores.
@@ -678,7 +680,7 @@ With memory in Qdrant, payloads are **sealed on your machine by default** (`--se
 | **Tenant name** | visible |
 | **Win and loss counters, timing, point counts** | visible |
 
-The key is, in order of precedence, the `OSTLER_MEMORY_KEY` variable, or the store chosen by `key_store` (`OSTLER_KEY_STORE`): `file` (default, owner-only `memory.key`) or `keychain` (macOS Keychain / Linux Secret Service). :unreleased: `ostler memory key export --yes-print` and `ostler memory key import` back it up and restore it.
+The key is, in order of precedence, the `OSTLER_MEMORY_KEY` variable, or the store chosen by `key_store` (`OSTLER_KEY_STORE`): `file` (default, owner-only `memory.key`) or `keychain` (macOS Keychain / Linux Secret Service). **Unreleased: main branch, not a tagged release.** `ostler memory key export --yes-print` and `ostler memory key import` back it up and restore it.
 
 ### Memory written before sealing
 
@@ -693,7 +695,7 @@ Saved facts are copied into sealed form and read back to check them before the o
 
 ## Local embeddings
 
-By default Ostler embeds text with Qdrant Cloud Inference (`sentence-transformers/all-minilm-l6-v2`, 384 dimensions). To keep the text on your machine, embed locally with Ollama: :unreleased:
+By default Ostler embeds text with Qdrant Cloud Inference (`sentence-transformers/all-minilm-l6-v2`, 384 dimensions). To keep the text on your machine, embed locally with Ollama: **Unreleased: main branch, not a tagged release.**
 
 ```sh
 ostler serve --embeddings ollama --embedding-model <model> --embedding-dim <dims>
@@ -709,13 +711,13 @@ Exact signals need no vectors: lookups by playbook mapping and `autocomplete` to
 
 ## Transport
 
-Plain `http://` to a non-loopback Qdrant is **refused**, because the API key and facts would cross the network unencrypted. `--allow-insecure-qdrant` (`OSTLER_ALLOW_INSECURE_QDRANT`) overrides it for links already protected by a VPN or tunnel. :unreleased:
+Plain `http://` to a non-loopback Qdrant is **refused**, because the API key and facts would cross the network unencrypted. `--allow-insecure-qdrant` (`OSTLER_ALLOW_INSECURE_QDRANT`) overrides it for links already protected by a VPN or tunnel. **Unreleased: main branch, not a tagged release.**
 
 If Qdrant fails twice in a row (transport error or 5xx), lookups are skipped for 30 seconds and tool results start with `Note: memory is unavailable (...); continuing without it.` Requests time out after 4 seconds.
 
 ## Per-tenant access tokens
 
-By default all tenants share three collections, separated by a `tenant` filter in every query. A leaked **admin key** exposes every tenant in that mode. For stronger separation: :unreleased:
+By default all tenants share three collections, separated by a `tenant` filter in every query. A leaked **admin key** exposes every tenant in that mode. For stronger separation: **Unreleased: main branch, not a tagged release.**
 
 - `--isolation collection` gives each tenant its own collections.
 - `ostler memory token` mints a **JWT that Qdrant itself limits** to those collections, read-write or `--read-only`, and expiring. A leaked client token then exposes one tenant, not the cluster.
@@ -736,7 +738,7 @@ ostler memory token --days 30
 
 Tested on a real Qdrant 1.20: another tenant's collections answer 403, and expired, forged and read-only tokens are refused. Qdrant 1.20 rejects the older per-point `payload` claim as deprecated, so isolation is **per collection**.
 
-Not covered: the default `shared` isolation shares collections, so a leaked admin key exposes every tenant, and collection isolation needs `jwt_rbac` and an admin who creates the collections. Over [A2A](a2a.html), all conversations share one tenant; run one server per tenant if callers must not see each other's profile.
+Not covered: the default `shared` isolation shares collections, so a leaked admin key exposes every tenant, and collection isolation needs `jwt_rbac` and an admin who creates the collections. Over [A2A](https://inamdarmihir.github.io/ostler/docs/a2a.html), all conversations share one tenant; run one server per tenant if callers must not see each other's profile.
 
 ## How retrieval works
 
@@ -761,7 +763,7 @@ Ostler needs no model to judge whether a fill worked: the browser reads every va
 | demote | a mapping that loses more than it wins is dropped | |
 | forget | `ostler memory prune --days 90` removes stale, unproven skills; `serve` also forgets those not verified for 180 days on start (`--retain-days`, 0 keeps them). Saved facts never expire | range filter on `verified_ts` |
 
-On a scripted site with redesigned forms, correct suggestions went from 1 to 8 of 10 fillable fields, with zero wrong fills in both conditions. That is a synthetic fixture, not real sites ([ADR-0008](repo:docs/adr/0008-learning-loop.md)).
+On a scripted site with redesigned forms, correct suggestions went from 1 to 8 of 10 fillable fields, with zero wrong fills in both conditions. That is a synthetic fixture, not real sites ([ADR-0008](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0008-learning-loop.md)).
 
 ## Commands
 
@@ -791,7 +793,7 @@ Just trying things out: `ostler memory --memory ephemeral list` keeps memory in-
 | memory on **Qdrant Cloud** | cluster URL and API key, with **Inference enabled** on the cluster |
 | memory on self-hosted Qdrant | URL (plus key if you set one) and `--embeddings dev-hash`, or `--embeddings ollama` for semantic search |
 
-See [Security model](security.html) for the threat-model rows on secrets, cross-user exposure and anyone who can read your Qdrant.
+See [Security model](https://inamdarmihir.github.io/ostler/docs/security.html) for the threat-model rows on secrets, cross-user exposure and anyone who can read your Qdrant.
 
 ### Upgrading older memory
 
@@ -849,7 +851,7 @@ ostler config path                          # ~/.config/ostler/config.toml
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `tools` | `OSTLER_TOOLS` | `core`, `forms` or `all` |
 
-Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_KEY_STORE`, `OSTLER_ALLOW_NEW_KEY` (same as `--allow-new-key`: let a first start create the sealing key while Qdrant cannot be checked), `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are :unreleased:.
+Other environment variables used by the code: `OSTLER_SEAL`, `OSTLER_ISOLATION`, `OSTLER_MEMORY_KEY`, `OSTLER_EMBEDDING_URL`, `OSTLER_EMBEDDING_DIM`, `OSTLER_ALLOW_INSECURE_QDRANT`, `OSTLER_RETAIN_DAYS`, `OSTLER_KEY_STORE`, `OSTLER_ALLOW_NEW_KEY` (same as `--allow-new-key`: let a first start create the sealing key while Qdrant cannot be checked), `OSTLER_VERBOSE`, `OSTLER_CHROME`, `OSTLER_NO_SANDBOX`, `OSTLER_A2A_BIND` and `OSTLER_A2A_TOKEN`. The seal, isolation, embedding-URL, insecure-Qdrant and retention settings are **Unreleased: main branch, not a tagged release.**.
 
 ## Commands
 
@@ -867,7 +869,7 @@ ostler <COMMAND>
   fixtures   Serve the demo form pages (default port 8787)
 ```
 
-`ostler memory` also has `seal` and `token` :unreleased:, described in [Memory and privacy](memory.html). Memory flags go before the subcommand: `ostler memory --memory ephemeral list`.
+`ostler memory` also has `seal` and `token` **Unreleased: main branch, not a tagged release.**, described in [Memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html). Memory flags go before the subcommand: `ostler memory --memory ephemeral list`.
 
 ## `ostler serve` flags
 
@@ -890,15 +892,15 @@ ostler <COMMAND>
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
 | `--embeddings` | `cloud` | `cloud`, `ollama` (embed locally, only vectors leave) or `dev-hash` |
 | `--embedding-model`, `--embedding-dim` | MiniLM, 384 | embedding model and its dimension |
-| `--embedding-url` | `http://127.0.0.1:11434` | where the Ollama embedding server lives :unreleased: |
+| `--embedding-url` | `http://127.0.0.1:11434` | where the Ollama embedding server lives **Unreleased: main branch, not a tagged release.** |
 | `--qdrant-on-disk` | off | vectors on disk |
-| `--seal` | `auto` | encrypt memory on this machine before it reaches Qdrant (`on`, `off`) :unreleased: |
-| `--isolation` | `shared` | `collection`: one set of collections per tenant, pairs with `ostler memory token` :unreleased: |
-| `--allow-insecure-qdrant` | off | allow plain http to a non-loopback Qdrant :unreleased: |
-| `--retain-days` | 180 | forget unverified skills and episodes on start (0 = keep) :unreleased: |
+| `--seal` | `auto` | encrypt memory on this machine before it reaches Qdrant (`on`, `off`) **Unreleased: main branch, not a tagged release.** |
+| `--isolation` | `shared` | `collection`: one set of collections per tenant, pairs with `ostler memory token` **Unreleased: main branch, not a tagged release.** |
+| `--allow-insecure-qdrant` | off | allow plain http to a non-loopback Qdrant **Unreleased: main branch, not a tagged release.** |
+| `--retain-days` | 180 | forget unverified skills and episodes on start (0 = keep) **Unreleased: main branch, not a tagged release.** |
 | `--tenant` | `default` | memory namespace |
 
-Set `OSTLER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root or in some containers). See [Troubleshooting](troubleshooting.html).
+Set `OSTLER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root or in some containers). See [Troubleshooting](https://inamdarmihir.github.io/ostler/docs/troubleshooting.html).
 
 ## `ostler a2a` flags
 
@@ -914,7 +916,7 @@ Set `OSTLER_NO_SANDBOX=1` to run Chrome without its sandbox (needed as root or i
 | `--idle-secs` | 300 | close a conversation's browser after this many idle seconds |
 | `--a2a-auto-submit` | off | treat `submit: true` as already confirmed |
 
-See [A2A](a2a.html) for the protocol and its security notes.
+See [A2A](https://inamdarmihir.github.io/ostler/docs/a2a.html) for the protocol and its security notes.
 
 
 ---
@@ -933,7 +935,7 @@ Ostler exposes 30 MCP tools in five profiles. `--tools auto|core|forms|research|
 | `research` | core plus the research tools | 21 |
 | `all` | everything, including memory and `stats` | 30 |
 
-Page-derived text in results (page content, titles, URLs, dialog text, the `look` legend) is wrapped in `<page_content untrusted="true">`. The server instructions tell the model not to follow it. See [Security model](security.html).
+Page-derived text in results (page content, titles, URLs, dialog text, the `look` legend) is wrapped in `<page_content untrusted="true">`. The server instructions tell the model not to follow it. See [Security model](https://inamdarmihir.github.io/ostler/docs/security.html).
 
 ## Browse (profile: core)
 
@@ -1133,11 +1135,11 @@ Set one field by ref (any kind, including custom widgets).
 
 ## Research (profile: research)
 
-Built around one contract: **an answer can only contain what was read and verified.** See the [Cookbook](cookbook.html#13-research-with-citations-that-are-checked) for the workflow.
+Built around one contract: **an answer can only contain what was read and verified.** See the [Cookbook](https://inamdarmihir.github.io/ostler/docs/cookbook.html#13-research-with-citations-that-are-checked) for the workflow.
 
 ### `cite`
 
-Check a quote against a page read this session. `VERIFIED` returns the page's exact words and a `#:~:text=` link a person can open to check them. `NOT READ` (the page was never read), `NOT VERIFIED` (with the closest text on the page) and `TOO SHORT` are errors: do not use that claim. Markdown on either side is ignored, so `**1887**` and `[Marta Ilves](/m)` still verify.
+Check a quote against a page read this session. `VERIFIED` returns the page's exact words and a `#:~:text=` link a person can open to check them. `NOT READ` (the page was never read), `NOT VERIFIED` (with the closest text on the page) and `TOO SHORT` are errors: do not use that claim. Markdown on either side is ignored, so `**1887**` and `[Marta Ilves](https://inamdarmihir.github.io/m)` still verify.
 
 | parameter | type | notes |
 |---|---|---|
@@ -1192,7 +1194,7 @@ Links on the current page with anchor text and context, optionally filtered.
 
 ## Memory (profile: all)
 
-These need memory enabled (`--memory local`, a Qdrant URL, or `--memory ephemeral`). See [Memory and privacy](memory.html).
+These need memory enabled (`--memory local`, a Qdrant URL, or `--memory ephemeral`). See [Memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html).
 
 ### `memory_remember`
 
@@ -1264,7 +1266,7 @@ Include the version, how you ran it (flags, transport), and a minimal reproducti
 
 The `Security` workflow (`.github/workflows/security.yml`) runs on every push to `main`, every pull request and weekly:
 
-- `cargo deny` with [deny.toml](deny.toml): RustSec advisories and yanked crates, an allow-list of licenses, wildcard version requirements, and sources (crates.io only; no git dependencies). Duplicate versions of a crate are reported as warnings, not failures.
+- `cargo deny` with [deny.toml](https://github.com/inamdarmihir/ostler/blob/main/deny.toml): RustSec advisories and yanked crates, an allow-list of licenses, wildcard version requirements, and sources (crates.io only; no git dependencies). Duplicate versions of a crate are reported as warnings, not failures.
 - `cargo audit --deny warnings`: `Cargo.lock` against the RustSec database, including unmaintained and unsound warnings.
 - Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for Cargo dependencies and GitHub Actions.
 
@@ -1279,11 +1281,11 @@ These cover known-vulnerable and disallowed dependencies. They do not detect unk
 | **Irreversible submissions** | `--require-confirm-submit` blocks every non-GET request unless it happens inside `form_submit` with `confirm=true`. | Off by default. A GET with side effects, and WebSockets, are not covered. The first request of a popup window and requests from cross-site iframes (their own browser processes) are covered too: Chrome is told to hold such targets at start (`Target.setAutoAttach` with `waitForDebuggerOnStart`) and interception is switched on before they are released, so `--allow-domain host:port` pins and the gate apply to them (tested with a canary: popup POST, popup GET to another port, cross-site iframe POST/`fetch`/image). A submit that is cancelled mid-flight now closes the gate again. At most 8 popups are adopted (the rest are closed before they run). A popup opened by the form you confirmed inherits the confirmation for its first request only, so a hostile page that opens a window during a confirmed submit can let that popup's first request through. |
 | **File exfiltration through an upload field** | File fields are refused unless you pass `--upload-dir DIR`. A path is resolved first (`..` and symlinks included) and must land inside an allowed directory; the browser is handed the resolved path. | Anything inside an allowed directory can be attached to any page the agent visits, so keep it small and free of secrets. |
 | **A page's own "are you sure?" dialog** | `confirm()` and `prompt()` are dismissed, so a site's "Delete everything?" is not confirmed by a browser nobody is watching, and the agent is told what happened. `alert()` and `beforeunload` are acknowledged. | `--accept-dialogs` restores auto-accept for sites that need it. A dismissed confirm can leave a flow stuck; the agent sees the dialog text and can ask you. |
-| **A remote agent over A2A** | Loopback by default; bearer token required to listen elsewhere; `Origin` and `Host` checks against browser-based attacks; per-conversation browsers; submit needs an explicit confirm; private and internal addresses are refused unless you pass `--allow-private-networks`. | No TLS (use a reverse proxy). All conversations share one memory tenant. Always pass `--allow-domain`. See [docs/A2A.md](docs/A2A.md). |
+| **A remote agent over A2A** | Loopback by default; bearer token required to listen elsewhere; `Origin` and `Host` checks against browser-based attacks; per-conversation browsers; submit needs an explicit confirm; private and internal addresses are refused unless you pass `--allow-private-networks`. | No TLS (use a reverse proxy). All conversations share one memory tenant. Always pass `--allow-domain`. See [docs/A2A.md](https://inamdarmihir.github.io/ostler/docs/a2a.html). |
 | **Secrets in memory** | The memory API refuses password/token/card-like keys and card-number-like values; sensitive fields are never auto-filled from memory nor stored by `--learn`; sensitive values are masked in tool output; playbooks store structure only, never values. | Detection is heuristic (names, `autocomplete` tokens, digit patterns). A secret stored under an innocuous key with an innocuous value will not be caught. |
 | **Cross-user data exposure** | Every memory point carries a `tenant`; every query filters on it; isolation is tested on a real Qdrant. With `--isolation collection` each tenant has its own collections and `ostler memory token` mints a JWT Qdrant itself limits to them (tested on Qdrant 1.20: other tenants answer 403). | The default shares collections, so a leaked admin key exposes every tenant. Collection isolation needs `jwt_rbac` and an admin who creates the collections. |
 | **Someone who can read your Qdrant (operator, leaked key, backup)** | Payloads are sealed on your machine (AES-256-GCM); site names, labels, keys and point ids are keyed hashes; episodes are redacted of emails and numbers; plain `http://` to a remote Qdrant is refused. | The vector is not hidden: with `--embeddings cloud` the field text is sent to Qdrant Cloud Inference, and vectors of labels reveal roughly what they say. Use `--embeddings ollama` to keep text local. Tenant name, win/loss counters, timing and point counts stay visible. The key is a file or env var by default (optionally the macOS Keychain or Linux Secret Service via `key_store = keychain`). Lose it and sealed memory is unreadable; `serve` refuses to start rather than silently replace a key that cannot open existing memory, and a first start only creates a key after Qdrant was seen to hold no sealed memory for the tenant (with Qdrant unreachable it refuses unless you pass `--allow-new-key`). Sealed blobs in the old `v1` format are not read (run `ostler memory seal` once to upgrade them). Two simultaneous first starts on the Linux keychain are serialised by a lock file, which does not cover other programs writing the same Secret Service item; that path is tested against a scripted fake `secret-tool`, not a real keyring. |
-| **Malicious page attacking the runtime** | The injected runtime avoids `eval` and never executes page-supplied strings; it works on DOM objects. It runs before page scripts and keeps its own references to `fetch`, `XMLHttpRequest` and `setTimeout`. | The runtime shares a JS world with the page, so a hostile page can replace `window.__wm`, patch `Element.prototype` / `Array.prototype` / `JSON` / `Map` after load, or read the runtime's functions, and so mislead what the agent is told (a field's value, whether something is visible or required) or how long a fill waits. Running it in a CDP isolated world was investigated and is **not** done: the activity tracking that settle depends on works by patching `fetch`, XHR and timers in the page's own world, which an isolated world cannot do, and the same-origin-iframe walk calls the other frame's `__wm`. Doing it needs a split into a small main-world tracker and an isolated-world runtime ([ADR-0004](docs/adr/0004-injected-runtime.md)). Page DOM content itself is always attacker-controlled; do not rely on the runtime for adversarial pages. |
+| **Malicious page attacking the runtime** | The injected runtime avoids `eval` and never executes page-supplied strings; it works on DOM objects. It runs before page scripts and keeps its own references to `fetch`, `XMLHttpRequest` and `setTimeout`. | The runtime shares a JS world with the page, so a hostile page can replace `window.__wm`, patch `Element.prototype` / `Array.prototype` / `JSON` / `Map` after load, or read the runtime's functions, and so mislead what the agent is told (a field's value, whether something is visible or required) or how long a fill waits. Running it in a CDP isolated world was investigated and is **not** done: the activity tracking that settle depends on works by patching `fetch`, XHR and timers in the page's own world, which an isolated world cannot do, and the same-origin-iframe walk calls the other frame's `__wm`. Doing it needs a split into a small main-world tracker and an isolated-world runtime ([ADR-0004](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0004-injected-runtime.md)). Page DOM content itself is always attacker-controlled; do not rely on the runtime for adversarial pages. |
 | **Local exposure** | Chrome is launched with a throwaway profile and talks to Ostler over a pipe (`--remote-debugging-pipe`). There is no debugging port, so no other local user can connect to the browser, and Chrome exits by itself if Ostler dies. Tested: no listening socket in the browser's process tree (the WebSocket mode shows one). | `OSTLER_CDP_TRANSPORT=ws` brings back the old unauthenticated localhost port, for debugging only. With `--profile-dir` your logged-in sessions live on disk, readable by your own account and by any process running as you. |
 
 Not audited. No security review has been done by a third party.
@@ -1449,14 +1451,14 @@ Source: https://inamdarmihir.github.io/ostler/docs/architecture.html
 | `ostler-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
 | `ostler-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors from a local embedder: Ollama or the non-semantic hash), `InMemoryStore` and `SealedStore` (client-side encryption wrapper); `Memory` API for one tenant; per-tenant Qdrant access tokens (`token.rs`). |
 | `ostler-mcp` | JSON-RPC loop, 30 tools in 5 profiles (15 core, 19 forms, 21 research, 30 all; `auto` grows from core), lazy browser, per-tool metrics, background memory writes. `evidence.rs` holds the research session: pages read (markdown for passages, plain words for verification), verified citations, re-verification when a page changes; `app/research.rs` wires `read`, `cite`, `evidence`, `search`, `open_many`, `extract` and `links` to `ostler-browser`, `ostler-extract` and `ostler-research`. |
-| `ostler-a2a` | The Agent2Agent HTTP surface (`ostler a2a`); see [A2A.md](A2A.md). |
+| `ostler-a2a` | The Agent2Agent HTTP surface (`ostler a2a`); see [A2A.md](https://inamdarmihir.github.io/ostler/docs/a2a.html). |
 | `ostler` (`crates/ostler-cli`) | `serve`, `a2a`, `init`, `config`, `setup`, `doctor`, `inspect`, `memory`, `fixtures`. |
 | `ostler-fixtures` | The 49 form test pages (`PAGES` in `crates/ostler-fixtures/src/lib.rs`, plus an internal 404 page), the domain packs under `packs/` (research, gov-forms, jobs, dev-qa, commerce: 34 tasks, 29 pages), and a recording HTTP server (`/__records`, `/__reset`, `/exfil`, `/pay`, `robots.txt`, a second origin port). |
 | `ostler-bench` | Forms / footprint / concurrency / memory-scale benchmarks and the LLM cost model. |
 
 ## The decisions that matter, and why
 
-Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
+Each has an ADR in [`docs/adr/`](https://github.com/inamdarmihir/ostler/tree/main/docs/adr) where the alternatives are written down.
 
 **An injected runtime instead of CDP's accessibility tree.** A single script (`runtime.js`) runs inside every document and does traversal, snapshotting and field manipulation. It sees open shadow roots and same-origin iframes through one code path, can run React-safe native setters, and answers a question in one round-trip that would take dozens of CDP calls. The cost: it is our code running in a hostile page's world, so it is written defensively (no `eval`, no page-supplied selectors executed as code) and it cannot see closed shadow roots or cross-origin frames.
 
@@ -1470,7 +1472,7 @@ Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
 
 **Observation is part of the action.** `navigate` returns an interactive snapshot; `click`/`type`/`press` return a delta snapshot. Saves a tool call per step and keeps the context small. `observe: none` opts out.
 
-**Memory as three kinds, one tenant filter.** *Profile* (facts about the user), *playbooks* (structure of forms that worked: field labels and which fact fed them, **never values**), *episodes* (validation errors and failures, deduplicated with a count). Retrieval prefers the most reliable signal first: the form's own playbook mapping → the field's `autocomplete` token matched against facts (payload filter, no vectors) → a trusted mapping from a similar form on the same host, ranked in Qdrant by a score-boosting formula over similarity, win rate and recency → semantic vector search. Every fill outcome patches the playbook: wins reinforce a mapping, failures demote it, and `prune` forgets stale, unproven skills ([ADR-0008](adr/0008-learning-loop.md)). Writes happen in the background, never on the response path. Every point carries `tenant`, indexed with `is_tenant`; `--isolation collection` instead gives each tenant its own three collections (the usual names prefixed with `ostler_<tenant>_`), see "Tenant tokens" below. On start, `serve` forgets learned skills and episodes not verified for `--retain-days` (default 180; 0 keeps them); facts you saved never expire.
+**Memory as three kinds, one tenant filter.** *Profile* (facts about the user), *playbooks* (structure of forms that worked: field labels and which fact fed them, **never values**), *episodes* (validation errors and failures, deduplicated with a count). Retrieval prefers the most reliable signal first: the form's own playbook mapping → the field's `autocomplete` token matched against facts (payload filter, no vectors) → a trusted mapping from a similar form on the same host, ranked in Qdrant by a score-boosting formula over similarity, win rate and recency → semantic vector search. Every fill outcome patches the playbook: wins reinforce a mapping, failures demote it, and `prune` forgets stale, unproven skills ([ADR-0008](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0008-learning-loop.md)). Writes happen in the background, never on the response path. Every point carries `tenant`, indexed with `is_tenant`; `--isolation collection` instead gives each tenant its own three collections (the usual names prefixed with `ostler_<tenant>_`), see "Tenant tokens" below. On start, `serve` forgets learned skills and episodes not verified for `--retain-days` (default 180; 0 keeps them); facts you saved never expire.
 
 **One Qdrant API, three vector sources (`--embeddings`).** `cloud`: with Qdrant Cloud Inference the client sends `{text, model}` and Qdrant embeds server-side, so the field text reaches Qdrant. `ollama`: a local Ollama server embeds on this machine (`--embedding-url`, default `http://127.0.0.1:11434`) and only vectors reach Qdrant; plain http to a non-loopback embedder is refused. `dev-hash`: a deterministic client-side hash embedder for tests and open-source Qdrant development; explicitly **not** semantic.
 
@@ -1484,14 +1486,14 @@ Each has an ADR in [`docs/adr/`](adr/) where the alternatives are written down.
 
 - Chrome/Chromium only (Lightpanda/other CDP engines are a planned pluggable backend, see ADR-0001; not implemented).
 - Cross-origin iframes and closed shadow roots are invisible to the runtime.
-- No CAPTCHA solving, 2FA, anti-bot evasion or login-state management beyond `--profile-dir`. Verification walls are *detected and handed to a person* (`CHALLENGE:` notice, `wait_for_human`, A2A `input-required`); this is deliberate, see [ADR-0009](adr/0009-challenges-are-handed-off.md).
+- No CAPTCHA solving, 2FA, anti-bot evasion or login-state management beyond `--profile-dir`. Verification walls are *detected and handed to a person* (`CHALLENGE:` notice, `wait_for_human`, A2A `input-required`); this is deliberate, see [ADR-0009](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0009-challenges-are-handed-off.md).
 - Calendar pickers on read-only inputs are handled heuristically (month header, prev/next, day cells); dropdown-only and year-only pickers are not.
 - MCP runs over stdio only; `ostler a2a` is the HTTP surface.
 - Linux and Windows are untested locally; CI covers Linux.
 
 ## Related
 
-[SYSTEM-DESIGN.md](SYSTEM-DESIGN.md) (context, constraints, capacity, trade-offs) · [THREAT-MODEL.md](THREAT-MODEL.md) · [FAILURE-MODES.md](FAILURE-MODES.md) · [SLOS.md](SLOS.md) · [COMPATIBILITY.md](COMPATIBILITY.md) · [OPERATIONS.md](OPERATIONS.md) · [ADR-0011](adr/0011-reliability-principles.md)
+[SYSTEM-DESIGN.md](https://github.com/inamdarmihir/ostler/blob/main/docs/SYSTEM-DESIGN.md) (context, constraints, capacity, trade-offs) · [THREAT-MODEL.md](https://github.com/inamdarmihir/ostler/blob/main/docs/THREAT-MODEL.md) · [FAILURE-MODES.md](https://github.com/inamdarmihir/ostler/blob/main/docs/FAILURE-MODES.md) · [SLOS.md](https://github.com/inamdarmihir/ostler/blob/main/docs/SLOS.md) · [COMPATIBILITY.md](https://github.com/inamdarmihir/ostler/blob/main/docs/COMPATIBILITY.md) · [OPERATIONS.md](https://github.com/inamdarmihir/ostler/blob/main/docs/OPERATIONS.md) · [ADR-0011](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0011-reliability-principles.md)
 
 
 ---
@@ -1507,7 +1509,7 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 
 ## What these benchmarks do and do not show
 
-- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 form fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. Section 7 checks seven live practice pages (correctness of what the tool claims, no model, small corpus); a real-model evaluation on a wider set of real sites is the next milestone ([roadmap](../README.md#roadmap)).
+- They run against the **local fixtures** in `crates/ostler-fixtures/fixtures/` (the form benchmark drives 10 of the 49 form fixture pages, built to reproduce documented form-filling failure modes: basic, validation, dependent, wizard, controlled, combobox, shadow, iframe, longform, types). They show the engine handles those failure modes and what it costs. They do **not** show success rates on the open web. Section 7 checks seven live practice pages (correctness of what the tool claims, no model, small corpus); a real-model evaluation on a wider set of real sites is the next milestone ([roadmap](https://inamdarmihir.github.io/ostler/index.html#limits)).
 - The "per-field" baseline is **our own engine driven the way snapshot-per-action tools are driven** (one call per field, each returning a full page snapshot). It isolates the effect of the interaction pattern. It is **not** a measurement of Playwright MCP, agent-browser or any other product (section 5 runs Playwright MCP and Chrome DevTools MCP for real). Tools that offer batched form fills would sit between the two columns.
 - LLM prices, LLM turn latency and cloud prices are **illustrative parameters** (flags on the harness). Token counts are `bytes / 4`, an estimate.
 
@@ -1602,7 +1604,7 @@ Section 1 compares Ostler with a *pattern*. This section runs the **real competi
 | Playwright MCP | npm `@playwright/mcp` 0.0.84 (reports Playwright 1.65.0-alpha-2026-10-30), `--headless --isolated --browser chrome` | 25 | 5,265 |
 | Chrome DevTools MCP | npm `chrome-devtools-mcp` 1.12.0, `--headless --isolated --executablePath <Chrome>` | 32 | 7,416 |
 
-Node v26.10.0. Median of 3 runs per task in one session per server (browser pre-launched by a warm-up call; cold start is reported separately in the JSON). Raw data: [`bench-results/compare.json`](../bench-results/compare.json), table: [`bench-results/compare.md`](../bench-results/compare.md).
+Node v26.10.0. Median of 3 runs per task in one session per server (browser pre-launched by a warm-up call; cold start is reported separately in the JSON). Raw data: [`bench-results/compare.json`](https://github.com/inamdarmihir/ostler/blob/main/bench-results/compare.json), table: [`bench-results/compare.md`](https://github.com/inamdarmihir/ostler/blob/main/bench-results/compare.md).
 
 **Method.** There is no LLM. A deterministic script plays an "ideal agent" per server: the shortest sensible sequence, with element refs parsed from the server's own output, never guessed. Each task is judged only by what the fixture server received (`GET /__submissions`): exactly one submission, equal field for field to the expected record. `steps` = tool calls. `out tokens` = bytes of tool output text / 4 (an estimate, as elsewhere in this file; no images were returned). `wall ms` = sum of tool-call times (no LLM time, no post-submit wait).
 
@@ -1705,7 +1707,7 @@ scripts/bench-compare.sh          # section 5: builds, npm-installs the pinned c
 #             --vcpu-hour-usd --gib-hour-usd                          (concurrency)
 ```
 
-Raw results from the run documented here are in [`bench-results/`](../bench-results/). The `bench` GitHub workflow re-runs these on Linux runners and uploads artifacts, which also gives PSS-based memory numbers.
+Raw results from the run documented here are in [`bench-results/`](https://github.com/inamdarmihir/ostler/tree/main/bench-results). The `bench` GitHub workflow re-runs these on Linux runners and uploads artifacts, which also gives PSS-based memory numbers.
 
 
 ---
@@ -1714,7 +1716,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/economics.html
 
 # Economics and scale: the hard questions
 
-Written as the questions a skeptical investor or senior engineer would ask, answered with what we measured ([BENCHMARKS.md](BENCHMARKS.md)) and clearly separated from what we assume. Where we do not know, we say so.
+Written as the questions a skeptical investor or senior engineer would ask, answered with what we measured ([BENCHMARKS.md](https://inamdarmihir.github.io/ostler/docs/benchmarks.html)) and clearly separated from what we assume. Where we do not know, we say so.
 
 ## 1. What does one task cost, and who pays for what?
 
@@ -1765,7 +1767,7 @@ What can erode it: competitors adding memory (it is not hard in principle), and 
 
 | risk | status |
 |---|---|
-| Real-site success rate unknown (we test fixtures only) | **Biggest gap, partly addressed.** `ostler-bench real` fills 7 live practice pages and checks every field against the DOM: 44 of 45 correct, 0 false claims after two fixes ([BENCHMARKS §7](BENCHMARKS.md#7-real-site-evaluation-fill-only-no-llm)). Small and friendly; a wider real-model evaluation is still the next milestone. |
+| Real-site success rate unknown (we test fixtures only) | **Biggest gap, partly addressed.** `ostler-bench real` fills 7 live practice pages and checks every field against the DOM: 44 of 45 correct, 0 false claims after two fixes ([BENCHMARKS §7](https://inamdarmihir.github.io/ostler/docs/benchmarks.html#7-real-site-evaluation-fill-only-no-llm)). Small and friendly; a wider real-model evaluation is still the next milestone. |
 | Computer-use models make DOM tooling less necessary | Real. Forms with consent/legal gates still want structured, verifiable filling; unproven. |
 | Anti-bot, CAPTCHA, SSO/2FA, cross-origin iframes | Not handled (documented limitations). |
 | Memory leaks PII or is poisoned by a malicious page | Mitigated: secrets refused at write, sensitive fields never auto-filled or stored, values not stored in playbooks, tenant isolation tested, page content marked untrusted. Not a security audit. |
@@ -1934,7 +1936,7 @@ With nothing configured it prints `Memory: in-process, this session only` and th
 
 | symptom | likely cause | fix |
 |---|---|---|
-| `serve --cdp-url` says it could not read `/json/version` | no Chrome is listening on that port, or it was started without a dedicated `--user-data-dir` (Chrome ignores the debug flag on its default profile) | start it as in [CLIENTS.md](CLIENTS.md#use-the-chrome-you-already-have), then `ostler doctor --cdp-url ...` |
+| `serve --cdp-url` says it could not read `/json/version` | no Chrome is listening on that port, or it was started without a dedicated `--user-data-dir` (Chrome ignores the debug flag on its default profile) | start it as in [CLIENTS.md](https://inamdarmihir.github.io/ostler/docs/agents.html#use-the-chrome-you-already-have), then `ostler doctor --cdp-url ...` |
 | `--cdp-url ... refusing a non-loopback host` | the URL points off this machine | use 127.0.0.1; for a remote browser tunnel the port with SSH |
 | `ostler install` says the file is not valid JSON/TOML | the client's config has a typo or comments | nothing was written; fix the file, or add the snippet from `ostler setup <client>` by hand |
 | Client says it can't start `ostler` / command not found | the client has a different `PATH` than your shell | use `ostler setup <client>`, which writes the binary's **absolute path** |
@@ -1977,7 +1979,7 @@ With nothing configured it prints `Memory: in-process, this session only` and th
 Ostler is a form-filling browser for an agent working on your behalf, on one machine. It is the wrong tool when:
 
 - **The site walls off automation.** CAPTCHA, Cloudflare/Turnstile, "verify you are human" pages and search-engine bot checks are reported with a `CHALLENGE:` line and handed to a person. Ostler never solves or bypasses them, and it is not built to avoid detection: there is no stealth patching, fingerprint spoofing, residential proxy or IP rotation. A site that blocks headless or datacenter Chrome will block Ostler. `--headed` plus a persistent `--profile-dir` lets *you* pass a check once; it does not make a bot wall go away.
-- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](BENCHMARKS.md)).
+- **You need scale.** Each server drives one local Chrome (tabs share its cookies and profile). It is not a remote or cloud browser farm, not a crawler, and not meant for bulk scraping or high-volume account creation. More sessions means more servers, each with its own profile and its own memory use (see [Benchmarks](https://inamdarmihir.github.io/ostler/docs/benchmarks.html)).
 - **The flow needs an identity Ostler does not have.** There is no mailbox, phone number, SMS/OTP receiver or authenticator: one-time codes, email-link verification, passkeys, hardware keys and 2FA prompts need a person. Passwords and card numbers are never read back or remembered; sensitive fields are refused and the agent is told to ask you. It does not create accounts on your behalf out of thin air.
 - **The page is outside what the injected runtime can see.** Cross-origin iframes (many hosted card fields), closed shadow roots, canvas-drawn UIs, native OS dialogs and file pickers, and desktop apps are not reachable. A control that stays disabled until a person scrolls or hovers is reported as disabled rather than worked around.
 - **A wrong submit is expensive and nobody is checking.** Ostler verifies every value by reading it back and refuses to call a submit a success without evidence, but it cannot know whether a form means what it says. For payments, legal acceptance and anything irreversible, run with `--require-confirm-submit` and review the result yourself.
