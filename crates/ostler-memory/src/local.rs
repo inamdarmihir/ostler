@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::sealed::SealKey;
-use crate::store::{Filter, Hit, InMemoryStore, Kind, Rank, Store};
+use crate::sparse::SparseVector;
+use crate::store::{Filter, Hit, HybridHit, HybridQuery, InMemoryStore, Kind, Rank, Store};
 use crate::{Embedder, MemoryError, Result};
 
 /// Bound into the ciphertext, so a sealed Qdrant blob cannot be passed off as a store file or the reverse.
@@ -38,6 +39,10 @@ struct Rec {
     kind: String,
     id: String,
     vector: Vec<f32>,
+    /// Sparse (BM25) vector of a source chunk. Absent for every other kind, and in files written before
+    /// source memory existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sparse: Option<SparseVector>,
     payload: Value,
 }
 
@@ -175,7 +180,7 @@ impl LocalStore {
                     r.vector.len()
                 )));
             }
-            points.push((kind, r.id, r.vector, r.payload));
+            points.push((kind, r.id, r.vector, r.sparse, r.payload));
         }
         self.inner.replace_all(points);
         *self.seen.lock().unwrap() = stamp;
@@ -200,10 +205,11 @@ impl LocalStore {
                 .inner
                 .export()
                 .into_iter()
-                .map(|(kind, id, vector, payload)| Rec {
+                .map(|(kind, id, vector, sparse, payload)| Rec {
                     kind: kind.collection().into(),
                     id,
                     vector,
+                    sparse,
                     payload,
                 })
                 .collect(),
@@ -262,7 +268,40 @@ impl Store for LocalStore {
             .ok_or_else(|| MemoryError::Embed("embedder returned no vector".into()))?;
         let _lock = self.lock()?;
         self.load()?;
-        self.inner.put_vector(kind, id, vector, payload);
+        self.inner.put_vector(kind, id, vector, None, payload);
+        self.save()
+    }
+
+    async fn upsert_source(
+        &self,
+        id: &str,
+        text: &str,
+        sparse: SparseVector,
+        payload: Value,
+    ) -> Result<()> {
+        let vector = self
+            .inner
+            .embedder()
+            .embed(&[text.to_string()])
+            .await?
+            .pop()
+            .ok_or_else(|| MemoryError::Embed("embedder returned no vector".into()))?;
+        let _lock = self.lock()?;
+        self.load()?;
+        self.inner
+            .put_vector(Kind::Source, id, vector, Some(sparse), payload);
+        self.save()
+    }
+
+    async fn search_hybrid(&self, q: &HybridQuery<'_>) -> Result<Vec<HybridHit>> {
+        self.refresh()?;
+        self.inner.search_hybrid(q).await
+    }
+
+    async fn replace_payload(&self, kind: Kind, id: &str, payload: Value) -> Result<()> {
+        let _lock = self.lock()?;
+        self.load()?;
+        self.inner.put_payload(kind, id, payload);
         self.save()
     }
 

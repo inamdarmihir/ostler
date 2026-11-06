@@ -24,20 +24,28 @@
 //! 4. **Forget.** [`Memory::prune`] removes stale, unproven skills and old episodes.
 
 mod embed;
+pub mod fusion;
 mod local;
 mod qdrant;
 mod sealed;
+mod source;
+pub mod sparse;
 mod store;
 mod token;
 
 pub use embed::{Embedder, HashEmbedder, OllamaEmbedder};
 pub use local::LocalStore;
-pub use qdrant::{QdrantConfig, QdrantStore, VectorSource};
+pub use qdrant::{QdrantConfig, QdrantStore, VectorSource, MIN_HYBRID_VERSION};
 pub use sealed::{
     migrate_sealed, probe_key, seal_legacy, write_v1_point_for_tests, KeyProbe, MigrateReport,
     SealKey, SealReport, SealedStore,
 };
-pub use store::{Filter, Hit, InMemoryStore, Kind, Rank, Store};
+pub use source::{
+    SaveSourcesReport, SourceChunk, SourceHit, SourceRecallOptions, SourceStats, SourceSummary,
+    DEFAULT_SOURCE_RETAIN_DAYS, MAX_CHUNKS_PER_URL, MAX_CHUNK_CHARS,
+};
+pub use sparse::{SparseVector, TermHasher};
+pub use store::{Filter, Hit, HybridHit, HybridQuery, InMemoryStore, Kind, Rank, Store};
 pub use token::{mint_tenant_token, tenant_prefix};
 
 use std::sync::Arc;
@@ -577,6 +585,8 @@ fn norm(s: &str) -> String {
 pub struct Memory {
     store: Arc<dyn Store>,
     pub tenant: String,
+    /// Days a fetched page stays in source memory; `0` keeps it. See [`Memory::prune_sources`].
+    source_retain_days: u64,
 }
 
 impl Memory {
@@ -584,6 +594,7 @@ impl Memory {
         Self {
             store,
             tenant: tenant.into(),
+            source_retain_days: DEFAULT_SOURCE_RETAIN_DAYS,
         }
     }
 
@@ -759,6 +770,8 @@ impl Memory {
                     self.store.delete(Kind::Episode, &h.id).await?;
                 }
             }
+            // Remembered page text can echo it too.
+            self.forget_sources_echoing(&needle).await?;
         }
         Ok(())
     }
@@ -776,7 +789,7 @@ impl Memory {
     }
 
     pub async fn wipe(&self) -> Result<()> {
-        for k in [Kind::Profile, Kind::Playbook, Kind::Episode] {
+        for k in Kind::ALL {
             self.store
                 .delete_matching(k, &Filter::tenant(&self.tenant))
                 .await?;
@@ -967,7 +980,9 @@ impl Memory {
     }
 
     /// Forget what has gone stale: playbooks not verified for `max_age_secs` that are unproven
-    /// (losses at least equal to wins), and episodes not seen for that long. Returns how many went.
+    /// (losses at least equal to wins), and episodes not seen for that long, plus remembered pages older than
+    /// [`Memory::source_retain_days`] (their own clock, `max_age_secs` does not apply to them). Returns how
+    /// many went.
     pub async fn prune(&self, max_age_secs: u64) -> Result<usize> {
         let cutoff = now().saturating_sub(max_age_secs) as f64;
         let stale = Filter::tenant(&self.tenant).below("verified_ts", cutoff);
@@ -984,6 +999,7 @@ impl Memory {
         }
         n += self.store.count(Kind::Episode, &stale).await? as usize;
         self.store.delete_matching(Kind::Episode, &stale).await?;
+        n += self.prune_sources(self.source_retain_days).await?;
         Ok(n)
     }
 
@@ -1115,6 +1131,7 @@ impl Memory {
                 self.save_episode(id, &ep).await?;
                 Some(id.to_string())
             }
+            Kind::Source => self.resave_source(payload).await?,
         })
     }
 

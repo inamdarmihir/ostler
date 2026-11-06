@@ -49,6 +49,22 @@ async fn sealed_memory_roundtrips_and_the_server_sees_no_plaintext() {
         .unwrap();
     }
 
+    m.save_sources(
+        "https://clinic.example/records",
+        vec![SourceChunk {
+            url: "https://clinic.example/records".into(),
+            chunk_id: "c0".into(),
+            ordinal: 0,
+            heading_path: vec!["Cardiology".into()],
+            text: "Appointment for the Lovelace family".into(),
+            fetched_at: 1_700_000_000,
+            content_hash: "h".into(),
+            title: Some("Clinic".into()),
+        }],
+    )
+    .await
+    .unwrap();
+
     // Everything works through the filters, which now run on hashes.
     assert_eq!(m.facts(10).await.unwrap().len(), 2);
     assert_eq!(
@@ -90,6 +106,9 @@ async fn sealed_memory_roundtrips_and_the_server_sees_no_plaintext() {
                 "fp-secret",
                 "Contact",
                 "ZIP",
+                "clinic.example",
+                "Lovelace",
+                "Cardiology",
             ] {
                 assert!(!s.contains(leak), "{kind:?} leaks {leak:?}: {s}");
             }
