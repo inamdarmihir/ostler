@@ -1515,10 +1515,718 @@
     return { strong, weak };
   }
 
+  // ---------------------------------------------------------------- reading and extraction
+  // read(): main-content extraction. Approach (one, documented): a compact readability-style scorer, not a
+  // vendored Readability.js. Reason: Readability works on a cloned Document, and cloning drops shadow roots and
+  // iframe content, which this runtime must read. Text-block elements (p, pre, blockquote, and leaf divs/li/td with
+  // >= 25 chars) add score to their ancestors (parent 1, grandparent 1/2, great-grandparent 1/3); class/id tokens
+  // and semantic tags adjust it; link density discounts it; boilerplate (nav, aside, footer, forms, cookie and
+  // consent banners, comments, share bars, fixed overlays) is skipped both when scoring and when converting.
+  // Nothing here executes page-supplied strings; JSON-LD is parsed as data with JSON.parse.
+  const T = (el) => el.tagName.toUpperCase();
+  const BOILER_TAGS = new Set(['NAV', 'ASIDE', 'FOOTER', 'FORM', 'BUTTON', 'SELECT', 'TEXTAREA', 'INPUT', 'SVG', 'CANVAS', 'AUDIO', 'VIDEO', 'OBJECT', 'EMBED', 'DIALOG', 'MAP', 'DATALIST']);
+  const BOILER_ROLES = new Set(['navigation', 'banner', 'contentinfo', 'complementary', 'dialog', 'alertdialog', 'search', 'menu', 'menubar', 'toolbar']);
+  const BOILER_TOKENS = new Set(['cookie', 'cookies', 'consent', 'gdpr', 'ccpa', 'popup', 'modal', 'newsletter', 'subscribe', 'subscription', 'share', 'sharing', 'social', 'sidebar', 'related', 'recommended', 'recommendations', 'comments', 'comment', 'respond', 'promo', 'promoted', 'advert', 'advertisement', 'ads', 'ad', 'sponsor', 'sponsored', 'breadcrumb', 'breadcrumbs', 'navbar', 'nav', 'navigation', 'masthead', 'footer', 'paywall', 'overlay']);
+  const POSITIVE_TOKENS = new Set(['article', 'body', 'content', 'entry', 'main', 'post', 'text', 'story', 'prose', 'blog']);
+  const COOKIE_TEXT = /\b(cookies?|consent|gdpr|privacy (?:policy|settings)|accept all|subscribe to our newsletter)\b/i;
+  const INLINE_TAGS = new Set(['A', 'SPAN', 'B', 'STRONG', 'I', 'EM', 'CODE', 'SMALL', 'ABBR', 'SUB', 'SUP', 'MARK', 'TIME', 'LABEL', 'U', 'S', 'DEL', 'INS', 'BR', 'IMG', 'CITE', 'Q', 'KBD', 'SAMP', 'VAR', 'DFN', 'DATA', 'WBR', 'BDI', 'BDO', 'FONT', 'PICTURE', 'SOURCE']);
+  const TABLE_TAGS = new Set(['TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TR', 'TD', 'TH', 'CAPTION', 'COLGROUP', 'COL']);
+  const RD = { bodyLen: 0 };
+  function tokensOf(el) {
+    const raw = (el.getAttribute('class') || '') + ' ' + (el.getAttribute('id') || '');
+    return raw.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  }
+  // Visit rendered elements through the composed tree (open shadow roots, slots, same-origin iframes).
+  // `fn` returning false prunes that subtree.
+  function eachEl(root, fn, cap = 60000) {
+    let n = 0;
+    const visit = (el, d) => {
+      if (n > cap || d > 200 || el.nodeType !== 1) return;
+      if (SKIP.has(T(el)) || hiddenSelf(el)) return;
+      n++;
+      if (fn(el) === false) return;
+      for (const k of kids(el)) visit(k, d + 1);
+    };
+    visit(root, 0);
+    return n;
+  }
+  const parentOf = (el) => el.parentElement || (el.getRootNode && el.getRootNode().host) || null;
+  function composedContains(a, b) { for (let n = b; n; n = parentOf(n)) if (n === a) return true; return false; }
+  const absUrl = (raw, el) => {
+    try {
+      const u = new URL(String(raw).trim(), (el && el.ownerDocument && el.ownerDocument.baseURI) || location.href);
+      return /^(https?|mailto|tel):$/.test(u.protocol) ? u.href : '';
+    } catch { return ''; }
+  };
+  // True for page furniture. The root of an explicit selection is never judged by the caller.
+  function boiler(el) {
+    const tag = T(el);
+    if (BOILER_TAGS.has(tag)) return true;
+    if (tag === 'HEADER' && !el.closest('article,main,section,[role=article],[role=main]')) return true;
+    const role = (el.getAttribute('role') || '').split(/\s+/)[0];
+    if (BOILER_ROLES.has(role) || el.getAttribute('aria-modal') === 'true') return true;
+    const toks = tokensOf(el);
+    if (toks.some((t) => BOILER_TOKENS.has(t)) && !toks.some((t) => POSITIVE_TOKENS.has(t))) {
+      // A layout wrapper such as `has-sidebar` that holds most of the page is not the sidebar.
+      if (el.querySelector('article,main,[role=main]')) return false;
+      if (RD.bodyLen && (el.textContent || '').length > 0.6 * RD.bodyLen) return false;
+      return true;
+    }
+    try {
+      const pos = styleOf(el).position;
+      if ((pos === 'fixed' || pos === 'sticky') && COOKIE_TEXT.test((el.textContent || '').slice(0, 600))) return true;
+    } catch { /* ignore */ }
+    return false;
+  }
+  const isLeafBlock = (el) => {
+    for (const k of el.children) if (!INLINE_TAGS.has(T(k))) return false;
+    return true;
+  };
+  function textBlockLen(el) {
+    const t = T(el);
+    if (t === 'P' || t === 'PRE' || t === 'BLOCKQUOTE') return clean(el.textContent).length;
+    if (['DIV', 'SECTION', 'LI', 'TD', 'DD', 'FIGCAPTION', 'ARTICLE'].includes(t) && isLeafBlock(el)) return clean(el.textContent).length;
+    return 0;
+  }
+  function linkStats(el) {
+    let total = 0, links = 0;
+    const visit = (n, inLink, d) => {
+      if (d > 200) return;
+      if (n.nodeType === 3) { const l = clean(n.nodeValue).length; total += l; if (inLink) links += l; return; }
+      if (n.nodeType !== 1 || SKIP.has(T(n)) || hiddenSelf(n)) return;
+      const lk = inLink || (T(n) === 'A' && n.hasAttribute('href'));
+      for (const k of kids(n)) visit(k, lk, d + 1);
+    };
+    visit(el, false, 0);
+    return { total, links, density: total ? links / total : 0 };
+  }
+  function classWeight(el) {
+    const toks = tokensOf(el);
+    let w = 0;
+    if (toks.some((t) => POSITIVE_TOKENS.has(t))) w += 25;
+    if (toks.some((t) => BOILER_TOKENS.has(t))) w -= 25;
+    const tag = T(el);
+    if (tag === 'ARTICLE' || el.getAttribute('itemprop') === 'articleBody' || el.getAttribute('role') === 'article') w += 40;
+    else if (tag === 'MAIN' || el.getAttribute('role') === 'main') w += 20;
+    else if (tag === 'DIV') w += 5;
+    else if (['UL', 'OL', 'DL', 'LI', 'FORM', 'ADDRESS'].includes(tag)) w -= 3;
+    else if (/^H[1-6]$/.test(tag) || tag === 'TH') w -= 5;
+    return w;
+  }
+  // Score containers by the text blocks they hold. Returns the best container(s) and its adjusted score.
+  function pickContent() {
+    const scores = new Map();
+    const bump = (el, v) => { if (el) scores.set(el, (scores.get(el) || 0) + v); };
+    const visit = (el, anc, d) => {
+      if (d > 200 || el.nodeType !== 1) return;
+      if (SKIP.has(T(el)) || hiddenSelf(el) || boiler(el)) return;
+      const len = textBlockLen(el);
+      if (len >= 25 && !concealed(el)) {
+        const commas = (el.textContent.match(/[,，、]/g) || []).length;
+        const s = 1 + commas + Math.min(Math.floor(len / 100), 3);
+        bump(anc[anc.length - 1], s);
+        bump(anc[anc.length - 2], s / 2);
+        bump(anc[anc.length - 3], s / 3);
+        return;
+      }
+      anc.push(el);
+      for (const k of kids(el)) visit(k, anc, d + 1);
+      anc.pop();
+    };
+    visit(document.documentElement, [], 0);
+    const ranked = [...scores.entries()].map(([el, s]) => [el, s + classWeight(el)]).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    let best = null;
+    for (const [el, s] of ranked) {
+      const ls = linkStats(el);
+      const adj = s * (1 - ls.density);
+      if (!best || adj > best.score) best = { el, score: adj, density: ls.density, textLen: ls.total };
+    }
+    if (!best) return null;
+    // Siblings that hold more of the same article (a body split across divs).
+    let roots = [best.el];
+    const parent = parentOf(best.el);
+    if (parent && parent !== document.documentElement && parent !== document.body) {
+      const min = Math.max(10, best.score * 0.2);
+      roots = [];
+      for (const sib of kids(parent)) {
+        if (sib.nodeType !== 1) continue;
+        if (sib === best.el) { roots.push(sib); continue; }
+        if (SKIP.has(T(sib)) || hiddenSelf(sib) || boiler(sib)) continue;
+        const own = scores.get(sib);
+        if ((own && (own + classWeight(sib)) * (1 - linkStats(sib).density) >= min) ||
+            (T(sib) === 'P' && textBlockLen(sib) > 80 && linkStats(sib).density < 0.25)) roots.push(sib);
+      }
+    }
+    return { roots, score: best.score, textLen: best.textLen, density: best.density, el: best.el };
+  }
+
+  // ---- markdown ------------------------------------------------------------------------------------
+  const mdEsc = (s) => s.replace(/\\/g, '\\\\').replace(/([\[\]])/g, '\\$1');
+  const cellEsc = (s) => s.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+  const cutAt = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+  function fenceFor(code) {
+    let f = '```';
+    while (code.includes(f)) f += '`';
+    return f;
+  }
+  // Rows of a table with their cells; shared by read (markdown) and tables().
+  function tableRowsOf(table) {
+    const out = [];
+    const span = (v) => Math.min(Math.max(parseInt(v, 10) || 1, 1), 100);
+    if (T(table) === 'TABLE') {
+      for (const tr of table.rows) {
+        const sec = tr.parentElement ? T(tr.parentElement) : '';
+        out.push({ head: sec === 'THEAD', cells: [...tr.cells].map((c) => ({ el: c, th: T(c) === 'TH', cs: span(c.getAttribute('colspan')), rs: span(c.getAttribute('rowspan')) })) });
+      }
+    } else {
+      const rows = [];
+      eachEl(table, (n) => {
+        if (n !== table && /^(table|grid|treegrid)$/.test(n.getAttribute('role') || '')) return false;
+        if (n.getAttribute('role') === 'row') { rows.push(n); return false; }
+      });
+      for (const tr of rows) {
+        const cells = [];
+        eachEl(tr, (n) => {
+          const r = n.getAttribute('role');
+          if (n !== tr && /^(cell|gridcell|columnheader|rowheader)$/.test(r || '')) {
+            cells.push({ el: n, th: r === 'columnheader' || r === 'rowheader', cs: span(n.getAttribute('aria-colspan')), rs: span(n.getAttribute('aria-rowspan')) });
+            return false;
+          }
+        });
+        out.push({ head: false, cells });
+      }
+    }
+    return out;
+  }
+  // Flatten colspan/rowspan: a spanned cell's text is repeated in every slot it covers.
+  function tableGrid(table, textOf, maxRows, maxCols) {
+    const rows = tableRowsOf(table);
+    const grid = [], isHeaderRow = [];
+    let truncated = false;
+    for (let r = 0; r < rows.length; r++) {
+      if (r > maxRows + 20) { truncated = true; break; }
+      grid[r] = grid[r] || [];
+      let c = 0;
+      let allTh = rows[r].cells.length > 0;
+      for (const cell of rows[r].cells) {
+        while (grid[r][c] !== undefined) c++;
+        if (!cell.th) allTh = false;
+        const text = textOf(cell.el);
+        for (let dr = 0; dr < cell.rs && r + dr < rows.length; dr++) {
+          grid[r + dr] = grid[r + dr] || [];
+          for (let dc = 0; dc < cell.cs && c + dc < maxCols; dc++) grid[r + dr][c + dc] = text;
+        }
+        c += cell.cs;
+      }
+      isHeaderRow[r] = rows[r].head || allTh;
+    }
+    const width = Math.min(maxCols, grid.reduce((m, g) => Math.max(m, g ? g.length : 0), 0));
+    const norm = grid.map((g) => { g = g || []; const o = []; for (let i = 0; i < width; i++) o.push(g[i] === undefined ? '' : g[i]); return o; });
+    let h = 0;
+    while (h < norm.length && isHeaderRow[h]) h++;
+    const headRows = norm.slice(0, h);
+    const headers = [];
+    if (headRows.length) {
+      for (let i = 0; i < width; i++) {
+        const parts = [];
+        for (const hr of headRows) if (hr[i] && parts[parts.length - 1] !== hr[i]) parts.push(hr[i]);
+        headers.push(parts.join(' / '));
+      }
+    }
+    return { headers, rows: norm.slice(h), width, truncated, total: norm.length - h };
+  }
+  const cellText = (el) => cutAt(clean(readableText(el).text), 300);
+
+  function toMarkdown(roots, o) {
+    const blocks = [];
+    const links = [];
+    const seenLink = new Set();
+    let size = 0, stop = false, omitted = 0;
+    const push = (b, sink = blocks) => {
+      if (stop || !b) return;
+      sink.push(b);
+      if (sink === blocks) { size += b.length + 2; if (size > o.hard) stop = true; }
+    };
+    const skipped = (el) => SKIP.has(T(el)) || hiddenSelf(el) || (!o.explicit && boiler(el));
+    const isInline = (el) => INLINE_TAGS.has(T(el)) || (T(el).includes('-') && styleOf(el).display.startsWith('inline'));
+    const collapse = (s) => s.replace(/[\s ]+/g, ' ');
+    function inl(node, depth = 0) {
+      if (depth > 100 || stop) return '';
+      if (node.nodeType === 3) {
+        const p = node.parentElement;
+        if (p && concealed(p)) { if (clean(node.nodeValue)) omitted++; return ''; }
+        return collapse(node.nodeValue);
+      }
+      if (node.nodeType !== 1) return '';
+      const el = node, tag = T(el);
+      if (skipped(el)) return '';
+      if (tag === 'BR') return '\n';
+      if (tag === 'IMG') { const a = clean(el.alt); return a ? `[image: ${a}]` : ''; }
+      const inner = kids(el).map((k) => inl(k, depth + 1)).join('');
+      const blockish = !INLINE_TAGS.has(tag);
+      const pad = (s) => (blockish ? ' ' + s + ' ' : s);
+      const t = inner.replace(/[ \t]+/g, ' ').trim();
+      if (!t) return blockish || /^\s|\s$/.test(inner) ? ' ' : '';
+      const lead = /^\s/.test(inner) ? ' ' : '', trail = /\s$/.test(inner) ? ' ' : '';
+      const wrap = (m) => lead + m + t + m + trail;
+      switch (tag) {
+        case 'A': {
+          const href = el.hasAttribute('href') && !/^#/.test(el.getAttribute('href') || '') ? absUrl(el.getAttribute('href'), el) : '';
+          if (!o.links || !href) return pad(inner);
+          const plain = t.replace(/\s+/g, ' ');
+          const key = href + '\u0000' + plain;
+          if (!seenLink.has(key) && links.length < 200) { seenLink.add(key); links.push({ text: cutAt(plain, 200), url: href }); }
+          return lead + `[${mdEsc(t)}](${href.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29')})` + trail;
+        }
+        case 'STRONG': case 'B': return wrap('**');
+        case 'EM': case 'I': case 'CITE': return wrap('*');
+        case 'DEL': case 'S': return wrap('~~');
+        case 'CODE': case 'KBD': case 'SAMP': return lead + '`' + t.replace(/`/g, "'") + '`' + trail;
+        default: return pad(inner);
+      }
+    }
+    const para = (s) => s.replace(/[ \t]*\n[ \t]*/g, '\n').replace(/ {2,}/g, ' ').replace(/\n{2,}/g, '\n').trim();
+    const inlKids = (el) => para(kids(el).map((k) => inl(k)).join(''));
+    function langOf(pre) {
+      for (const el of [pre, pre.querySelector('code')]) {
+        if (!el) continue;
+        const m = /(?:language|lang)-([\w+#.-]+)/.exec(el.getAttribute('class') || '') || (el.getAttribute('data-lang') ? [0, el.getAttribute('data-lang')] : null);
+        if (m) return m[1].replace(/[^\w+#.-]/g, '').slice(0, 20);
+      }
+      return '';
+    }
+    function tableMd(table) {
+      const g = tableGrid(table, (c) => inlKids(c), 200, 40);
+      if (!g.rows.length && !g.headers.length) return '';
+      if (g.width <= 1) return g.rows.map((r) => r[0]).filter(Boolean).join('\n\n');
+      let head = g.headers, rows = g.rows;
+      if (!head.length) { head = rows[0] || []; rows = rows.slice(1); }
+      const line = (r) => '| ' + r.map(cellEsc).join(' | ') + ' |';
+      const cap = table.caption ? clean(table.caption.textContent) : '';
+      const lines = [];
+      if (cap) lines.push(`*${cap}*`, '');
+      lines.push(line(head), '|' + head.map(() => ' --- |').join(''));
+      for (const r of rows.slice(0, 200)) lines.push(line(r));
+      if (rows.length > 200 || g.truncated) lines.push('', `… [${Math.max(g.total - 200, 1)} more row(s) not shown]`);
+      return lines.join('\n');
+    }
+    function listMd(list, depth) {
+      const ordered = T(list) === 'OL';
+      let n = parseInt(list.getAttribute('start'), 10) || 1;
+      const items = [];
+      for (const li of kids(list)) {
+        if (li.nodeType !== 1 || skipped(li)) continue;
+        const sink = [];
+        flow(li, sink, depth + 1);
+        const body = sink.join('\n');
+        if (!body) continue;
+        const marker = ordered ? `${n++}.` : '-';
+        const pad = ' '.repeat(marker.length + 1);
+        items.push(marker + ' ' + body.split('\n').map((l, i) => (i ? pad + l : l)).join('\n'));
+      }
+      return items.join('\n');
+    }
+    function block(el, sink, depth) {
+      const tag = T(el);
+      if (/^H[1-6]$/.test(tag)) { const t = inlKids(el).replace(/\n/g, ' '); if (t) push('#'.repeat(+tag[1]) + ' ' + t, sink); return; }
+      switch (tag) {
+        case 'P': case 'ADDRESS': case 'FIGCAPTION': { const t = inlKids(el); if (t) push(t, sink); return; }
+        case 'PRE': {
+          const code = (el.textContent || '').replace(/\r/g, '').replace(/^\n+|\s+$/g, '');
+          if (!code) return;
+          const f = fenceFor(code);
+          push(`${f}${langOf(el)}\n${code}\n${f}`, sink);
+          return;
+        }
+        case 'UL': case 'OL': { const t = listMd(el, depth); if (t) push(t, sink); return; }
+        case 'BLOCKQUOTE': {
+          const inner = [];
+          flow(el, inner, depth + 1);
+          const t = inner.join('\n\n');
+          if (t) push(t.split('\n').map((l) => (l ? '> ' + l : '>')).join('\n'), sink);
+          return;
+        }
+        case 'TABLE': { const t = tableMd(el); if (t) push(t, sink); return; }
+        case 'HR': push('---', sink); return;
+        case 'DL': {
+          const lines = [];
+          for (const c of kids(el)) {
+            if (c.nodeType !== 1 || skipped(c)) continue;
+            const t = inlKids(c);
+            if (!t) continue;
+            lines.push(T(c) === 'DT' ? `**${t}**` : T(c) === 'DD' ? `: ${t}` : t);
+          }
+          if (lines.length) push(lines.join('\n'), sink);
+          return;
+        }
+        case 'DETAILS': {
+          const sum = el.querySelector(':scope > summary');
+          if (sum) { const t = inlKids(sum); if (t) push(`**${t}**`, sink); }
+          flow(el, sink, depth + 1, sum);
+          return;
+        }
+        default: flow(el, sink, depth + 1);
+      }
+    }
+    // Children of a container: inline runs become paragraphs, block children recurse.
+    function flow(el, sink, depth, except) {
+      if (depth > 120 || stop) return;
+      let run = [];
+      const flush = () => { const t = para(run.join('')); if (t) push(t, sink); run = []; };
+      for (const k of kids(el)) {
+        if (stop) break;
+        if (k === except) continue;
+        if (k.nodeType === 3) { run.push(inl(k)); continue; }
+        if (k.nodeType !== 1 || skipped(k)) continue;
+        if (T(k) === 'IFRAME' || T(k) === 'FRAME') { flush(); flow(k, sink, depth + 1); continue; }
+        if (isInline(k)) { run.push(inl(k)); continue; }
+        flush();
+        block(k, sink, depth);
+      }
+      flush();
+    }
+    for (const r of roots) {
+      if (!o.explicit && skipped(r)) continue;
+      if (isInline(r)) { const t = para(inl(r)); if (t) push(t); } else if (/^(H[1-6]|P|PRE|TABLE|UL|OL|BLOCKQUOTE|DL|HR)$/.test(T(r))) block(r, blocks, 0); else flow(r, blocks, 0);
+    }
+    return { blocks, links, omitted, capped: stop };
+  }
+
+  // ---- metadata ------------------------------------------------------------------------------------
+  const metaContent = (sel) => { const m = document.querySelector(sel); return m ? clean(m.getAttribute('content')) : ''; };
+  function jsonLd() {
+    const out = [];
+    let skipped = 0;
+    for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
+      if (out.length >= 10) { skipped++; continue; }
+      const raw = s.textContent || '';
+      if (raw.length > 60000) { skipped++; continue; }
+      try { out.push(JSON.parse(raw)); } catch { skipped++; }
+    }
+    return { blocks: out, skipped };
+  }
+  function ldFind(blocks, key) {
+    const stack = [...blocks];
+    let n = 0;
+    while (stack.length && n++ < 500) {
+      const v = stack.shift();
+      if (Array.isArray(v)) { stack.push(...v); continue; }
+      if (v && typeof v === 'object') {
+        if (v[key] != null) return v[key];
+        if (v['@graph']) stack.push(v['@graph']);
+      }
+    }
+    return null;
+  }
+  function metadata(root) {
+    const ld = jsonLd();
+    let by = metaContent('meta[name=author]') || metaContent('meta[property="article:author"]');
+    if (!by) {
+      const a = ldFind(ld.blocks, 'author');
+      if (a) by = typeof a === 'string' ? a : Array.isArray(a) ? a.map((x) => (x && x.name) || x).filter((x) => typeof x === 'string').join(', ') : (typeof a.name === 'string' ? a.name : '');
+    }
+    const scope = root || document;
+    if (!by) {
+      const el = scope.querySelector('[rel=author],[itemprop=author],.byline,[class*=byline],[class*=author]');
+      if (el) { const t = clean(el.textContent); if (t.length <= 100) by = t.replace(/^by\s+/i, ''); }
+    }
+    let pub = metaContent('meta[property="article:published_time"]') || metaContent('meta[itemprop=datePublished]') || metaContent('meta[name=date]');
+    if (!pub) { const d = ldFind(ld.blocks, 'datePublished'); if (typeof d === 'string') pub = d; }
+    if (!pub) { const t = scope.querySelector('time[datetime]'); if (t) pub = clean(t.getAttribute('datetime')); }
+    const canon = document.querySelector('link[rel~=canonical]');
+    let canonical = canon ? absUrl(canon.getAttribute('href'), canon) : '';
+    if (!canonical) canonical = absUrl(metaContent('meta[property="og:url"]'), document.documentElement);
+    const lang = clean(document.documentElement.getAttribute('lang') || '') || metaContent('meta[http-equiv=content-language]');
+    return {
+      title: cutAt(metaContent('meta[property="og:title"]') || clean(document.title), 300),
+      byline: cutAt(by || '', 200), published: cutAt(pub || '', 60), canonical_url: canonical, language: lang,
+      site_name: cutAt(metaContent('meta[property="og:site_name"]') || metaContent('meta[name=application-name]'), 100),
+      json_ld: ld.blocks, json_ld_skipped: ld.skipped,
+    };
+  }
+
+  function read(opts = {}) {
+    const hard = Math.max((opts.maxChars || 20000) * 4, 300000);
+    memo = newCache();
+    try {
+      const notes = [];
+      const ct = document.contentType || 'text/html';
+      const out = (kind, extra) => ({ kind, notes, url: location.href, meta: metadata(null), links: [], capped: false, ...extra });
+      if (!/html|xml/i.test(ct)) {
+        const text = (document.body ? document.body.innerText || document.body.textContent : document.documentElement.textContent) || '';
+        if (!text.trim()) {
+          notes.push(`non-HTML document (${ct}) with no text layer available; Ostler has no PDF parser, fetch it another way`);
+          return out('empty', { markdown: '' });
+        }
+        return out('text', { markdown: text.length > hard ? text.slice(0, hard) : text, capped: text.length > hard });
+      }
+      RD.bodyLen = document.body ? (document.body.textContent || '').length : 0;
+      const o = { links: opts.includeLinks !== false, hard, explicit: !!opts.ref };
+      const finish = (kind, roots, pre) => {
+        const r = toMarkdown(roots, o);
+        const md = (pre ? [pre, ...r.blocks] : r.blocks).join('\n\n');
+        if (r.omitted) notes.push(`${r.omitted} invisible text run(s) omitted (opacity 0, zero font size, far off-screen or same colour as the background)`);
+        return out(kind, { markdown: md, links: r.links, capped: r.capped, meta: metadata(roots[0]) });
+      };
+      if (opts.ref) return finish('selection', [elOf(opts.ref)], null);
+      const root = document.body || document.documentElement;
+      const pick = pickContent();
+      const title = metaContent('meta[property="og:title"]') || clean(document.title);
+      if (pick && pick.score >= 20 && pick.textLen >= 200 && pick.density < 0.6) {
+        let pre = null;
+        const h1 = [...document.querySelectorAll('h1')].find((h) => rendered(h));
+        if (h1 && !pick.roots.some((r) => composedContains(r, h1)) && title) pre = '# ' + cutAt(clean(h1.textContent) || title, 200);
+        return finish('article', pick.roots, pre);
+      }
+      let controls = 0;
+      eachEl(root, (e) => { if (e.matches('input:not([type=hidden]),select,textarea,button,[role=button]')) controls++; });
+      if (RD.bodyLen < 2500 && controls < 8) return finish('page', [root], null);
+      notes.push('no article-like main content found (interactive or list-like page); use snapshot, extract_lists or extract_tables instead');
+      const heads = [];
+      eachEl(root, (e) => {
+        if (boiler(e)) return false;
+        if (heads.length < 40 && /^H[1-6]$/.test(T(e)) && !concealed(e)) { const t = clean(e.textContent); if (t) heads.push('#'.repeat(+T(e)[1]) + ' ' + cutAt(t, 150)); }
+      });
+      return out('app', { markdown: heads.join('\n') });
+    } finally { memo = null; RD.bodyLen = 0; }
+  }
+
+  // ---- tables ----------------------------------------------------------------------------------------
+  function tables(opts = {}) {
+    const maxTables = 50, maxRows = opts.maxRows || 500;
+    memo = newCache();
+    try {
+      const found = [];
+      eachEl(document.documentElement, (e) => {
+        if (found.length >= maxTables) return false;
+        if (T(e) === 'TABLE' || /^(table|grid|treegrid)$/.test(e.getAttribute('role') || '')) found.push(e);
+      });
+      const out = [];
+      for (const t of found) {
+        const g = tableGrid(t, cellText, maxRows, 60);
+        if (!g.rows.length && !g.headers.length) continue;
+        let cap = '';
+        if (T(t) === 'TABLE' && t.caption) cap = clean(t.caption.textContent);
+        else cap = clean(t.getAttribute('aria-label') || '') || (t.getAttribute('aria-labelledby') ? textOfIds(t, t.getAttribute('aria-labelledby')) : '');
+        out.push({ ref: refOf(t), caption: cutAt(cap, 200), headers: g.headers, rows: g.rows.slice(0, maxRows), row_count: g.total, truncated: g.truncated || g.rows.length > maxRows });
+      }
+      return out;
+    } finally { memo = null; }
+  }
+
+  // ---- repeated structures -----------------------------------------------------------------------------
+  const STATE_TOKENS = new Set(['odd', 'even', 'first', 'last', 'active', 'selected', 'current', 'hover', 'focus', 'open', 'show', 'visible', 'is', 'js']);
+  const GENERIC_FIELD = new Set(['col', 'row', 'item', 'items', 'text', 'container', 'wrapper', 'card', 'content', 'inner', 'info', 'body', 'box', 'link', 'list', 'cell', 'flex', 'grid', 'block', 'group', 'wrap', 'details', 'meta', 'data']);
+  const NO_REPEAT_TAGS = new Set(['P', 'BR', 'HR', 'IMG', 'SPAN', 'A', 'OPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TR', 'TD', 'TH', 'STRONG', 'EM', 'B', 'I', 'BUTTON', 'INPUT', 'SOURCE', 'COL']);
+  const classTokens = (el) => tokensOf(el).filter((t) => !STATE_TOKENS.has(t) && (el.getAttribute('class') || '').toLowerCase().includes(t));
+  const sigOf = (el) => T(el) + '.' + classTokens(el).sort().join('.');
+  // Per-row named fields: itemprop, a distinctive class token, the first heading, a time, a price. A name is kept
+  // only when at least half the rows have it, so one-off decoration does not become a column.
+  function rowFields(items) {
+    const per = items.map((m) => {
+      const f = new Map();
+      let seen = 0;
+      const h = m.querySelector('h1,h2,h3,h4,h5,h6');
+      if (h && clean(h.textContent)) f.set('title', cutAt(clean(h.textContent), 200));
+      eachEl(m, (d) => {
+        if (++seen > 80) return false;
+        if (d === m || concealed(d)) return;
+        let name = d.getAttribute('itemprop') || '';
+        if (!name && T(d) === 'TIME' && d.getAttribute('datetime')) { if (!f.has('date')) f.set('date', cutAt(clean(d.getAttribute('datetime')), 60)); return; }
+        if (!name) name = classTokens(d).find((t) => t.length >= 3 && t.length <= 24 && !/\d/.test(t) && !GENERIC_FIELD.has(t)) || '';
+        if (!name || f.has(name) || d.children.length > 2) return;
+        const v = clean(d.getAttribute('content') || d.textContent);
+        if (v && v.length <= 200) f.set(name, v);
+      });
+      if (!f.has('price')) { const p = /(?:[$€£¥]|USD|EUR|GBP)\s?\d[\d,.]*/.exec(clean(m.textContent)); if (p) f.set('price', p[0]); }
+      return f;
+    });
+    const counts = new Map();
+    for (const f of per) for (const k of f.keys()) counts.set(k, (counts.get(k) || 0) + 1);
+    const need = Math.max(2, Math.ceil(items.length / 2));
+    return per.map((f) => { const o = {}; for (const [k, v] of f) if (counts.get(k) >= need) o[k] = v; return o; });
+  }
+  function lists(opts = {}) {
+    const maxLists = 8, maxRows = opts.maxRows || 100;
+    memo = newCache();
+    try {
+      const groups = [];
+      eachEl(document.documentElement, (p) => {
+        const tag = T(p);
+        if (tag === 'NAV' || p.getAttribute('role') === 'navigation' || TABLE_TAGS.has(tag) || tag === 'SELECT' || tag === 'DATALIST') return false;
+        const ch = kids(p).filter((n) => n.nodeType === 1 && !SKIP.has(T(n)) && !hiddenSelf(n));
+        if (ch.length < 3) return;
+        const by = new Map();
+        for (const c of ch) {
+          if (NO_REPEAT_TAGS.has(T(c))) continue;
+          const s = sigOf(c);
+          if (!by.has(s)) by.set(s, []);
+          by.get(s).push(c);
+        }
+        for (const [sig, members] of by) {
+          if (members.length < 3) continue;
+          const lens = members.map((m) => clean(m.textContent).length);
+          const avg = lens.reduce((a, b) => a + b, 0) / lens.length;
+          if (avg < 20 || lens.filter((l) => l >= 8).length < members.length * 0.6) continue;
+          if (members.filter((m) => m.querySelector('a[href]') || m.children.length >= 2).length < members.length * 0.6) continue;
+          groups.push({ parent: p, sig, members, score: members.length * Math.min(avg, 300) });
+        }
+      });
+      // Only the outermost structure: a repeated tag list inside a card is not a list of its own.
+      const kept = groups.filter((g) => !groups.some((h) => h !== g && h.members.some((m) => m !== g.parent && composedContains(m, g.parent))));
+      kept.sort((a, b) => b.score - a.score);
+      const outLists = [];
+      for (const g of kept.slice(0, maxLists)) {
+        const used = g.members.slice(0, maxRows);
+        const fields = rowFields(used);
+        const rows = used.map((m, i) => {
+          const links = [];
+          for (const a of m.querySelectorAll('a[href]')) {
+            if (links.length >= 6) break;
+            const url = absUrl(a.getAttribute('href'), a);
+            if (!url || /^#/.test(a.getAttribute('href') || '') || hiddenSelf(a)) continue;
+            links.push({ text: cutAt(clean(a.textContent || a.getAttribute('aria-label') || a.title), 100), url });
+          }
+          return { ref: refOf(m), text: cutAt(clean(readableText(m).text), 400), links, fields: fields[i] };
+        });
+        outLists.push({ ref: refOf(g.parent), signature: g.sig, item_count: g.members.length, rows, truncated: g.members.length > maxRows });
+      }
+      return { lists: outLists, hints: hints() };
+    } finally { memo = null; }
+  }
+
+  // ---- pagination hints --------------------------------------------------------------------------------
+  // Text is returned verbatim for the caller to judge; nothing here decides whether a result set is complete.
+  const RE_PAGE = /\bpage\s+\d[\d,]*\s+(?:of|\/)\s+\d[\d,]*\b/i;
+  const RE_SHOW = /\b\d[\d,]*\s*(?:-|–|—|to)\s*\d[\d,]*\s+(?:of|\/)\s+(?:about\s+|over\s+)?\d[\d,.]*\+?/i;
+  const RE_TOTAL = /\b(?:about\s+|over\s+|approximately\s+)?\d[\d,.]*\+?\s+(?:results?|items?|products?|listings?|matches|entries|records|jobs|properties|posts|articles)\b/i;
+  const RE_NEXT = /^(?:go to )?(?:next(?: page| results?)?|older(?: posts| entries| results)?|load more(?: results)?|show more(?: results)?|view more|more results|see more|›|»|→|>|>>)\s*[›»→>]*$/i;
+  function hints() {
+    const out = { next: [], page_x_of_y: [], showing: [], totals: [] };
+    const add = (arr, s) => { s = cutAt(clean(s), 200); if (s && !arr.includes(s) && arr.length < 5) arr.push(s); };
+    const matchesAny = (t) => RE_PAGE.test(t) || RE_SHOW.test(t) || RE_TOTAL.test(t);
+    const rel = document.querySelector('link[rel~=next]');
+    if (rel) { const u = absUrl(rel.getAttribute('href'), rel); if (u) out.next.push({ kind: 'link-rel', text: 'rel=next', url: u, ref: null, disabled: false }); }
+    const prev = memo;
+    memo = prev || newCache();
+    try {
+      eachEl(document.body || document.documentElement, (el) => {
+        const tag = T(el);
+        const isCtl = tag === 'A' || tag === 'BUTTON' || /^(button|link)$/.test(el.getAttribute('role') || '') || (tag === 'INPUT' && /^(button|submit)$/.test(el.type));
+        if (isCtl) {
+          const nm = clean(nameOf(el)), al = clean(el.getAttribute('aria-label') || '');
+          if (out.next.length < 6 && (/(^|\s)next(\s|$)/i.test(el.getAttribute('rel') || '') || RE_NEXT.test(nm) || RE_NEXT.test(al) || /^next page$/i.test(al))) {
+            const href = el.hasAttribute('href') ? absUrl(el.getAttribute('href'), el) : '';
+            out.next.push({ kind: tag === 'A' ? 'link' : 'button', text: cutAt(nm || al, 80), url: href || null, ref: refOf(el), disabled: !!(el.disabled || el.getAttribute('aria-disabled') === 'true') });
+          }
+          return false;
+        }
+        if (el.children.length > 4) return;
+        const t = el.textContent || '';
+        if (t.length > 200 || t.length < 6) return;
+        if ([...el.children].some((c) => matchesAny(c.textContent || ''))) return;
+        if (RE_PAGE.test(t)) add(out.page_x_of_y, t);
+        else if (RE_SHOW.test(t)) add(out.showing, t);
+        else if (RE_TOTAL.test(t)) add(out.totals, t);
+      });
+    } finally { memo = prev; }
+    return out;
+  }
+
+  // ---- links -------------------------------------------------------------------------------------------
+  const BLOCK_CTX = new Set(['P', 'LI', 'TD', 'TH', 'DD', 'DT', 'BLOCKQUOTE', 'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'ARTICLE', 'SECTION', 'DIV', 'BODY']);
+  function linkContext(a, text) {
+    let b = parentOf(a);
+    for (let i = 0; b && i < 4 && !BLOCK_CTX.has(T(b)); i++) b = parentOf(b);
+    if (!b) return '';
+    const full = clean(b.textContent);
+    if (full.length > 3000) return '';
+    const i = text ? full.indexOf(text) : -1;
+    if (i < 0) return cutAt(full, 120);
+    const room = Math.max(0, 120 - text.length);
+    const from = Math.max(0, i - Math.floor(room / 2));
+    const to = Math.min(full.length, i + text.length + Math.ceil(room / 2));
+    return (from > 0 ? '…' : '') + full.slice(from, to) + (to < full.length ? '…' : '');
+  }
+  function links(opts = {}) {
+    const root = opts.ref ? elOf(opts.ref) : document.documentElement;
+    const limit = Math.min(opts.limit || 200, 1000);
+    const needleT = (opts.textContains || '').toLowerCase(), needleH = (opts.hrefContains || '').toLowerCase();
+    const out = [], seen = new Set();
+    let total = 0;
+    memo = newCache();
+    try {
+      eachEl(root, (el) => {
+        if (T(el) !== 'A' && T(el) !== 'AREA') return;
+        if (!el.hasAttribute('href')) return;
+        const raw = el.getAttribute('href') || '';
+        if (/^\s*javascript:/i.test(raw)) return;
+        const url = absUrl(raw, el);
+        if (!url || concealed(el)) return;
+        const img = el.querySelector('img');
+        const text = cutAt(clean(el.textContent || el.getAttribute('aria-label') || el.getAttribute('title') || (img ? img.alt : '')), 200);
+        let same = false;
+        try { same = new URL(url).origin === location.origin; } catch { /* ignore */ }
+        if (opts.sameOrigin === true && !same) return;
+        if (opts.sameOrigin === false && same) return;
+        if (needleT && !text.toLowerCase().includes(needleT)) return;
+        if (needleH && !url.toLowerCase().includes(needleH)) return;
+        const key = url + '\u0000' + text;
+        if (seen.has(key)) return;
+        seen.add(key);
+        total++;
+        if (out.length < limit) out.push({ text, url, rel: cutAt(el.getAttribute('rel') || '', 60), same_origin: same, context: linkContext(el, text), ref: refOf(el) });
+        return false;
+      }, 100000);
+    } finally { memo = null; }
+    return { links: out, total };
+  }
+
+  // ---- observation for `expect` --------------------------------------------------------------------------
+  function observe(opts = {}) {
+    const maxText = opts.maxText || 6000, maxEls = opts.maxElements || 150;
+    memo = newCache();
+    try {
+      const parts = [];
+      let len = 0, truncated = false;
+      const BLK = new Set(['P', 'DIV', 'LI', 'TR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SECTION', 'ARTICLE', 'UL', 'OL', 'TABLE', 'BR', 'MAIN', 'HEADER', 'FOOTER', 'NAV', 'FORM']);
+      const walk = (n, d) => {
+        if (truncated || d > 200) return;
+        if (n.nodeType === 3) {
+          const p = n.parentElement, t = clean(n.nodeValue);
+          if (!t || !p || SKIP.has(T(p)) || concealed(p)) return;
+          parts.push(t + ' '); len += t.length + 1;
+          if (len > maxText) truncated = true;
+          return;
+        }
+        if (n.nodeType !== 1 || SKIP.has(T(n)) || hiddenSelf(n)) return;
+        const blk = BLK.has(T(n));
+        if (blk) parts.push('\n');
+        for (const k of kids(n)) walk(k, d + 1);
+        if (blk) parts.push('\n');
+      };
+      walk(document.body || document.documentElement, 0);
+      const text = parts.join('').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{2,}/g, '\n').trim();
+      const elements = [];
+      eachEl(document.body || document.documentElement, (el) => {
+        if (elements.length >= maxEls) return false;
+        const role = roleOf(el);
+        if (!role || role === 'form' || role === 'iframe' || (!INTERACTIVE.has(role) && role !== 'heading')) return;
+        const name = cutAt(nameOf(el), 100);
+        if (!name) return;
+        const last = elements[elements.length - 1];
+        if (last && last.role === role && last.name === name) return;
+        elements.push({ role, name });
+      });
+      return { url: location.href, title: document.title, text: text.slice(0, maxText), text_truncated: truncated || text.length > maxText, elements };
+    } finally { memo = null; }
+  }
+
   window.__wm = {
     docId: () => DOC_ID, problems,
     snapshot, forms, field, validity, prepare, finish, setNative, apply, comboPick, pickDate, clickInfo, jsClick, rect, targets, mark, unmark,
     settle, textPresent, selectorPresent, challenge, confirmations,
+    read, tables, lists, hints, links, observe,
     el: (ref) => elOf(ref),
     pending: pendingDeep,
     version: 1,
