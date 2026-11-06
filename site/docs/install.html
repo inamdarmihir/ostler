@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Install - Ostler MCP browser docs</title>
-<meta name="description" content="Every way to get the binary, what works today, update and uninstall.">
+<title>Install Ostler on macOS or Linux</title>
+<meta name="description" content="Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/install.html">
 <link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Install - Ostler MCP browser docs"><meta property="og:description" content="Every way to get the binary, what works today, update and uninstall.">
+<meta property="og:title" content="Install Ostler on macOS or Linux"><meta property="og:description" content="Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/install.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Install - Ostler MCP browser docs"><meta name="twitter:description" content="Every way to get the binary, what works today, update and uninstall."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Install","description":"Every way to get the binary, what works today, update and uninstall.","url":"https://inamdarmihir.github.io/ostler/docs/install.html","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"about":{"@type":"SoftwareApplication","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"author":{"@type":"Person","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir"},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Install","item":"https://inamdarmihir.github.io/ostler/docs/install.html"}]}]}</script>
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Install Ostler on macOS or Linux">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Install Ostler on macOS or Linux"><meta name="twitter:description" content="Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/install.html#article","headline":"Install Ostler from source","description":"Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.","url":"https://inamdarmihir.github.io/ostler/docs/install.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/install.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Install","item":"https://inamdarmihir.github.io/ostler/docs/install.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -25,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -49,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -62,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html">Design review</a></li>
 </ul></div>
@@ -74,8 +77,8 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
-<article class="prose"><h1>Install</h1>
-<p class="lede">Every way to get the binary, what works today, update and uninstall.</p>
+<article class="prose"><h1>Install Ostler from source</h1>
+<p class="lede">Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#verify">Verify</a></li><li class="toc-l2"><a href="#connect-your-agent">Connect your agent</a></li><li class="toc-l2"><a href="#use-your-own-chrome-optional">Use your own Chrome (optional)</a></li><li class="toc-l2"><a href="#platforms">Platforms</a></li><li class="toc-l2"><a href="#update">Update</a></li><li class="toc-l2"><a href="#uninstall">Uninstall</a></li><li class="toc-l2"><a href="#what-gets-written-to-disk">What gets written to disk</a></li><li class="toc-l2"><a href="#the-prebuilt-installer">The prebuilt installer</a></li></ul></details>
 <p>Ostler is a single Rust binary, <code>ostler</code>, that launches and drives Chrome. You need <strong>Chrome or Chromium</strong> installed. Pick one way to get the binary.</p>
 <div class="table-wrap"><table><thead><tr><th>how</th><th>command</th><th>needs</th></tr></thead><tbody><tr><td><strong>From source</strong> (works today)</td><td><code>cargo install --git https://github.com/inamdarmihir/ostler ostler</code></td><td>Rust 1.89+, a minute or two to compile</td></tr><tr><td>Prebuilt binary</td><td><code>curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh</code></td><td>nothing else; macOS and Linux</td></tr><tr><td>npm / <code>npx</code></td><td><code>npx -y ostler doctor</code></td><td>Node 18+; downloads the binary on first run</td></tr><tr><td>crates.io</td><td><code>cargo install ostler</code> or <code>cargo binstall ostler</code></td><td>Rust (or cargo-binstall for the prebuilt)</td></tr></tbody></table></div>

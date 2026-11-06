@@ -20,6 +20,20 @@ Secrets are refused by the memory API (password, token and card-like keys, and c
 
 `--learn` is off by default. Ostler records *how* forms were filled automatically (structure only), but stores *your data* only when you opt in with `--learn` or call `memory_remember`.
 
+## Where your data goes
+
+Five places data can travel. Only the last two involve Qdrant, and only if you turn memory on.
+
+| step | where it goes | what crosses | what you control |
+|---|---|---|---|
+| Browsing | Chrome on your machine talks directly to the sites you visit. | The page requests Chrome makes. Ostler sends no telemetry. | `--allow-domain` limits every request the browser makes; `--profile-dir` decides whether logins persist. |
+| Tool output to your agent | Over stdio to the MCP client that launched Ostler (Claude Code, Codex, Cursor, VS Code). | Page text, the values read back from form fields, and verification reports. Sensitive values are masked in tool output, but detection is heuristic. | Your client decides what happens next. **A client normally forwards tool output to its model provider**, so treat anything a tool returns as visible to that provider and check the client's own privacy settings. |
+| Search | The SearXNG instance or Brave API you configure for `search`. | The search query. | Without a provider configured, `search` sends nothing. |
+| Embeddings | By default, Qdrant Cloud Inference. With `--embeddings ollama`, your own machine. :unreleased: | With cloud inference, the field text to be embedded. | `--embeddings ollama` keeps text local. |
+| Stored memory | Your Qdrant. | Facts you saved, playbooks and episodes. Sealed on your machine before upload by default. :unreleased: | `--seal`, `--embeddings`, `--isolation`; `memory_forget` deletes. |
+
+Secrets are the part to be careful about. Memory refuses password-, token- and card-like keys and card-number-like values, but that check is a heuristic: a secret saved under an innocuous key and value would not be caught, and it would then also be part of what a later tool call returns to your agent.
+
 ## Sealing: encrypt before it reaches Qdrant
 
 With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). :unreleased:

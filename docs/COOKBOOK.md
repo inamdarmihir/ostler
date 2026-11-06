@@ -148,7 +148,7 @@ What this gives you that a page-to-markdown API does not:
 - **Gaps are reported, not hidden.** A paywalled page (teaser only), a verification wall, a robots.txt refusal, an HTTP error or an empty page is recorded. `evidence` lists them next to the verified citations, so "I could not read X" is part of the answer.
 - **Changed pages invalidate their citations.** Read the same URL again and, if the text differs, `read` says `CHANGED` and `evidence` lists the earlier citations as stale.
 - **Text aimed at your agent is flagged**, not obeyed: the header says `ATTENTION`, and a citation inside such text carries a warning.
-- **It runs on your machine and your browser.** With `--profile-dir`, pages behind your login are readable; nothing is sent to a third party.
+- **It runs on your machine and your browser.** With `--profile-dir`, pages behind your login are readable; Ostler sends nothing to a third party, though your MCP client may pass what a tool returns to its model provider.
 
 `open_many` reads up to 10 URLs at once in a scratch tab (your tab is untouched), obeying robots.txt and per-host spacing, and returns the best passages from each. `search` needs a provider: set `OSTLER_SEARXNG_URL` (a SearXNG instance) or `OSTLER_SEARCH_PROVIDER=brave` with `OSTLER_BRAVE_API_KEY`, then restart the server. `extract` returns tables as rows and lists with a `PARTIAL: 5 of 13` verdict when the page says there is more.
 

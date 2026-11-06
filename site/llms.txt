@@ -2,7 +2,7 @@
 
 > Ostler is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked.
 
-Ostler is one local Rust binary (Apache-2.0) that runs Chrome and speaks MCP over stdio to coding agents and A2A over HTTP to other agents. It has no LLM inside, no cloud browser and no anti-bot evasion. Status: v0.2, early; tested against real Chrome and Qdrant on local fixtures, not yet benchmarked on the open web.
+Ostler is one local Rust binary (Apache-2.0) that runs Chrome and speaks MCP over stdio to coding agents and A2A over HTTP to other agents. It has no LLM inside, no cloud browser and no anti-bot evasion. Status: v0.2, early (development source; no tagged release yet); tested against real Chrome and Qdrant on local fixtures, not yet benchmarked on the open web.
 
 Key facts:
 
@@ -11,7 +11,7 @@ Key facts:
 - Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.
 - Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).
 - Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).
-- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic.
+- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic. Tool output goes to your MCP client and, through it, to that client's model provider.
 - Safety: page text is fenced as untrusted, a domain allowlist holds every request, CAPTCHAs are handed to a person.
 
 ## Docs
@@ -19,6 +19,7 @@ Key facts:
 - [Quickstart](https://inamdarmihir.github.io/ostler/docs/quickstart.html): Install, check, connect, and fill a demo form in five minutes.
 - [Install](https://inamdarmihir.github.io/ostler/docs/install.html): Every way to get the binary, what works today, update and uninstall.
 - [Use with your agent](https://inamdarmihir.github.io/ostler/docs/agents.html): Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.
+- [Research with checked citations](https://inamdarmihir.github.io/ostler/docs/research-with-citations.html): Read pages, check each quote against them, and report what could not be read, with real tool output.
 - [Cookbook](https://inamdarmihir.github.io/ostler/docs/cookbook.html): Recipes: deep research with checked citations, reading, QA, logins, forms, approvals and A2A, with what is not built yet.
 - [Forms and verification](https://inamdarmihir.github.io/ostler/docs/forms.html): How keys become fields, how values are verified by read-back, and what submit results mean.
 - [Memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html): What is stored, what sealing hides and does not, local embeddings, per-tenant tokens.
@@ -28,6 +29,7 @@ Key facts:
 - [A2A](https://inamdarmihir.github.io/ostler/docs/a2a.html): Let other agents hand Ostler forms over Agent2Agent v1.0.
 - [Architecture](https://inamdarmihir.github.io/ostler/docs/architecture.html): Crates, the injected runtime, the form model, and the decisions behind them.
 - [Benchmarks](https://inamdarmihir.github.io/ostler/docs/benchmarks.html): Measured on local fixtures with a scripted agent. Read the caveats.
+- [Ostler vs Playwright MCP](https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html): Five scripted form tasks on local fixtures: tool calls, tokens, time, and what the comparison does not show.
 - [Economics](https://inamdarmihir.github.io/ostler/docs/economics.html): Unit costs, scaling limits, the moat question and what could go wrong.
 - [Design review](https://inamdarmihir.github.io/ostler/docs/review.html): The October 2026 review: five design flaws and their status.
 - [Troubleshooting](https://inamdarmihir.github.io/ostler/docs/troubleshooting.html): Symptoms, causes and fixes. Start with ostler doctor.

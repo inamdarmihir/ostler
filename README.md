@@ -22,7 +22,7 @@
 </p>
 <p align="center"><sub>Real tool output, recorded against the bundled local test pages (<code>ostler fixtures</code>). Nothing real is submitted.</sub></p>
 
-**Ostler** is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It is one local Rust binary that drives Chrome on your machine; pages are not sent to a third party (a search provider or Qdrant Cloud only if you configure one).
+**Ostler** is an open-source MCP browser for AI coding agents such as Claude Code, Codex and Cursor. It checks its own work: research answers cite only pages it actually read, with every quote verified, forms are filled in one call with every value read back, and Qdrant remembers what worked. It is one local Rust binary that drives Chrome on your machine; Ostler sends pages to no third party (a search provider or Qdrant Cloud only if you configure one), but your MCP client may forward tool output to its model provider.
 
 > **Status: v0.2, early.** Tested against real Chrome and a real Qdrant server, but mostly on local fixtures, not the open web. A [design review](docs/REVIEW-2026-10.md) found real flaws; they are listed openly with a fix order. Read [what that means](docs/ECONOMICS.md#6-what-can-go-wrong) before relying on it. Nothing has been audited by a third party.
 
