@@ -1,0 +1,11 @@
+# Host-root policy for inamdarmihir.github.io. Crawlers read robots.txt only at the root of a host,
+# so this has no effect here. Copy it to the root of the user-site repository
+# (inamdarmihir/inamdarmihir.github.io) so it is served at https://inamdarmihir.github.io/robots.txt.
+# Review the other projects on that hostname first: the file applies to all of them.
+#
+# Training crawlers (GPTBot, ClaudeBot, Google-Extended) are a separate publisher decision and are
+# not restricted here. Do not block search crawlers while trying to block training.
+User-agent: *
+Allow: /ostler/
+
+Sitemap: https://inamdarmihir.github.io/ostler/sitemap.xml

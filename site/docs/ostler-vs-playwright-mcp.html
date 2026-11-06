@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ostler vs Playwright MCP: Forms, Evidence and Trade-offs</title>
+<meta name="description" content="Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Ostler vs Playwright MCP: Forms, Evidence and Trade-offs"><meta property="og:description" content="Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Ostler vs Playwright MCP: Forms, Evidence and Trade-offs">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler vs Playwright MCP: Forms, Evidence and Trade-offs"><meta name="twitter:description" content="Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html#article","headline":"Ostler vs Playwright MCP","description":"Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.","url":"https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Ostler vs Playwright MCP","item":"https://inamdarmihir.github.io/ostler/docs/ostler-vs-playwright-mcp.html"}]}]}</script>
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
+<li><a href="cookbook.html">Cookbook</a></li>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html" aria-current="page">Ostler vs Playwright MCP</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Evidence</p>
+<article class="prose"><h1>Ostler vs Playwright MCP</h1>
+<p class="lede">Compare local MCP browser workflows, form read-back and published scripted results. Review versions and limits before choosing a tool.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#where-they-differ">Where they differ</a></li><li class="toc-l2"><a href="#what-was-measured">What was measured</a></li><li class="toc-l2"><a href="#what-this-does-not-show">What this does not show</a></li><li class="toc-l2"><a href="#when-to-choose-which">When to choose which</a></li><li class="toc-l2"><a href="#reproduce-it">Reproduce it</a></li></ul></details>
+<p>Playwright MCP and Ostler are both MCP servers that give an agent a browser, and both have a batched form-fill tool. On five scripted form tasks on local fixtures, both finished every task correctly; Ostler used fewer tool calls (19 against 27) and Playwright MCP's tool list is larger. No language model was in the loop, no real website was used, and the numbers say nothing about which tool a real agent will complete tasks with more often. Choose on the differences below, not on the step counts alone.</p>
+<h2 id="where-they-differ">Where they differ<a class="anchor" href="#where-they-differ" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th></th><th>Ostler</th><th>Playwright MCP</th></tr></thead><tbody><tr><td>What it is</td><td>Local Rust binary that runs Chrome and serves MCP and A2A. Early: v0.2, development source, no tagged release.</td><td>Microsoft's MCP server for Playwright, installed from npm. Mature and broad.</td></tr><tr><td>Form filling</td><td><code>form_fill</code> takes a label-to-value map, then reads every value back from the live page and reports mismatches. <code>form_submit</code> is a separate step with its own outcome.</td><td><code>browser_fill_form</code> fills several fields in one call from a page snapshot.</td></tr><tr><td>Research</td><td><code>read</code>, <code>cite</code> and <code>evidence</code> check quotations against pages read in the session and report pages that could not be read. See <a href="research-with-citations.html">research with checked citations</a>.</td><td>Reads pages as accessibility snapshots. This project did not evaluate it for quotation checking, so no claim is made either way.</td></tr><tr><td>Memory</td><td>Optional, in your own Qdrant: saved facts and per-site playbooks. See <a href="memory.html">memory and privacy</a>.</td><td>Browser profile only.</td></tr><tr><td>Tool list size</td><td>21 tools in the tested version, about 1,513 estimated tokens of definitions. Today's full list is 30 tools in five profiles; the default <code>auto</code> profile starts with 15.</td><td>25 tools, about 5,265 estimated tokens of definitions.</td></tr><tr><td>Platforms</td><td>Chrome or Chromium; tested on macOS locally and Linux in CI. Windows is not built or tested.</td><td>See Playwright MCP's own documentation.</td></tr></tbody></table></div>
+<p>The Ostler column is from this project's own documentation. For Playwright MCP, the only facts used here are the ones this project measured on the version below; check its documentation for anything else.</p>
+<h2 id="what-was-measured">What was measured<a class="anchor" href="#what-was-measured" aria-label="Link to this section">#</a></h2>
+<p>Scripted, model-free, five tasks on local fixtures. A deterministic script plays the shortest sensible tool sequence for each server, using each server's own batch-fill tool, and every task is judged by what the fixture server received, not by what the tool said.</p>
+<div class="table-wrap"><table><thead><tr><th></th><th>Ostler</th><th>Playwright MCP</th></tr></thead><tbody><tr><td>Version tested</td><td>0.2.0 (the revision was not recorded; see below)</td><td><code>@playwright/mcp</code> 0.0.84 (reports Playwright 1.65.0-alpha-2026-10-30), <code>--headless --isolated --browser chrome</code></td></tr><tr><td>Tasks completed correctly</td><td>5 of 5</td><td>5 of 5</td></tr><tr><td>Tool calls, all five tasks</td><td>19</td><td>27</td></tr><tr><td>Output tokens, all five tasks (bytes / 4, an estimate)</td><td>1,550</td><td>2,960</td></tr><tr><td>Tool time, all five tasks</td><td>4.1 s</td><td>8.8 s</td></tr></tbody></table></div>
+<p>Per task, tool calls (Ostler against Playwright MCP): basic form 3 against 4, validation 3 against 4, dependent dropdowns 3 against 5, three-step wizard 7 against 10, 20-field form 3 against 4.</p>
+<p>Conditions: 2026-11-02, Apple M2, macOS 26.6, one machine over localhost, headless, Google Chrome 156.0.8078.74, Node v26.10.0, median of 3 runs per task. The Chrome DevTools MCP server was measured in the same run and is in the <a href="benchmarks.html#5-ostler-vs-playwright-mcp-vs-chrome-devtools-mcp-same-fixtures-scripted-agent">benchmarks</a>.</p>
+<h2 id="what-this-does-not-show">What this does not show<a class="anchor" href="#what-this-does-not-show" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>No language model.</strong> A real model may take more or fewer steps than the scripted ideal. The script gives every server its best case.</li><li><strong>Fixtures only.</strong> Five tasks on local pages. None of the hostile behaviours in the other fixtures (CAPTCHA, shadow DOM, comboboxes, rich inputs) were run against Playwright MCP, so how it handles them is not measured here.</li><li><strong>Correctness is a tie.</strong> All three servers completed every task correctly in every run. The read-back that Ostler adds is what lets an agent detect a silent failure, but these fixtures never triggered one, so its value is not measured here.</li><li><strong>Ostler is not always cheaper.</strong> On small forms Chrome DevTools MCP returned fewer output tokens than Ostler, because Ostler's replies carry the read-back text. The step gap against batch-fill tools is about 1.4 times, not the larger gap seen against one call per field.</li><li><strong>Wall time is not end-to-end latency.</strong> Differences of a few hundred milliseconds are well under one model turn.</li><li><strong>Versions move.</strong> Playwright MCP has changed how navigation returns snapshots between releases. The sequences are this project's best attempt for each server and were not reviewed by its authors. A shorter sequence would change the numbers.</li><li><strong>The Ostler revision was not recorded.</strong> The raw results record the version string <code>ostler 0.2.0</code> and the date, not a commit. <code>git log</code> of the repository gives the history of the documents, not the revision that was measured.</li></ul>
+<p>The larger headline gaps elsewhere on this site (3 calls against 22 on a 20-field form, 13 times fewer input tokens) compare Ostler's form engine with the same engine driven one field per call. That is not a measurement of Playwright MCP.</p>
+<h2 id="when-to-choose-which">When to choose which<a class="anchor" href="#when-to-choose-which" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>Choose Playwright MCP</strong> if you need a mature, widely used tool, you want the documentation and ecosystem around Playwright, or you need a platform Ostler does not support. For simple, small forms the two tools are close.</li><li><strong>Choose Ostler</strong> if the agent must report what actually ended up in each field, if your workflow needs checked quotations and an explicit list of pages it could not read, or if you want per-site form memory in your own Qdrant. Accept that it is early software without a tagged release and without real-site success rates.</li><li><strong>Choose neither on this page's evidence alone.</strong> Run your own task. The harness is in the repository: <code>scripts/bench-compare.sh</code> reproduces the table above, and the <a href="benchmarks.html#8-reproduce">benchmark methods</a> list every flag.</li></ul>
+<h2 id="reproduce-it">Reproduce it<a class="anchor" href="#reproduce-it" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>scripts/bench-compare.sh    <span class="tok-c"># builds, installs the pinned competitors in a temp dir, writes bench-results/compare.{json,md}</span></code></pre></div>
+<p>Raw data: <a href="https://github.com/inamdarmihir/ostler/blob/main/bench-results/compare.json" rel="noopener"><code>bench-results/compare.json</code></a> and <a href="https://github.com/inamdarmihir/ostler/blob/main/bench-results/compare.md" rel="noopener"><code>compare.md</code></a>. If you find a shorter sequence for either server, please <a href="https://github.com/inamdarmihir/ostler/issues" rel="noopener">open an issue</a>.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/site/tools/content/ostler-vs-playwright-mcp.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="benchmarks.html"><span>Previous</span><strong>Benchmarks</strong></a>
+<a class="pager-next" rel="next" href="economics.html"><span>Next</span><strong>Economics</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#where-they-differ">Where they differ</a></li><li class="toc-l2"><a href="#what-was-measured">What was measured</a></li><li class="toc-l2"><a href="#what-this-does-not-show">What this does not show</a></li><li class="toc-l2"><a href="#when-to-choose-which">When to choose which</a></li><li class="toc-l2"><a href="#reproduce-it">Reproduce it</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>

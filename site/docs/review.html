@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Design review - Ostler MCP browser docs</title>
-<meta name="description" content="The October 2026 review: five design flaws and their status.">
+<title>Ostler Design Review, October 2026: Flaws and Their Status</title>
+<meta name="description" content="The October 2026 design review of Ostler: five design flaws and their status.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/review.html">
 <link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Design review - Ostler MCP browser docs"><meta property="og:description" content="The October 2026 review: five design flaws and their status.">
+<meta property="og:title" content="Ostler Design Review, October 2026: Flaws and Their Status"><meta property="og:description" content="The October 2026 design review of Ostler: five design flaws and their status.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/review.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Design review - Ostler MCP browser docs"><meta name="twitter:description" content="The October 2026 review: five design flaws and their status."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Design review","description":"The October 2026 review: five design flaws and their status.","url":"https://inamdarmihir.github.io/ostler/docs/review.html","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"about":{"@type":"SoftwareApplication","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"author":{"@type":"Person","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir"},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Design review","item":"https://inamdarmihir.github.io/ostler/docs/review.html"}]}]}</script>
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Ostler Design Review, October 2026: Flaws and Their Status">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler Design Review, October 2026: Flaws and Their Status"><meta name="twitter:description" content="The October 2026 design review of Ostler: five design flaws and their status."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/review.html#article","headline":"Ostler design review (October 2026)","description":"The October 2026 design review of Ostler: five design flaws and their status.","url":"https://inamdarmihir.github.io/ostler/docs/review.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/review.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Design review","item":"https://inamdarmihir.github.io/ostler/docs/review.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -25,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -49,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -62,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html" aria-current="page">Design review</a></li>
 </ul></div>
@@ -74,8 +77,8 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Evidence</p>
-<article class="prose"><h1>Design review</h1>
-<p class="lede">The October 2026 review: five design flaws and their status.</p>
+<article class="prose"><h1>Ostler design review (October 2026)</h1>
+<p class="lede">The October 2026 design review of Ostler: five design flaws and their status.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#status">Status</a></li><li class="toc-l2"><a href="#the-five-design-flaws">The five design flaws</a></li><li class="toc-l3"><a href="#1-never-guess-is-not-actually-enforced-wrong-fills-can-be-reported-as-verified-critical">1. "Never guess" is not actually enforced: wrong fills can be reported as Verified (critical)</a></li><li class="toc-l3"><a href="#2-the-safety-model-is-checked-after-the-browser-has-acted-high">2. The safety model is checked after the browser has acted (high)</a></li><li class="toc-l3"><a href="#3-secrets-leak-through-side-channels-medium-high">3. Secrets leak through side channels (medium-high)</a></li><li class="toc-l3"><a href="#4-the-browser-layer-has-no-recovery-and-almost-no-tests-high">4. The browser layer has no recovery and almost no tests (high)</a></li><li class="toc-l3"><a href="#5-the-evidence-does-not-support-the-headline-yet-critical-for-credibility">5. The evidence does not support the headline yet (critical for credibility)</a></li><li class="toc-l2"><a href="#other-notable-findings">Other notable findings</a></li><li class="toc-l2"><a href="#recommended-order-of-work">Recommended order of work</a></li></ul></details>
 <p>Five independent read-only reviews: form engine, Qdrant memory, MCP/security, CDP/lifecycle, benchmarks/claims. 74 findings in total; this page keeps the ones that matter, grouped by the design flaw they share. "C" = confirmed from the code path, "S" = suspected. No reviewer reproduced issues live; all 73 tests pass, which mostly says the tests miss these cases.</p>
 <h2 id="status">Status<a class="anchor" href="#status" aria-label="Link to this section">#</a></h2>

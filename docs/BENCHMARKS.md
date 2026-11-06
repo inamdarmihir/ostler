@@ -3,7 +3,7 @@
 Everything below was measured by `ostler-bench` on one machine and is reproducible with the commands at the end. The harness prints its own assumptions with every table. If a number here disagrees with what you measure, trust yours and open an issue.
 
 **Machine:** Apple M2, 8 cores, 8 GB RAM, macOS 26.6, Chrome 156, Qdrant (latest release binary at the time), single machine, everything over localhost.
-**Date:** 2026-10-30. **Commit:** see `git log`.
+**Date:** 2026-10-30 (section 5: 2026-11-02). **Revision:** not recorded. The raw files in `bench-results/` record the version string `ostler 0.2.0` and the date, not a commit, and `git log` shows the history of this document, not the revision that was measured. Re-runs should note `git rev-parse HEAD`.
 
 ## What these benchmarks do and do not show
 
@@ -14,6 +14,8 @@ Everything below was measured by `ostler-bench` on one machine and is reproducib
 ## 1. Forms: tool calls, tokens, cost, latency
 
 Median of 3 runs. `calls` = agent tool calls. `in tok` = total input tokens the model reads across all turns (every turn re-reads the conversation). `$ cached` = LLM cost with prompt caching (cache reads at 0.1x, writes at 1.25x) at the illustrative $3 / $15 per Mtok. `e2e` = tool time + turns x 3 s.
+
+**Baseline and mode:** `engine` is Ostler's form engine. `per-field` is the same engine driven one call per field, not another product. Scripted, no LLM in the loop, local fixtures, one machine.
 
 | scenario | mode | calls | out tok | in tok | tool ms | e2e s | $ cached |
 |---|---|---:|---:|---:|---:|---:|---:|

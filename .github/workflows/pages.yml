@@ -1,6 +1,6 @@
 name: Pages
 on:
-  push: { branches: [main], paths: ["site/**", "assets/**", "docs/**", "README.md", "SECURITY.md", "CHANGELOG.md", ".github/workflows/pages.yml"] }
+  push: { branches: [main], paths: ["site/**", "assets/**", "docs/**", "README.md", "SECURITY.md", "CHANGELOG.md", "Cargo.toml", ".github/workflows/pages.yml"] }
   workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
@@ -12,11 +12,14 @@ jobs:
     environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
     steps:
       - uses: actions/checkout@v7
-      # Build from the docs so the uploaded site always matches the repository.
-      - name: Build the site and check links
+        with: { fetch-depth: 0 }   # the IndexNow step diffs against the previous commit
+      # Build from the docs so the uploaded site always matches the repository, then refuse to deploy a
+      # site with broken links, invalid or contradictory structured data, or non-absolute LLM links.
+      - name: Build and check the site
         run: |
           python3 site/tools/build_docs.py
           python3 site/tools/check_links.py
+          python3 site/tools/check_site.py
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with: { path: site }
@@ -25,16 +28,20 @@ jobs:
       - name: Smoke test the live site
         run: |
           base="${{ steps.d.outputs.page_url }}"
-          for f in "" favicon.svg assets/og.png assets/icon-180.png sitemap.xml llms.txt llms-full.txt "$INDEXNOW_KEY.txt"; do
+          for f in "" favicon.svg assets/og.png assets/icon-180.png sitemap.xml llms.txt llms-full.txt docs/research-with-citations.html docs/ostler-vs-playwright-mcp.html "$INDEXNOW_KEY.txt"; do
             curl -fsS --retry 5 --retry-delay 3 -o /dev/null -w "%{http_code} $base$f\n" "$base$f"
           done
-      # Tell the IndexNow engines (Bing, Yandex, Seznam, Naver; Bing's index also backs Copilot)
-      # that every page in the sitemap may have changed. A failure here must not fail the deploy.
+      # Tell the IndexNow engines (Bing, Yandex, Seznam, Naver; Bing's index also backs Copilot) which
+      # pages changed. This is a notification, not proof of indexing. Runs after the smoke test above, so
+      # only live URLs are announced. A failure here must not fail the deploy.
       - name: Ping IndexNow
         continue-on-error: true
+        env: { BEFORE_SHA: "${{ github.event.before }}" }
         run: |
           base="${{ steps.d.outputs.page_url }}"
-          urls=$(grep -o '<loc>[^<]*</loc>' site/sitemap.xml | sed -e 's/<loc>//' -e 's#</loc>##' | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          urls=$(python3 site/tools/indexnow_urls.py "$BEFORE_SHA")
+          echo "IndexNow URLs: $urls"
+          if [ "$urls" = "[]" ]; then echo "No page changed; nothing to announce."; exit 0; fi
           host=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.urlsplit(sys.argv[1]).hostname)' "$base")
           body=$(python3 -c 'import json,sys; print(json.dumps({"host": sys.argv[1], "key": sys.argv[2], "keyLocation": sys.argv[3], "urlList": json.loads(sys.argv[4])}))' "$host" "$INDEXNOW_KEY" "${base}${INDEXNOW_KEY}.txt" "$urls")
           curl -sS -o /dev/null -w "IndexNow: HTTP %{http_code}\n" -X POST https://api.indexnow.org/indexnow -H 'Content-Type: application/json; charset=utf-8' --data "$body"

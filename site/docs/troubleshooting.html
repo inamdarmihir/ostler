@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Troubleshooting - Ostler MCP browser docs</title>
-<meta name="description" content="Symptoms, causes and fixes. Start with ostler doctor.">
+<title>Troubleshoot Ostler: Symptoms, Causes and Fixes</title>
+<meta name="description" content="Symptoms, causes and fixes for Ostler. Start with ostler doctor.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/icon-180.png">
 <link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/troubleshooting.html">
 <link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
 <meta name="color-scheme" content="light dark">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Troubleshooting - Ostler MCP browser docs"><meta property="og:description" content="Symptoms, causes and fixes. Start with ostler doctor.">
+<meta property="og:title" content="Troubleshoot Ostler: Symptoms, Causes and Fixes"><meta property="og:description" content="Symptoms, causes and fixes for Ostler. Start with ostler doctor.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/troubleshooting.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<meta property="og:image:alt" content="Ostler">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Troubleshooting - Ostler MCP browser docs"><meta name="twitter:description" content="Symptoms, causes and fixes. Start with ostler doctor."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Troubleshooting","description":"Symptoms, causes and fixes. Start with ostler doctor.","url":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"about":{"@type":"SoftwareApplication","name":"Ostler","url":"https://inamdarmihir.github.io/ostler/"},"author":{"@type":"Person","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir"},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Troubleshooting","item":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html"}]}]}</script>
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Troubleshoot Ostler: Symptoms, Causes and Fixes">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Troubleshoot Ostler: Symptoms, Causes and Fixes"><meta name="twitter:description" content="Symptoms, causes and fixes for Ostler. Start with ostler doctor."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html#article","headline":"Troubleshooting Ostler","description":"Symptoms, causes and fixes for Ostler. Start with ostler doctor.","url":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Troubleshooting","item":"https://inamdarmihir.github.io/ostler/docs/troubleshooting.html"}]}]}</script>
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="../assets/site.css">
 <script defer src="../assets/site.js"></script>
@@ -25,7 +26,7 @@
 <header class="topbar">
 <div class="topbar-inner">
 <button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
 <nav class="topnav" aria-label="Main">
 <a href="../docs/index.html" aria-current="page">Docs</a>
 <a href="../docs/tools.html">Tools</a>
@@ -49,6 +50,7 @@
 <li><a href="agents.html">Use with your agent</a></li>
 </ul></div>
 <div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
 <li><a href="cookbook.html">Cookbook</a></li>
 <li><a href="forms.html">Forms and verification</a></li>
 <li><a href="memory.html">Memory and privacy</a></li>
@@ -62,6 +64,7 @@
 </ul></div>
 <div class="side-group"><p class="side-title">Evidence</p><ul>
 <li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
 <li><a href="economics.html">Economics</a></li>
 <li><a href="review.html">Design review</a></li>
 </ul></div>
@@ -74,8 +77,8 @@
 <div class="scrim" data-scrim hidden></div>
 <main id="content" class="doc-main" tabindex="-1">
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Help</p>
-<article class="prose"><h1>Troubleshooting</h1>
-<p class="lede">Symptoms, causes and fixes. Start with ostler doctor.</p>
+<article class="prose"><h1>Troubleshooting Ostler</h1>
+<p class="lede">Symptoms, causes and fixes for Ostler. Start with ostler doctor.</p>
 <details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#when-not-to-use-ostler">When not to use Ostler</a></li><li class="toc-l2"><a href="#searching-the-web">Searching the web</a></li></ul></details>
 <p>Start with <code>ostler doctor</code>. It launches Chrome, round-trips a page and, if memory is on, prints a memory report and checks Qdrant. The report says in plain words what is stored where and what leaves the machine:</p>
 <div class="code" data-lang="output"><pre tabindex="0"><code>Memory: on, Qdrant at https://… (tenant "default")
