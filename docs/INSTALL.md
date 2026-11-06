@@ -10,6 +10,7 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 |---|---|---|
 | **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
 | Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh` | nothing else; macOS and Linux |
+| Homebrew (macOS, Linux) | `brew install inamdarmihir/ostler/ostler` | Homebrew; installs the prebuilt binary |
 | npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
 
