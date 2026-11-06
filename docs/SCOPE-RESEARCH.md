@@ -1,6 +1,6 @@
 # Scope proposal: from form filling to research and general browser tasks
 
-Status: **draft for discussion**, 2026-11-06. Nothing here is built. Section 7 lists the decisions that need an owner's call before work starts.
+Status: **draft for discussion**, 2026-11-06. Nothing here is built. The wider task and domain frame is in [SCOPE-TASKS.md](SCOPE-TASKS.md). Section 7 lists the decisions that need an owner's call before work starts.
 
 ## 1. Why expand
 
