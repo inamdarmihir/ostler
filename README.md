@@ -49,7 +49,7 @@ Try it: run `ostler fixtures` (synthetic test forms at http://127.0.0.1:8787), t
 
 ## What it does
 
-Ostler is a general MCP browser (navigate, read, click, type, tabs, screenshots, a click-target overlay, shared notes) with a **form engine** and **Qdrant memory** on top. Forms are where it verifies the most, so they lead. Recipes for forms, reading, QA, logins and A2A are in the [cookbook](docs/COOKBOOK.md). Research and extraction are built as libraries but not yet tools; see [below](#beyond-forms-research-and-tasks-in-progress).
+Ostler is a general MCP browser (navigate, read, click, type, tabs, screenshots, a click-target overlay, shared notes) with a **form engine**, **checked-citation research tools** and **Qdrant memory** on top. Forms are where it verifies the most, so they lead. Recipes for forms, reading, QA, logins, research and A2A are in the [cookbook](docs/COOKBOOK.md). Research (`read`, `cite`, `evidence`, `search`, `open_many`) is described [below](#beyond-forms-deep-research-with-checked-citations).
 
 Instead of one click and one snapshot per field, the agent asks for the form's typed fields (`form_inspect`), sends `{label: value}` for the whole form (`form_fill`), and submits (`form_submit`). Dependent dropdowns, multi-step wizards, masks, comboboxes, shadow DOM and same-origin iframes are handled by the engine. Every value is **read back from the live page** and compared by field type, and a rejected submit returns the page's own messages. `look` returns a screenshot with numbered click targets.
 
@@ -73,11 +73,13 @@ A key that matches nothing is reported, not guessed; ties are `ambiguous`; a pag
 
 Optional **memory** in [Qdrant](https://qdrant.tech) (or an encrypted local file, no server) saves profile facts and per-site playbooks of which fact fills which field, scoped per tenant and sealed on your machine by default. See [docs/MEMORY.md](docs/MEMORY.md). A second front door, [A2A](docs/A2A.md) over HTTP, lets other agents delegate forms.
 
-## Beyond forms: research and tasks (in progress)
+## Beyond forms: deep research with checked citations
 
-Ostler is being widened from forms to deep research and general browser tasks, keeping one idea: **verified**. Forms read every value back; research should refuse to cite what it did not read, and report pages it could not read as gaps. The plan of record is [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md).
+Ostler is widened from forms to deep research, keeping one idea: **verified**. Forms read every value back; research refuses to cite what it did not read, and reports the pages it could not read as gaps. The plan of record is [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md).
 
-What exists today, as tested libraries (unit, property and real-Chrome / real-Qdrant tests):
+**Research tools (MCP):** `read` (best passages for a `query`, or the start of a page), `cite` (a quote is `VERIFIED` only if its words are on a page read this session, with a link to check it), `evidence` (verified and stale citations, and the gaps: paywall, bot wall, robots.txt, errors), `search` (SearXNG or Brave), `open_many` (up to 10 URLs in a scratch tab, robots.txt-aware), `extract` (tables, and lists with a `PARTIAL: 5 of 13` verdict) and `links`. A page that changes between reads invalidates the citations taken from it; text aimed at the agent is flagged, not obeyed. Output and limits: [TOOLS.md](docs/TOOLS.md#research-tools), recipe in the [cookbook](docs/COOKBOOK.md#13-research-with-citations-that-are-checked). Tested against real Chrome on the bundled research pack; the search providers are tested against mock servers only, and nothing has been run against the open web at scale.
+
+Underneath, as tested libraries (unit, property and real-Chrome / real-Qdrant tests):
 
 | crate | what it does |
 |---|---|
@@ -88,7 +90,7 @@ What exists today, as tested libraries (unit, property and real-Chrome / real-Qd
 | `ostler-browser` | readability-style `read`, table, list and pagination extraction, and a `diagnostics` console/network collector. |
 | `ostler-fixtures`, `ostler-bench` | five **domain packs** (research, gov-forms, jobs, dev-qa, commerce; 34 tasks) and a **false-success** scorer: claimed success while the outcome failed. |
 
-**Not done yet:** none of this is exposed as MCP tools. `read`, `extract`, `search`, `cite`, `open_many`, `task`, `diagnostics`, the `expect` parameter and tool presets are the next milestone (M1 in the plan). Until then an agent using Ostler over MCP still gets the form tools and `navigate`/`snapshot`. Search providers are only verified against mocks (Brave partly); there is no WARC archive; Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
+**Not exposed as MCP tools yet:** `task`, `diagnostics`, the `expect` parameter, and the memory `source` kind (so read pages are not kept across sessions). Pages are read one at a time, there is no PDF text layer and no WARC archive; Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
 
 First scripted result across the packs (a deterministic script, not a model; [bench-results/packs-all-scripted.md](bench-results/packs-all-scripted.md)): 30 tasks ran, 29 true successes, **1 false success** (dev-qa-005: the script trusted a page's "saved" banner while the save had failed), 4 skipped because they need tools not wired yet. That trap is the point of the metric. Run it with `ostler-bench packs --scripted --pack all`.
 

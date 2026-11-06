@@ -2,7 +2,7 @@
 
 Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](../README.md); tool details are in [TOOLS.md](TOOLS.md).
 
-Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 14 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all.
+Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 15 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all. Recipe 13 is deep research with citations that are checked.
 
 Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.
 
@@ -22,6 +22,7 @@ Everything marked **planned** at the end is built as a library but is not an MCP
 | 10 | [Submit only with your approval](#10-submit-only-with-your-approval) | `--require-confirm-submit` |
 | 11 | [Hand a form to another agent over A2A](#11-hand-a-form-to-another-agent-over-a2a) | `ostler a2a` |
 | 12 | [Keep a run cheap](#12-keep-a-run-cheap) | `--tools` `stats` `snapshot` delta |
+| 13 | [Research with citations that are checked](#13-research-with-citations-that-are-checked) | `search` `open_many` `read` `cite` `evidence` |
 
 ## 1. Read a page and answer a question
 
@@ -31,7 +32,7 @@ Everything marked **planned** at the end is built as a library but is not an MCP
 
 `navigate` returns the page state with interactive elements. `snapshot` returns the page as text with element refs. On a long page, pass the ref of a heading to read only that section, and use `delta` on later calls to see only what changed. Page text arrives wrapped as untrusted content, so instructions inside a page are data, not commands.
 
-**Be aware:** Ostler gives your agent the text. It does not check that the agent's quote is on the page; that check (`cite`) is [planned](#planned-not-yet-mcp-tools).
+**Be aware:** `snapshot` gives your agent the text; it does not check that the agent's quote is on the page. For answers that must be sourced, use `read` and `cite` ([recipe 13](#13-research-with-citations-that-are-checked)).
 
 ## 2. Compare several pages side by side
 
@@ -116,20 +117,49 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 
 ## 12. Keep a run cheap
 
-- `--tools auto` (default) shows 14 core tools and adds the form and memory tools once a page has fields. `--tools core` keeps the schema smallest.
+- `--tools auto` (default) shows 15 core tools (about 4.9 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
+- `read` with a `query` returns only the best-matching passages, so a long page costs a few hundred tokens instead of the whole page.
 - Use `snapshot` with `delta` and heading refs rather than re-reading whole pages.
 - Call `stats` to see calls, time and estimated tokens for the session.
 - Form recipes beat per-field clicking: 3 calls versus 22 on the 20-field fixture, measured on a scripted agent ([BENCHMARKS.md](BENCHMARKS.md)).
 
+## 13. Research with citations that are checked
+
+**Use it for:** any question whose answer will be relied on: a fact, a comparison, a "what does the source say".
+
+**Prompt:** "Find out who designed the Kestrel Lock and when it opened. Use `read`, then back every claim with `cite`, and finish with `evidence`. If a page could not be read, say so instead of guessing." (Try it on the bundled pages: `ostler fixtures`, then start at `http://127.0.0.1:8787/packs/research/index.html`.)
+
+```text
+> read {"url": ".../kestrel-lock.html", "query": "who designed the lock"}
+Read: "The Kestrel Lock" — .../kestrel-lock.html · page · 297 chars · fetched 2026-11-06T14:44:22Z · sha256:9f602117
+[p1 · The Kestrel Lock] ... It opened in 1887 and was designed by [Marta Ilves](.../marta-ilves.html). ...
+
+> cite {"url": ".../kestrel-lock.html", "quote": "opened in 1887 and was designed by Marta Ilves"}
+VERIFIED [1] .../kestrel-lock.html (read 2026-11-06T14:44:22Z, sha256:9f602117)
+Check it yourself (best effort): .../kestrel-lock.html#:~:text=opened%20in%201887%20and%20was%20designed%20by%20Marta%20Ilves
+
+> cite {"url": ".../kestrel-lock.html", "quote": "Tomas Reyes designed the Kestrel Lock in 1887"}
+NOT VERIFIED: these words are not on "The Kestrel Lock". Do not state this claim as sourced ...
+```
+
+What this gives you that a page-to-markdown API does not:
+
+- **Nothing can be cited that was not read.** `cite` checks the quote against the stored text of a page read in this session. `NOT READ` and `NOT VERIFIED` are errors, and the second shows the closest text on the page.
+- **Gaps are reported, not hidden.** A paywalled page (teaser only), a verification wall, a robots.txt refusal, an HTTP error or an empty page is recorded. `evidence` lists them next to the verified citations, so "I could not read X" is part of the answer.
+- **Changed pages invalidate their citations.** Read the same URL again and, if the text differs, `read` says `CHANGED` and `evidence` lists the earlier citations as stale.
+- **Text aimed at your agent is flagged**, not obeyed: the header says `ATTENTION`, and a citation inside such text carries a warning.
+- **It runs on your machine and your browser.** With `--profile-dir`, pages behind your login are readable; nothing is sent to a third party.
+
+`open_many` reads up to 10 URLs at once in a scratch tab (your tab is untouched), obeying robots.txt and per-host spacing, and returns the best passages from each. `search` needs a provider: set `OSTLER_SEARXNG_URL` (a SearXNG instance) or `OSTLER_SEARCH_PROVIDER=brave` with `OSTLER_BRAVE_API_KEY`, then restart the server. `extract` returns tables as rows and lists with a `PARTIAL: 5 of 13` verdict when the page says there is more.
+
+**Be aware:** `cite` proves the words are on the page, not that the claim is true. Pages are read one at a time, there is no PDF text layer, and sources are not kept across sessions. A search provider has been tested against mock servers only.
+
 ## Planned, not yet MCP tools
 
-These exist as libraries in the workspace (`ostler-extract`, `ostler-workflow`, `ostler-research`, the memory `source` kind) and are covered by tests and a fixture pack, but **no MCP tool exposes them yet**. Do not write prompts that depend on them.
+These exist as libraries in the workspace (`ostler-workflow`, the memory `source` kind, the diagnostics collector) and are covered by tests and a fixture pack, but **no MCP tool exposes them yet**. Do not write prompts that depend on them.
 
 | recipe | needs | status |
 |---|---|---|
-| Search the web, then read the top results | `search`, `open_many` | providers verified against mocks only |
-| Pull a table into rows and know if it is complete | `extract` | library only |
-| Cite a claim and verify the quote is on the page | `cite` | library only |
 | Assert a postcondition after a click ("the page now shows step 2") | `expect` | library only |
 | See console errors and failed requests | `diagnostics` | per-tab capture built, no tool |
 | Remember what you read across sessions | source memory | library only |

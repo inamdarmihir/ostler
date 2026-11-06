@@ -112,7 +112,7 @@ ostler memory wipe --yes
 | `--block-private-networks` | with no allowlist, refuse loopback, private, metadata and internal hosts (on by default for `a2a`) |
 | `--accept-dialogs` | answer the page's `confirm()` and `prompt()` with OK; they are dismissed by default |
 | `--require-confirm-submit` | `form_submit` fails unless the agent passes `confirm=true`, so a human can approve |
-| `--tools auto\|core\|forms\|all` | which tools are listed; `auto` (default) lists the 14 core tools and adds forms and memory once a page has form fields |
+| `--tools auto\|core\|forms\|research\|all` | which tools are listed; `auto` (default) lists the 15 core tools (including `read`), adds the research tools after the first `read` or `search`, and forms and memory once a page has form fields |
 | `--lean` | lower memory; no images/fonts/media |
 | `--profile-dir DIR` | persistent Chrome profile (keeps logins) |
 | `--headed` | visible browser, for watching it work |

@@ -26,6 +26,8 @@ macro_rules! br {
     }};
 }
 
+mod research;
+
 pub struct AppConfig {
     pub launch: LaunchOptions,
     pub policy: Policy,
@@ -307,7 +309,10 @@ pub struct App {
     /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
     notice: StdMutex<Option<String>>,
     revealed: std::sync::atomic::AtomicBool,
+    research_revealed: std::sync::atomic::AtomicBool,
     list_changed: std::sync::atomic::AtomicBool,
+    /// Pages read, citations verified, sources and gaps: what the agent may state as found.
+    research: research::Research,
     /// Notes the agent keeps for itself, shared by every tab and kept across browser restarts.
     context: StdMutex<BTreeMap<String, String>>,
     pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -486,7 +491,9 @@ impl App {
             last_fill: StdMutex::default(),
             notice: StdMutex::default(),
             revealed: Default::default(),
+            research_revealed: Default::default(),
             list_changed: Default::default(),
+            research: Default::default(),
             context: StdMutex::default(),
             pending: StdMutex::default(),
             started: Instant::now(),
@@ -524,12 +531,32 @@ impl App {
         self.cfg.profile
     }
 
-    /// The tools to list right now (`auto` grows once a page with form fields has been seen).
+    /// The tools to list right now (`auto` grows once a page with form fields has been seen, and again
+    /// after the first `read` or `search`).
     pub fn listed_tools(&self) -> Vec<Value> {
+        use std::sync::atomic::Ordering::Relaxed;
         tools::list_revealed(
             self.cfg.profile,
-            self.revealed.load(std::sync::atomic::Ordering::Relaxed),
+            self.revealed.load(Relaxed),
+            self.research_revealed.load(Relaxed),
         )
+    }
+
+    /// `auto` profile: reveal the citation and search tools after the first successful `read` or `search`.
+    fn reveal_on_research(&self, name: &str, out: &mut ToolOutput) {
+        use std::sync::atomic::Ordering::Relaxed;
+        if self.cfg.profile != Profile::Auto
+            || self.research_revealed.load(Relaxed)
+            || out.is_error
+            || !matches!(name, "read" | "search" | "open_many")
+        {
+            return;
+        }
+        self.research_revealed.store(true, Relaxed);
+        self.list_changed.store(true, Relaxed);
+        out.content.push(Content::Text(
+            "Now available: cite, evidence, search, open_many, extract, links.".into(),
+        ));
     }
 
     /// True once after the listed tools changed, so the server can send `tools/list_changed`.
@@ -654,10 +681,12 @@ impl App {
         };
         let mut out = out;
         self.reveal_on_forms(name, &mut out);
+        self.reveal_on_research(name, &mut out);
         // A verification wall changes what the agent should do next, so say so right where it looks.
         if matches!(
             name,
             "navigate"
+                | "read"
                 | "snapshot"
                 | "click"
                 | "type"
@@ -1231,6 +1260,13 @@ impl App {
                 }))
             }
             "stats" => Ok(ToolOutput::text(self.stats().await)),
+            "read" => self.read_tool(a).await,
+            "cite" => self.cite_tool(a),
+            "evidence" => Ok(self.evidence_tool()),
+            "search" => self.search_tool(a).await,
+            "open_many" => self.open_many_tool(a).await,
+            "extract" => self.extract_tool(a).await,
+            "links" => self.links_tool(a).await,
             other => Err(format!("unknown tool {other:?}").into()),
         }
     }

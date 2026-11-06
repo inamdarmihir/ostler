@@ -1012,7 +1012,7 @@ struct MemoryArgs {
 struct ServeArgs {
     #[command(flatten)]
     mem: MemoryArgs,
-    /// Tools to list: auto (core, plus forms and memory once a page has form fields) | core | forms | all.
+    /// Tools to list: auto (core, plus research tools after the first read/search and forms and memory once a page has form fields) | core | forms | research | all.
     #[arg(long, default_value = "auto", env = "OSTLER_TOOLS")]
     tools: String,
     #[arg(long)]
