@@ -1,0 +1,29 @@
+[package]
+name = "ostler-research"
+description = "Web research building blocks for Ostler: search providers, robots.txt, crawl budgets, source ledger, fetch planner (internal crate)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = "0.1.92"
+reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tokio = { version = "1.53.3", features = ["rt", "macros", "time", "sync"] }
+url = "2.5.8"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tiny_http = "0.12.0"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync", "test-util"] }
