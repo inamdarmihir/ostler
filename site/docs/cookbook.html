@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cookbook - Ostler docs</title>
+<meta name="description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/cookbook.html">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Cookbook - Ostler docs"><meta property="og:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/cookbook.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:alt" content="Ostler">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Cookbook - Ostler docs"><meta name="twitter:description" content="Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="cookbook.html" aria-current="page">Cookbook</a></li>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Guides</p>
+<article class="prose"><h1>Cookbook</h1>
+<p class="lede">Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#contents">Contents</a></li><li class="toc-l2"><a href="#1-read-a-page-and-answer-a-question">1. Read a page and answer a question</a></li><li class="toc-l2"><a href="#2-compare-several-pages-side-by-side">2. Compare several pages side by side</a></li><li class="toc-l2"><a href="#3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)</a></li><li class="toc-l2"><a href="#4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal</a></li><li class="toc-l2"><a href="#5-log-in-once-reuse-the-session">5. Log in once, reuse the session</a></li><li class="toc-l2"><a href="#6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly</a></li><li class="toc-l2"><a href="#7-fill-a-form-and-verify-it">7. Fill a form and verify it</a></li><li class="toc-l2"><a href="#8-fill-a-multi-step-wizard">8. Fill a multi-step wizard</a></li><li class="toc-l2"><a href="#9-never-fill-the-same-form-twice">9. Never fill the same form twice</a></li><li class="toc-l2"><a href="#10-submit-only-with-your-approval">10. Submit only with your approval</a></li><li class="toc-l2"><a href="#11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A</a></li><li class="toc-l2"><a href="#12-keep-a-run-cheap">12. Keep a run cheap</a></li><li class="toc-l2"><a href="#planned-not-yet-mcp-tools">Planned, not yet MCP tools</a></li></ul></details>
+<p>Recipes for what you can do with Ostler <strong>today</strong>. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md" rel="noopener">README</a>; tool details are in <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md" rel="noopener">TOOLS.md</a>.</p>
+<p>Forms are the flagship because that is where Ostler verifies the most. They are not the only thing it does: the 14 core tools are a general browser (navigate, read, click, type, tabs, screenshots), and recipes 1 to 6 use no form tools at all.</p>
+<p>Everything marked <strong>planned</strong> at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.</p>
+<h2 id="contents">Contents<a class="anchor" href="#contents" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>recipe</th><th>tools</th></tr></thead><tbody><tr><td>1</td><td><a href="#1-read-a-page-and-answer-a-question">Read a page and answer a question</a></td><td><code>navigate</code> <code>snapshot</code></td></tr><tr><td>2</td><td><a href="#2-compare-several-pages-side-by-side">Compare several pages side by side</a></td><td><code>tabs</code> <code>snapshot</code> <code>context</code></td></tr><tr><td>3</td><td><a href="#3-check-a-web-app-after-a-change-qa">Check a web app after a change (QA)</a></td><td><code>navigate</code> <code>click</code> <code>wait_for</code> <code>look</code> <code>screenshot</code></td></tr><tr><td>4</td><td><a href="#4-get-past-a-cookie-wall-or-modal">Get past a cookie wall or modal</a></td><td><code>look</code> <code>click</code></td></tr><tr><td>5</td><td><a href="#5-log-in-once-reuse-the-session">Log in once, reuse the session</a></td><td><code>--profile-dir</code> <code>wait_for_human</code></td></tr><tr><td>6</td><td><a href="#6-handle-a-captcha-honestly">Handle a CAPTCHA honestly</a></td><td><code>wait_for_human</code> <code>--headed</code></td></tr><tr><td>7</td><td><a href="#7-fill-a-form-and-verify-it">Fill a form and verify it</a></td><td><code>form_inspect</code> <code>form_fill</code> <code>form_submit</code></td></tr><tr><td>8</td><td><a href="#8-fill-a-multi-step-wizard">Fill a multi-step wizard</a></td><td><code>form_fill</code> <code>form_submit</code></td></tr><tr><td>9</td><td><a href="#9-never-fill-the-same-form-twice">Never fill the same form twice</a></td><td><code>memory_remember</code> <code>--learn</code></td></tr><tr><td>10</td><td><a href="#10-submit-only-with-your-approval">Submit only with your approval</a></td><td><code>--require-confirm-submit</code></td></tr><tr><td>11</td><td><a href="#11-hand-a-form-to-another-agent-over-a2a">Hand a form to another agent over A2A</a></td><td><code>ostler a2a</code></td></tr><tr><td>12</td><td><a href="#12-keep-a-run-cheap">Keep a run cheap</a></td><td><code>--tools</code> <code>stats</code> <code>snapshot</code> delta</td></tr></tbody></table></div>
+<h2 id="1-read-a-page-and-answer-a-question">1. Read a page and answer a question<a class="anchor" href="#1-read-a-page-and-answer-a-question" aria-label="Link to this section">#</a></h2>
+<p><strong>Use it for:</strong> documentation lookups, reading an article, checking what a page says.</p>
+<p><strong>Prompt:</strong> "Open https://example.com/docs/limits and tell me the rate limit for the free plan. Quote the sentence."</p>
+<p><code>navigate</code> returns the page state with interactive elements. <code>snapshot</code> returns the page as text with element refs. On a long page, pass the ref of a heading to read only that section, and use <code>delta</code> on later calls to see only what changed. Page text arrives wrapped as untrusted content, so instructions inside a page are data, not commands.</p>
+<p><strong>Be aware:</strong> Ostler gives your agent the text. It does not check that the agent's quote is on the page; that check (<code>cite</code>) is <a href="#planned-not-yet-mcp-tools">planned</a>.</p>
+<h2 id="2-compare-several-pages-side-by-side">2. Compare several pages side by side<a class="anchor" href="#2-compare-several-pages-side-by-side" aria-label="Link to this section">#</a></h2>
+<p><strong>Use it for:</strong> comparing plans, specs or release notes from three sources.</p>
+<p><strong>Prompt:</strong> "Open these three pricing pages in separate tabs. Write down each plan's price in the shared notes, then give me a table."</p>
+<p><code>tabs</code> with <code>new &lt;url&gt;</code> opens each page; all tabs share cookies and the <code>context</code> notepad, so the agent can store <code>plan_a=$12/mo</code> and read it back after switching tabs. Keep notes short: <code>context</code> is for facts, not page dumps. Popups open as new tabs under the same policy.</p>
+<h2 id="3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)<a class="anchor" href="#3-check-a-web-app-after-a-change-qa" aria-label="Link to this section">#</a></h2>
+<p><strong>Use it for:</strong> a quick end-to-end check of your own app on localhost or staging.</p>
+<p><strong>Prompt:</strong> "Start at http://localhost:3000, sign in with the test account, add an item to the cart, and tell me whether the cart badge says 1. Take a screenshot at the end."</p>
+<p><code>click</code>, <code>type</code>, <code>press</code> and <code>wait_for</code> drive the flow. <code>wait_for</code> waits for text to appear or disappear or for a selector, so the agent asserts on what the page shows instead of sleeping. <code>look</code> and <code>screenshot</code> give a visual record. Allow only your own origin: <code>ostler serve --allow-domain localhost</code>.</p>
+<p><strong>Be aware:</strong> there is no console-error or failed-request report over MCP yet (<code>diagnostics</code> is <a href="#planned-not-yet-mcp-tools">planned</a>).</p>
+<h2 id="4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal<a class="anchor" href="#4-get-past-a-cookie-wall-or-modal" aria-label="Link to this section">#</a></h2>
+<p><strong>Prompt:</strong> "Dismiss anything blocking the page, then continue."</p>
+<p><code>look</code> returns a screenshot with every clickable element boxed and numbered, plus a legend (<code>e6 button "Accept" → ...</code>). Elements hidden under a modal or banner are left out and counted, so the agent knows to close the overlay first rather than click something it cannot reach.</p>
+<h2 id="5-log-in-once-reuse-the-session">5. Log in once, reuse the session<a class="anchor" href="#5-log-in-once-reuse-the-session" aria-label="Link to this section">#</a></h2>
+<p><strong>Use it for:</strong> sites that need a login for every task.</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler serve --headed --profile-dir ~/.ostler/profile</code></pre></div>
+<p>Log in yourself in the visible window (including any 2FA). Later runs with the same <code>--profile-dir</code> start already signed in. Ostler does not store your password and never types a credential you did not supply.</p>
+<h2 id="6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly<a class="anchor" href="#6-handle-a-captcha-honestly" aria-label="Link to this section">#</a></h2>
+<p>When a CAPTCHA or verification wall blocks the page, Ostler reports it (a <code>CHALLENGE:</code> line) and does not try to solve or disguise itself (<a href="https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0009-challenges-are-handed-off.md" rel="noopener">ADR-0009</a>). With <code>--headed</code>, <code>wait_for_human</code> pauses until you complete it in the browser window, then the agent continues. Over A2A the task moves to <code>input-required</code>.</p>
+<h2 id="7-fill-a-form-and-verify-it">7. Fill a form and verify it<a class="anchor" href="#7-fill-a-form-and-verify-it" aria-label="Link to this section">#</a></h2>
+<p><strong>Prompt:</strong> "Open http://127.0.0.1:8787/dependent.html (from <code>ostler fixtures</code>) and fill the shipping form for Ada Lovelace in Germany, Bavaria."</p>
+<div class="code" data-lang="output"><pre tabindex="0"><code>&gt; form_inspect                      typed fields: kind, label, required, options, errors
+&gt; form_fill {"Country": "Germany", "State": "Bavaria", "Recipient": "Ada Lovelace"}
+Filled 3/3 fields (form e2).
+  OK e4 "Country" = "de"
+  OK e5 "State / region" = "by"     &lt;- options loaded after Country changed
+&gt; form_submit                       Submitted | Advanced | NOT ACCEPTED + the page's messages</code></pre></div>
+<p>Every value is read back from the live page. A key that matches nothing is <code>UNMATCHED</code>, a tie is <code>ambiguous</code>, and a rejected submit returns the page's own words. Treat <code>UNMATCHED</code> and <code>NOT ACCEPTED</code> as the signal to stop and ask, not to retry blindly.</p>
+<h2 id="8-fill-a-multi-step-wizard">8. Fill a multi-step wizard<a class="anchor" href="#8-fill-a-multi-step-wizard" aria-label="Link to this section">#</a></h2>
+<p>Call <code>form_fill</code> then <code>form_submit</code> per step. A result of <code>Advanced</code> means the page moved to the next step; run <code>form_inspect</code> again to get its fields. Conditional sections that appear after an answer are picked up by the next inspect.</p>
+<h2 id="9-never-fill-the-same-form-twice">9. Never fill the same form twice<a class="anchor" href="#9-never-fill-the-same-form-twice" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler serve --learn</code></pre></div>
+<p>Save facts once (<code>memory_remember email ada@example.com</code>) or let <code>--learn</code> save non-sensitive values after an accepted submit. Memory defaults to <code>--memory auto</code> (Qdrant if reachable, else a local file). With <code>auto</code>, <code>form_fill</code> fills the remaining required fields from memory, and <code>form_inspect</code> tells the agent what worked on this site before. Memory lives in Qdrant or an encrypted local file, is scoped per <code>--tenant</code>, and secrets are refused. See <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/MEMORY.md" rel="noopener">MEMORY.md</a>.</p>
+<h2 id="10-submit-only-with-your-approval">10. Submit only with your approval<a class="anchor" href="#10-submit-only-with-your-approval" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler serve --require-confirm-submit</code></pre></div>
+<p>The agent can fill and verify, but <code>form_submit</code> is held until you confirm. Use it for anything with consequences: applications, orders, messages. Pair it with <code>--allow-domain</code> so the agent can only reach the sites you name.</p>
+<h2 id="11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A<a class="anchor" href="#11-hand-a-form-to-another-agent-over-a2a" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler a2a --allow-domain example.com</code></pre></div>
+<p>Another agent sends a task over A2A v1.0 and gets <code>input-required</code> back when a field is missing or a submit needs confirmation. See <a href="a2a.html">A2A.md</a>.</p>
+<h2 id="12-keep-a-run-cheap">12. Keep a run cheap<a class="anchor" href="#12-keep-a-run-cheap" aria-label="Link to this section">#</a></h2>
+<ul><li><code>--tools auto</code> (default) shows 14 core tools and adds the form and memory tools once a page has fields. <code>--tools core</code> keeps the schema smallest.</li><li>Use <code>snapshot</code> with <code>delta</code> and heading refs rather than re-reading whole pages.</li><li>Call <code>stats</code> to see calls, time and estimated tokens for the session.</li><li>Form recipes beat per-field clicking: 3 calls versus 22 on the 20-field fixture, measured on a scripted agent (<a href="benchmarks.html">BENCHMARKS.md</a>).</li></ul>
+<h2 id="planned-not-yet-mcp-tools">Planned, not yet MCP tools<a class="anchor" href="#planned-not-yet-mcp-tools" aria-label="Link to this section">#</a></h2>
+<p>These exist as libraries in the workspace (<code>ostler-extract</code>, <code>ostler-workflow</code>, <code>ostler-research</code>, the memory <code>source</code> kind) and are covered by tests and a fixture pack, but <strong>no MCP tool exposes them yet</strong>. Do not write prompts that depend on them.</p>
+<div class="table-wrap"><table><thead><tr><th>recipe</th><th>needs</th><th>status</th></tr></thead><tbody><tr><td>Search the web, then read the top results</td><td><code>search</code>, <code>open_many</code></td><td>providers verified against mocks only</td></tr><tr><td>Pull a table into rows and know if it is complete</td><td><code>extract</code></td><td>library only</td></tr><tr><td>Cite a claim and verify the quote is on the page</td><td><code>cite</code></td><td>library only</td></tr><tr><td>Assert a postcondition after a click ("the page now shows step 2")</td><td><code>expect</code></td><td>library only</td></tr><tr><td>See console errors and failed requests</td><td><code>diagnostics</code></td><td>per-tab capture built, no tool</td></tr><tr><td>Remember what you read across sessions</td><td>source memory</td><td>library only</td></tr></tbody></table></div>
+<p>Tracking: <a href="https://github.com/inamdarmihir/ostler/blob/main/docs/BUILD-PLAN.md" rel="noopener">BUILD-PLAN.md</a>.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/COOKBOOK.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" rel="prev" href="agents.html"><span>Previous</span><strong>Use with your agent</strong></a>
+<a class="pager-next" rel="next" href="forms.html"><span>Next</span><strong>Forms and verification</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#contents">Contents</a></li><li class="toc-l2"><a href="#1-read-a-page-and-answer-a-question">1. Read a page and answer a question</a></li><li class="toc-l2"><a href="#2-compare-several-pages-side-by-side">2. Compare several pages side by side</a></li><li class="toc-l2"><a href="#3-check-a-web-app-after-a-change-qa">3. Check a web app after a change (QA)</a></li><li class="toc-l2"><a href="#4-get-past-a-cookie-wall-or-modal">4. Get past a cookie wall or modal</a></li><li class="toc-l2"><a href="#5-log-in-once-reuse-the-session">5. Log in once, reuse the session</a></li><li class="toc-l2"><a href="#6-handle-a-captcha-honestly">6. Handle a CAPTCHA honestly</a></li><li class="toc-l2"><a href="#7-fill-a-form-and-verify-it">7. Fill a form and verify it</a></li><li class="toc-l2"><a href="#8-fill-a-multi-step-wizard">8. Fill a multi-step wizard</a></li><li class="toc-l2"><a href="#9-never-fill-the-same-form-twice">9. Never fill the same form twice</a></li><li class="toc-l2"><a href="#10-submit-only-with-your-approval">10. Submit only with your approval</a></li><li class="toc-l2"><a href="#11-hand-a-form-to-another-agent-over-a2a">11. Hand a form to another agent over A2A</a></li><li class="toc-l2"><a href="#12-keep-a-run-cheap">12. Keep a run cheap</a></li><li class="toc-l2"><a href="#planned-not-yet-mcp-tools">Planned, not yet MCP tools</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>
