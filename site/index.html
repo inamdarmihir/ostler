@@ -11,11 +11,11 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#14110f">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Ostler">
-<meta property="og:title" content="Ostler: a browser for AI agents that fills forms and remembers">
+<meta property="og:title" content="Ostler: a browser for AI agents that checks its own work">
 <meta property="og:description" content="Fills a whole form in one call, reads every value back, shows the agent where to click, and remembers with Qdrant. MCP and A2A. Rust.">
 <meta property="og:url" content="https://inamdarmihir.github.io/ostler/"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Ostler: a browser for AI agents that fills forms and remembers"><meta property="og:locale" content="en_US">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler: a browser for AI agents that fills forms and remembers"><meta name="twitter:description" content="Fills a whole form in one call, reads every value back, and remembers with Qdrant. MCP and A2A. Rust. Early (v0.2): measured on scripted fixtures, model-free."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta name="twitter:image:alt" content="Ostler: a browser for AI agents that fills forms and remembers">
+<meta property="og:image:alt" content="Ostler: a browser for AI agents that checks its own work"><meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Ostler: a browser for AI agents that checks its own work"><meta name="twitter:description" content="Fills a whole form in one call, reads every value back, and remembers with Qdrant. MCP and A2A. Rust. Early (v0.2): measured on scripted fixtures, model-free."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png"><meta name="twitter:image:alt" content="Ostler: a browser for AI agents that checks its own work">
 <script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="assets/site.css">
 <script defer src="assets/site.js"></script>
@@ -45,8 +45,8 @@
 <div class="wrap">
 <section class="hero" aria-labelledby="hero-title">
 <a class="eyebrow" href="docs/review.html"><b>v0.2, early</b><span>Rust &middot; MCP &middot; A2A &middot; Qdrant memory &middot; Apache-2.0</span></a>
-<h1 id="hero-title">A browser for AI agents that <em>fills forms</em> and remembers.</h1>
-<p class="lead">Ostler is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It fills a whole form in one call, reads every value back to check it, and uses Qdrant to remember what worked.</p>
+<h1 id="hero-title">A browser for AI agents that <em>checks its own work</em>.</h1>
+<p class="lead">Ostler is a headless browser server for Claude Code, Codex, Cursor and any MCP client. It browses, reads, clicks and tests, and fills a whole form in one call, reading every value back to check it. Qdrant remembers what worked. <a href="docs/cookbook.html">See the recipes</a>.</p>
 <div class="install-bar" role="group" aria-label="Install command">
 <span class="prompt" aria-hidden="true">$</span>
 <code id="hero-install">cargo install --git https://github.com/inamdarmihir/ostler ostler</code>
