@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <b>A headless browser for AI coding agents that fills a whole form in one call and reads every value back to check it.</b><br>
+  <b>A headless browser for AI coding agents that checks its own work: it fills a whole form in one call and reads every value back.</b><br>
   Rust · MCP · A2A · Chrome · <a href="https://qdrant.tech">Qdrant</a> memory
 </p>
 
@@ -48,6 +48,8 @@ Also `ostler setup vscode` and `ostler setup json` (generic `mcpServers`). Only 
 Try it: run `ostler fixtures` (synthetic test forms at http://127.0.0.1:8787), then ask your agent: *"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria."*
 
 ## What it does
+
+Ostler is a general MCP browser (navigate, read, click, type, tabs, screenshots, a click-target overlay, shared notes) with a **form engine** and **Qdrant memory** on top. Forms are where it verifies the most, so they lead. Recipes for forms, reading, QA, logins and A2A are in the [cookbook](docs/COOKBOOK.md). Research and extraction are built as libraries but not yet tools; see [below](#beyond-forms-research-and-tasks-in-progress).
 
 Instead of one click and one snapshot per field, the agent asks for the form's typed fields (`form_inspect`), sends `{label: value}` for the whole form (`form_fill`), and submits (`form_submit`). Dependent dropdowns, multi-step wizards, masks, comboboxes, shadow DOM and same-origin iframes are handled by the engine. Every value is **read back from the live page** and compared by field type, and a rejected submit returns the page's own messages. `look` returns a screenshot with numbered click targets.
 
@@ -124,6 +126,7 @@ Read this carefully: on the small forms Chrome DevTools MCP returned fewer token
 |---|---|
 | Install options, update, uninstall | [docs/INSTALL.md](docs/INSTALL.md) |
 | Config file, env vars, which keys you need | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
+| Recipes for each use case | [docs/COOKBOOK.md](docs/COOKBOOK.md) |
 | Tool list, `--tools auto`, tabs, example prompts | [docs/TOOLS.md](docs/TOOLS.md) |
 | Memory, the learning loop, privacy model | [docs/MEMORY.md](docs/MEMORY.md) |
 | CLI commands, `ostler serve` flags, A2A server | [docs/CLI.md](docs/CLI.md), [docs/A2A.md](docs/A2A.md) |

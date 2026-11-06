@@ -53,6 +53,7 @@ GROUPS = [
         ("agents", "Use with your agent", "Claude Code, Codex, Cursor, VS Code and any MCP client.", ("content", "agents.md")),
     ]),
     ("Guides", [
+        ("cookbook", "Cookbook", "Recipes: reading, QA, logins, forms, approvals and A2A, with what is not built yet.", ("repo", "docs/COOKBOOK.md")),
         ("forms", "Forms and verification", "How keys become fields, how values are verified by read-back, and what submit results mean.", ("content", "forms.md")),
         ("memory", "Memory and privacy", "What is stored, what sealing hides and does not, local embeddings, per-tenant tokens.", ("content", "memory.md")),
         ("configuration", "Configuration and CLI", "Config file, environment variables, every serve and a2a flag.", ("content", "configuration.md")),
@@ -88,6 +89,7 @@ REPO_TO_SLUG = {
     "docs/ARCHITECTURE.md": "architecture",
     "docs/BENCHMARKS.md": "benchmarks",
     "docs/CLIENTS.md": "agents",
+    "docs/COOKBOOK.md": "cookbook",
     "docs/ECONOMICS.md": "economics",
     "docs/REVIEW-2026-10.md": "review",
     "docs/TROUBLESHOOTING.md": "troubleshooting",
@@ -603,7 +605,7 @@ def overview_html() -> str:
         for slug, title, desc, _ in items:
             cards.append(f'<a class="doc-card" href="{slug}.html"><strong>{esc(title)}</strong><span>{esc(desc)}</span></a>')
         cards.append("</div>")
-    desc = "Documentation for Ostler: a Rust MCP browser server for AI coding agents that fills forms, verifies, and remembers."
+    desc = "Documentation for Ostler: a Rust MCP browser server for AI coding agents that browses, fills forms, verifies, and remembers."
     return "\n".join([
         head("Ostler documentation", desc, "docs/index.html", "../"),
         '<body data-search="search-index.json">',
