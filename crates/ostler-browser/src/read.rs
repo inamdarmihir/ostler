@@ -20,7 +20,7 @@ pub const DEFAULT_READ_CHARS: usize = 20_000;
 /// Options for [`Page::read`].
 #[derive(Debug, Clone)]
 pub struct ReadOptions {
-    /// Cap on the markdown, in characters (default [`DEFAULT_READ_CHARS`]).
+    /// Cap on the markdown, in characters (default `DEFAULT_READ_CHARS`, 20 000).
     pub max_chars: Option<usize>,
     /// Render links as `[text](absolute-url)` and list them in `meta.links`; false gives plain text.
     pub include_links: bool,

@@ -835,7 +835,7 @@ impl Page {
     /// Console messages, uncaught exceptions and network problems (HTTP status >= 400, failed requests,
     /// requests the policy blocked) recorded for this tab, oldest first, after `since`.
     ///
-    /// The buffer is bounded ([`diagnostics::MAX_ENTRIES`] entries, [`diagnostics::MAX_TEXT`] characters
+    /// The buffer is bounded (500 entries, 1000 characters
     /// each); `dropped` counts entries after `since` that were evicted unread. URLs are path-only. Every
     /// entry is page-derived and marked `untrusted`. Requests made by iframes in other processes and by
     /// workers are not captured.
