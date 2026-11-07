@@ -55,7 +55,7 @@ pub struct DiagEntry {
     pub kind: DiagKind,
     /// `error`, `warning`, `info`, `debug` or `log`.
     pub level: String,
-    /// Message text, capped at [`MAX_TEXT`] characters, URLs inside reduced to path-only.
+    /// Message text, capped at `MAX_TEXT` characters, URLs inside reduced to path-only.
     pub text: String,
     /// Related URL (script, resource), path-only.
     pub url: Option<String>,
