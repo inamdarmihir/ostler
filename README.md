@@ -35,14 +35,14 @@
 
 **Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds, or a VS Code extension, or `pip install ostler-mcp` / `uvx --from ostler-mcp ostler serve`. (Downloads begin with the first release; see below.) The steps that follow are for developers.
 
-Needs **Chrome or Chromium** and Rust 1.89+.
+Needs **Chrome or Chromium** and Python 3.8+ (no Rust). From source: `cargo install --git https://github.com/inamdarmihir/ostler ostler` (Rust 1.89+).
 
 ```sh
-cargo install --git https://github.com/inamdarmihir/ostler ostler
+pip install ostler-mcp      # or: uvx --from ostler-mcp ostler serve
 ostler doctor     # Chrome launches? Qdrant reachable (optional)? Prints the fix when not
 ```
 
-**Releases are not published yet.** No release has been tagged, so the prebuilt-binary installer, `npx` and crates.io paths described in [docs/INSTALL.md](docs/INSTALL.md) will not work until the first release ([process](docs/RELEASING.md)). Build from source for now. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
+**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
 
 ## Works with Claude Code, Codex, Cursor
 
@@ -164,7 +164,7 @@ Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which
 
 ## FAQ
 
-**How do I give Claude Code a browser?** `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply`. For Codex, Cursor and VS Code see [docs/CLIENTS.md](docs/CLIENTS.md).
+**How do I give Claude Code a browser?** `pip install ostler-mcp`, then `ostler setup claude --apply`. For Codex, Cursor and VS Code see [docs/CLIENTS.md](docs/CLIENTS.md).
 
 **Can it do deep research with citations?** Yes, within limits. `read` returns the best passages for a query, `cite` marks a quote `VERIFIED` only if its words are on a page read in this session, and `evidence` lists the verified citations and the pages that could not be read. `cite` proves the words are on the page, not that the claim is true; search providers are tested against mock servers only. See [recipe 13](docs/COOKBOOK.md#13-research-with-citations-that-are-checked).
 

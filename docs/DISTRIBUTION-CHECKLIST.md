@@ -5,9 +5,9 @@ Places where people find MCP servers, so Ostler can be installed without a searc
 | where | what it needs | status |
 |---|---|---|
 | GitHub Releases | push a `v*` tag ([RELEASING](RELEASING.md)); builds binaries and the macOS `.mcpb` | not done |
-| PyPI (`ostler-mcp`) | `PYPI_TOKEN` secret ([RELEASING](RELEASING.md)); wheel job exists | blocked on first release |
-| VS Code Marketplace and Open VSX | `VSCE_PAT` and `OVSX_PAT` secrets, claim the publisher and namespace | blocked on first release |
-| Official MCP registry | `server.json` exists; publish after the npm package is live | blocked on first release |
+| PyPI (`ostler-mcp`) | `PYPI_TOKEN` secret ([RELEASING](RELEASING.md)); wheel job exists | Open VSX done (v0.2.0); VS Code Marketplace waiting on `VSCE_PAT` |
+| VS Code Marketplace and Open VSX | `VSCE_PAT` and `OVSX_PAT` secrets, claim the publisher and namespace | Open VSX done (v0.2.0); VS Code Marketplace waiting on `VSCE_PAT` |
+| Official MCP registry | `server.json` exists; publish after the npm package is live | Open VSX done (v0.2.0); VS Code Marketplace waiting on `VSCE_PAT` |
 | Glama | `glama.json` exists; claim the listing | to do |
 | Smithery, mcp.so, PulseMCP | submit the repo; give the `npx -y ostler serve` command | to do |
 | Cursor and VS Code directories | install links are in [GETTING-STARTED](GETTING-STARTED.md); submit for listing | to do |
