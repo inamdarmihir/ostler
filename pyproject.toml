@@ -17,6 +17,7 @@ classifiers = [
   "Programming Language :: Rust",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Topic :: Internet :: WWW/HTTP :: Browsers",
 ]
 dynamic = ["version"]
