@@ -46,7 +46,7 @@ Rust **1.89** (`rust-version` in the workspace `Cargo.toml`; the `msrv` CI job r
 | macOS (arm64) | release build (`macos-14`) | developed and benchmarked locally; not run in CI tests | numbers in BENCHMARKS are from macOS |
 | macOS (x86_64) | release build (`macos-13`) | none | build only |
 | Linux arm64 | release build (`ubuntu-22.04-arm`) | none | build only |
-| Windows | not built | none | not supported |
+| Windows (x86_64) | built in CI | CI build and test suite | experimental |
 
 | dependency | tested | policy |
 |---|---|---|

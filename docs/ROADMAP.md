@@ -27,7 +27,7 @@ browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does
 5. **Downloads and uploads from the agent side**: file upload works inside forms; downloads are not surfaced.
 6. **Streamable HTTP transport** for remote agents (stdio only today, A2A covers one remote case).
 7. **Record and replay** of a successful flow as a playbook the agent can re-run in one call.
-8. **Windows** build and CI. Not built or tested.
+8. **Windows** build and CI. Done (experimental): built and tested in CI; needs real-world use before it is called supported.
 9. **Published binaries and packages**: nothing is on crates.io or npm until the first tagged release.
 
 ## Next sprint (in order)

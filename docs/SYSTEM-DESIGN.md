@@ -128,7 +128,7 @@ Per-boundary analysis: [THREAT-MODEL.md](THREAT-MODEL.md).
 | **Latency budget**: the browser should be a small slice of a task because LLM turns dominate (>99 percent of cost). Fixture measurements: about 160 ms per action after the settle fix; real-site timings are not yet measured at scale | optimise call count and output size before engine speed | ADR-0007 |
 | **Runtime shares the page's JS world** | a hostile page can mislead what the agent is told; cannot see closed shadow roots or cross-origin frames | ADR-0004, SECURITY |
 | **Memory is optional and degradable** | with no Qdrant: in-process (session only) or `--memory local` file; Qdrant failures skip lookups, never block a fill | ARCHITECTURE |
-| **Platforms**: CI runs Linux; release builds also macOS (arm64, x86_64) and Linux arm64. Windows is not built or tested | see [COMPATIBILITY.md](COMPATIBILITY.md) | `ci.yml`, `release.yml` |
+| **Platforms**: CI runs Linux and Windows; release builds also macOS (arm64, x86_64), Linux arm64, Windows x86_64 (experimental) and a Docker image | see [COMPATIBILITY.md](COMPATIBILITY.md) | `ci.yml`, `release.yml` |
 
 ## 6. Non-goals
 

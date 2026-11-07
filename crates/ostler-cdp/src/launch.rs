@@ -370,7 +370,9 @@ pub fn process_tree_rss_kb(root: u32) -> Option<u64> {
     process_tree_stats(root).map(|(_, kb)| kb)
 }
 
-fn descendants(root: u32) -> Option<Vec<(u32, u64)>> {
+/// (pid, ppid, resident KiB) for every process.
+#[cfg(unix)]
+fn process_rows() -> Option<Vec<(u32, u32, u64)>> {
     let out = std::process::Command::new("ps")
         .args(["-A", "-o", "pid=,ppid=,rss="])
         .output()
@@ -378,9 +380,34 @@ fn descendants(root: u32) -> Option<Vec<(u32, u64)>> {
     if !out.status.success() {
         return None;
     }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let rows: Vec<(u32, u32, u64)> = text
-        .lines()
+    Some(parse_rows(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Windows has no `ps`; PowerShell ships with every supported version and exposes the same data.
+#[cfg(windows)]
+fn process_rows() -> Option<Vec<(u32, u32, u64)>> {
+    let out = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId) $([int64]($_.WorkingSetSize / 1024))\" }",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(parse_rows(&String::from_utf8_lossy(&out.stdout)))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn process_rows() -> Option<Vec<(u32, u32, u64)>> {
+    None
+}
+
+fn parse_rows(text: &str) -> Vec<(u32, u32, u64)> {
+    text.lines()
         .filter_map(|l| {
             let mut it = l.split_whitespace();
             Some((
@@ -389,7 +416,11 @@ fn descendants(root: u32) -> Option<Vec<(u32, u64)>> {
                 it.next()?.parse().ok()?,
             ))
         })
-        .collect();
+        .collect()
+}
+
+fn descendants(root: u32) -> Option<Vec<(u32, u64)>> {
+    let rows = process_rows()?;
     let mut members = std::collections::HashSet::from([root]);
     loop {
         let before = members.len();
