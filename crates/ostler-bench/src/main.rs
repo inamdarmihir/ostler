@@ -84,7 +84,7 @@ enum Cmd {
         /// Use the scripted reference agent (required; model-driven runs live in the Python harness).
         #[arg(long)]
         scripted: bool,
-        /// Where to write packs-<pack>-scripted.{json,md}.
+        /// Where to write `packs-<pack>-scripted.{json,md}`.
         #[arg(long, default_value = "bench-results")]
         out_dir: std::path::PathBuf,
         /// Print the tables only; write no files.

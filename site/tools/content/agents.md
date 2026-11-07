@@ -64,6 +64,10 @@ Prints JSON for `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
 
 ## VS Code
 
+Easiest: install the **Ostler** extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler) (or [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) for Cursor, Windsurf and other forks). It registers Ostler as an MCP server, uses an `ostler` on your PATH or downloads and checks the release once, and adds *Ostler: Check setup* and *Ostler: Sign in to a website*. Source: [editors/vscode](https://github.com/inamdarmihir/ostler/tree/main/editors/vscode).
+
+Or by hand:
+
 ```sh
 ostler setup vscode
 ```
@@ -81,6 +85,16 @@ Prints JSON for `.vscode/mcp.json`. VS Code uses a `servers` key and an explicit
   }
 }
 ```
+
+## With uvx or pip (no Rust)
+
+Any MCP client can launch Ostler from the Python package [`ostler-mcp`](https://pypi.org/project/ostler-mcp/) (it carries the same binary):
+
+```json
+{ "mcpServers": { "ostler": { "command": "uvx", "args": ["--from", "ostler-mcp", "ostler", "serve"] } } }
+```
+
+`pip install ostler-mcp` instead puts the `ostler` command on your PATH. Use `pipx` or `uv tool install` to keep it isolated.
 
 ## Any other MCP client
 

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get started without programming - Ostler MCP browser docs</title>
+<meta name="description" content="Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<link rel="canonical" href="https://inamdarmihir.github.io/ostler/docs/get-started.html">
+<link rel="alternate" type="text/plain" title="llms.txt" href="../llms.txt">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Ostler">
+<meta property="og:title" content="Get started without programming - Ostler MCP browser docs"><meta property="og:description" content="Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files.">
+<meta property="og:url" content="https://inamdarmihir.github.io/ostler/docs/get-started.html"><meta property="og:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Get started without programming - Ostler MCP browser docs">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Get started without programming - Ostler MCP browser docs"><meta name="twitter:description" content="Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files."><meta name="twitter:image" content="https://inamdarmihir.github.io/ostler/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://inamdarmihir.github.io/ostler/docs/get-started.html#article","headline":"Get started without programming","description":"Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files.","url":"https://inamdarmihir.github.io/ostler/docs/get-started.html","mainEntityOfPage":"https://inamdarmihir.github.io/ostler/docs/get-started.html","inLanguage":"en","isPartOf":{"@id":"https://inamdarmihir.github.io/ostler/#website"},"about":{"@id":"https://inamdarmihir.github.io/ostler/#app"},"author":{"@type":"Person","@id":"https://inamdarmihir.github.io/ostler/#creator","name":"Mihir Inamdar","url":"https://github.com/inamdarmihir","sameAs":["https://github.com/inamdarmihir"]},"license":"https://www.apache.org/licenses/LICENSE-2.0"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Ostler","item":"https://inamdarmihir.github.io/ostler/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://inamdarmihir.github.io/ostler/docs/index.html"},{"@type":"ListItem","position":3,"name":"Get started without programming","item":"https://inamdarmihir.github.io/ostler/docs/get-started.html"}]}]}</script>
+<script>(function(){try{var t=localStorage.getItem('ostler-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../assets/site.css">
+<script defer src="../assets/site.js"></script>
+</head>
+<body data-search="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+<div class="topbar-inner">
+<button class="icon-btn nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+<a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="26" height="26"><span>Ostler</span></a>
+<nav class="topnav" aria-label="Main">
+<a href="../docs/index.html" aria-current="page">Docs</a>
+<a href="../docs/tools.html">Tools</a>
+<a href="../docs/benchmarks.html">Benchmarks</a>
+<a href="../docs/changelog.html">Changelog</a>
+</nav>
+<div class="topbar-actions">
+<button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="search-label">Search docs</span><kbd>/</kbd></button>
+<button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><svg class="i-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<a class="gh-link" href="https://github.com/inamdarmihir/ostler" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.74.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span>GitHub</span></a>
+</div>
+</div>
+</header>
+<div class="doc-layout">
+<nav class="sidebar" id="sidebar" aria-label="Documentation">
+<div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
+<a class="side-overview" href="index.html">Overview</a>
+<div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="get-started.html" aria-current="page">Get started without programming</a></li>
+<li><a href="quickstart.html">Quickstart</a></li>
+<li><a href="install.html">Install</a></li>
+<li><a href="agents.html">Use with your agent</a></li>
+<li><a href="frameworks.html">LangChain, LlamaIndex, AutoGen</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Guides</p><ul>
+<li><a href="research-with-citations.html">Research with checked citations</a></li>
+<li><a href="cookbook.html">Cookbook</a></li>
+<li><a href="forms.html">Forms and verification</a></li>
+<li><a href="memory.html">Memory and privacy</a></li>
+<li><a href="configuration.html">Configuration and CLI</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Reference</p><ul>
+<li><a href="tools.html">Tools reference</a></li>
+<li><a href="security.html">Security model</a></li>
+<li><a href="a2a.html">A2A</a></li>
+<li><a href="architecture.html">Architecture</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Evidence</p><ul>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+<li><a href="ostler-vs-playwright-mcp.html">Ostler vs Playwright MCP</a></li>
+<li><a href="economics.html">Economics</a></li>
+<li><a href="review.html">Design review</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">Help</p><ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul></div>
+<div class="side-group"><p class="side-title">More</p><ul><li><a href="https://github.com/inamdarmihir/ostler/tree/main/docs/adr" rel="noopener">Decision records</a></li><li><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub repository</a></li></ul></div>
+</nav>
+<div class="scrim" data-scrim hidden></div>
+<main id="content" class="doc-main" tabindex="-1">
+<p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
+<article class="prose"><h1>Get started without programming</h1>
+<p class="lede">Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files.</p>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#what-you-need">What you need</a></li><li class="toc-l2"><a href="#path-a-claude-desktop-on-a-mac-one-double-click">Path A: Claude Desktop on a Mac (one double-click)</a></li><li class="toc-l2"><a href="#path-b-any-supported-app-one-command">Path B: any supported app, one command</a></li><li class="toc-l2"><a href="#path-c-vs-code-cursor-or-windsurf-extension">Path C: VS Code, Cursor or Windsurf extension</a></li><li class="toc-l2"><a href="#path-d-python-pip-or-uvx">Path D: Python (pip or uvx)</a></li><li class="toc-l2"><a href="#path-e-one-click-links-for-cursor-and-vs-code">Path E: one-click links for Cursor and VS Code</a></li><li class="toc-l2"><a href="#ready-made-prompts">Ready-made prompts</a></li><li class="toc-l2"><a href="#signing-in-to-a-website">Signing in to a website</a></li><li class="toc-l2"><a href="#things-to-ask">Things to ask</a></li><li class="toc-l2"><a href="#extra-caution">Extra caution</a></li><li class="toc-l2"><a href="#what-the-messages-mean">What the messages mean</a></li><li class="toc-l2"><a href="#good-to-know">Good to know</a></li><li class="toc-l2"><a href="#if-something-goes-wrong">If something goes wrong</a></li></ul></details>
+<p>Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on your computer: read pages, research a topic with sources it actually read, and fill in web forms. You do <strong>not</strong> need Rust, Node or any code. Back to the <a href="https://github.com/inamdarmihir/ostler/blob/main/README.md" rel="noopener">README</a>.</p>
+<p><strong>Status:</strong> early (v0.2). No release is published yet, so the download steps below (paths A, C and D, and the install script in B) start working with the first release; until then a developer can build it for you (<a href="https://github.com/inamdarmihir/ostler/blob/main/docs/INSTALL.md" rel="noopener">INSTALL</a>). Windows is not supported yet.</p>
+<h2 id="what-you-need">What you need<a class="anchor" href="#what-you-need" aria-label="Link to this section">#</a></h2>
+<ul><li>A Mac or Linux computer (Windows: not yet).</li><li><strong>Google Chrome</strong> (<a href="https://www.google.com/chrome/" rel="noopener">download</a>).</li><li>An AI app that supports MCP: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf or Codex.</li></ul>
+<h2 id="path-a-claude-desktop-on-a-mac-one-double-click">Path A: Claude Desktop on a Mac (one double-click)<a class="anchor" href="#path-a-claude-desktop-on-a-mac-one-double-click" aria-label="Link to this section">#</a></h2>
+<ol><li>Open the <a href="https://github.com/inamdarmihir/ostler/releases/latest" rel="noopener">latest release</a> and download the <code>.mcpb</code> file for your Mac (<code>aarch64</code> = Apple silicon M1 or newer, <code>x86_64</code> = Intel).</li><li>Double-click it. Claude Desktop shows an install prompt; click <strong>Install</strong>.</li><li>Start a chat and ask: <em>"Open https://example.com and tell me what the page says."</em></li></ol>
+<h2 id="path-b-any-supported-app-one-command">Path B: any supported app, one command<a class="anchor" href="#path-b-any-supported-app-one-command" aria-label="Link to this section">#</a></h2>
+<p>Open <strong>Terminal</strong> (Mac: press Cmd+Space, type Terminal) and paste:</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh
+ostler start</code></pre></div>
+<p><code>ostler start</code> finds the AI apps on your computer, connects Ostler to each one, checks that Chrome is there, and tells you what to restart. It backs up any file it changes, keeps your other settings, and is safe to run twice. To undo: <code>ostler install --client &lt;name&gt; --uninstall</code> (<code>ostler install --list</code> shows the names).</p>
+<p>Then <strong>quit and reopen your AI app</strong>.</p>
+<h2 id="path-c-vs-code-cursor-or-windsurf-extension">Path C: VS Code, Cursor or Windsurf extension<a class="anchor" href="#path-c-vs-code-cursor-or-windsurf-extension" aria-label="Link to this section">#</a></h2>
+<p>Search the extensions panel for <strong>Ostler</strong> (Marketplace for VS Code, Open VSX for Cursor and Windsurf), install it, and Ostler appears as an MCP server. No terminal. It uses an <code>ostler</code> already on your PATH, or downloads the matching release once and checks its checksum. Commands: <em>Ostler: Check setup</em>, <em>Ostler: Sign in to a website</em>. Source: <a href="https://github.com/inamdarmihir/ostler/tree/main/editors/vscode" rel="noopener">editors/vscode</a>.</p>
+<h2 id="path-d-python-pip-or-uvx">Path D: Python (<code>pip</code> or <code>uvx</code>)<a class="anchor" href="#path-d-python-pip-or-uvx" aria-label="Link to this section">#</a></h2>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>pip install ostler-mcp        <span class="tok-c"># adds the `ostler` command (use pipx or `uv tool install` to keep it isolated)</span>
+ostler start</code></pre></div>
+<p>Or with no install step, in any MCP client's config: command <code>uvx</code>, arguments <code>["--from", "ostler-mcp", "ostler", "serve"]</code>. The package is the same Rust program inside a Python wheel (no Python code, nothing downloaded at run time). The name is <code>ostler-mcp</code> because <code>ostler</code> on PyPI is a different project.</p>
+<h2 id="path-e-one-click-links-for-cursor-and-vs-code">Path E: one-click links for Cursor and VS Code<a class="anchor" href="#path-e-one-click-links-for-cursor-and-vs-code" aria-label="Link to this section">#</a></h2>
+<p>After installing the <code>ostler</code> command (Path B, first line), these links add it to the app:</p>
+<ul><li><a href="https://cursor.com/install-mcp?name=ostler&amp;config=eyJjb21tYW5kIjoib3N0bGVyIiwiYXJncyI6WyJzZXJ2ZSJdfQ==" rel="noopener">Add to Cursor</a></li><li><a href="https://insiders.vscode.dev/redirect/mcp/install?name=ostler&amp;config=%7B%22name%22%3A%22ostler%22%2C%22command%22%3A%22ostler%22%2C%22args%22%3A%5B%22serve%22%5D%7D" rel="noopener">Add to VS Code</a></li></ul>
+<p>They assume <code>ostler</code> is on your <code>PATH</code>; <code>ostler start</code> does not need that. The link formats follow the apps' published install-link schemes but have not been tested here.</p>
+<h2 id="ready-made-prompts">Ready-made prompts<a class="anchor" href="#ready-made-prompts" aria-label="Link to this section">#</a></h2>
+<p>Apps that show MCP prompts (Claude Desktop lists them under the <strong>+</strong> menu) offer five from Ostler: summarize a page, research with checked sources, fill in a form (review before sending), check my web page, compare pages. Pick one, fill in the blank, send.</p>
+<h2 id="signing-in-to-a-website">Signing in to a website<a class="anchor" href="#signing-in-to-a-website" aria-label="Link to this section">#</a></h2>
+<p>For tasks behind a login, sign in once yourself:</p>
+<div class="code" data-lang="shell"><pre tabindex="0"><code>ostler login https://example.com/login</code></pre></div>
+<p>A Chrome window opens. Sign in, then press Enter in Terminal. Then connect Ostler with that saved session: <code>ostler install --client claude-desktop -- --profile-dir ~/.ostler/profile</code>. Anyone who can read that folder can use your sign-in, so use it on your own computer only.</p>
+<h2 id="things-to-ask">Things to ask<a class="anchor" href="#things-to-ask" aria-label="Link to this section">#</a></h2>
+<ul><li>"Open this page and summarize it: &lt;link&gt;"</li><li>"Research &lt;topic&gt;. Only use pages you actually read, and check every quote against the page."</li><li>"Fill in the contact form on &lt;link&gt; with my name and email, then show me what you entered before submitting."</li><li>"Check that the login page on my site still works after my change."</li></ul>
+<p>For a safe practice page, run <code>ostler fixtures</code> and ask the assistant to fill in the form at http://127.0.0.1:8787/dependent.html. Nothing real is submitted.</p>
+<h2 id="extra-caution">Extra caution<a class="anchor" href="#extra-caution" aria-label="Link to this section">#</a></h2>
+<p><code>ostler start --cautious</code> connects Ostler so page requests that change things (form posts and similar) are blocked unless the assistant uses its confirmed submit step. It is stricter than normal and can also stop some sign-ins or buttons. Run <code>ostler start</code> again without the flag to go back.</p>
+<h2 id="what-the-messages-mean">What the messages mean<a class="anchor" href="#what-the-messages-mean" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>you see</th><th>meaning</th></tr></thead><tbody><tr><td><code>VERIFIED</code> / <code>NOT VERIFIED</code></td><td>the quoted words were (or were not) found on a page the assistant actually read. It proves the words are there, not that they are true</td></tr><tr><td><code>NOT READ</code></td><td>the assistant cited a page it never opened</td></tr><tr><td>gaps in <code>evidence</code></td><td>pages it could not read (paywall, bot check, blocked by the site's robots.txt, error)</td></tr><tr><td><code>CHALLENGE:</code></td><td>the site showed a CAPTCHA or "are you human" check. Ostler does not solve these</td></tr><tr><td><code>UNMATCHED key</code></td><td>a detail you gave matches no field on the form, so nothing was guessed</td></tr><tr><td><code>NOT ACCEPTED</code></td><td>the site rejected the form and says why</td></tr></tbody></table></div>
+<h2 id="good-to-know">Good to know<a class="anchor" href="#good-to-know" aria-label="Link to this section">#</a></h2>
+<ul><li>Ostler uses its own Chrome window, hidden by default. To sign in to a site once and reuse it, or to solve a CAPTCHA yourself, see <a href="troubleshooting.html">Troubleshooting</a>.</li><li>Ostler does not solve CAPTCHAs and does not submit real forms unless you ask the assistant to.</li><li>Your AI app may send what it reads to its own model provider. Ostler itself sends pages nowhere.</li></ul>
+<h2 id="if-something-goes-wrong">If something goes wrong<a class="anchor" href="#if-something-goes-wrong" aria-label="Link to this section">#</a></h2>
+<p>Run <code>ostler doctor</code>. Every failing check prints the exact fix. More in <a href="troubleshooting.html">Troubleshooting</a>.</p>
+<p class="edit-link"><a href="https://github.com/inamdarmihir/ostler/blob/main/docs/GETTING-STARTED.md" rel="noopener">View this page&rsquo;s source on GitHub</a></p>
+</article>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-prev" href="index.html"><span>Docs</span><strong>Overview</strong></a>
+<a class="pager-next" rel="next" href="quickstart.html"><span>Next</span><strong>Quickstart</strong></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#what-you-need">What you need</a></li><li class="toc-l2"><a href="#path-a-claude-desktop-on-a-mac-one-double-click">Path A: Claude Desktop on a Mac (one double-click)</a></li><li class="toc-l2"><a href="#path-b-any-supported-app-one-command">Path B: any supported app, one command</a></li><li class="toc-l2"><a href="#path-c-vs-code-cursor-or-windsurf-extension">Path C: VS Code, Cursor or Windsurf extension</a></li><li class="toc-l2"><a href="#path-d-python-pip-or-uvx">Path D: Python (pip or uvx)</a></li><li class="toc-l2"><a href="#path-e-one-click-links-for-cursor-and-vs-code">Path E: one-click links for Cursor and VS Code</a></li><li class="toc-l2"><a href="#ready-made-prompts">Ready-made prompts</a></li><li class="toc-l2"><a href="#signing-in-to-a-website">Signing in to a website</a></li><li class="toc-l2"><a href="#things-to-ask">Things to ask</a></li><li class="toc-l2"><a href="#extra-caution">Extra caution</a></li><li class="toc-l2"><a href="#what-the-messages-mean">What the messages mean</a></li><li class="toc-l2"><a href="#good-to-know">Good to know</a></li><li class="toc-l2"><a href="#if-something-goes-wrong">If something goes wrong</a></li></ul></aside>
+</div>
+<footer class="site-footer"><div class="footer-inner">
+<p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>
+<nav aria-label="Footer"><a href="../docs/index.html">Docs</a><a href="../docs/security.html">Security</a><a href="../docs/changelog.html">Changelog</a><a href="../llms.txt">llms.txt</a><a href="https://github.com/inamdarmihir/ostler" rel="noopener">GitHub</a></nav>
+</div></footer>
+<dialog class="search-dialog" id="search-dialog" aria-label="Search the documentation">
+<form method="dialog" class="search-form" role="search">
+<label class="visually-hidden" for="search-input">Search the documentation</label>
+<input id="search-input" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+<button class="search-close" value="close" aria-label="Close search">Esc</button>
+</form>
+<div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+<p class="search-status visually-hidden" id="search-status" aria-live="polite"></p>
+<p class="search-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></p>
+</dialog>
+</body></html>
