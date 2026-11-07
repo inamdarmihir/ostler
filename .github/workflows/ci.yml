@@ -34,6 +34,23 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo doc --workspace --no-deps
         env: { RUSTDOCFLAGS: "-D warnings" }
+  windows:
+    name: windows build + tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      OSTLER_NO_SANDBOX: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { shared-key: windows }
+      - run: cargo build --release --locked -p ostler
+      - run: ./target/release/ostler.exe --version
+      - run: ./target/release/ostler.exe doctor
+        continue-on-error: true   # informational: shows whether Chrome is found and launches on the runner
+      - run: cargo test --workspace --locked
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 45

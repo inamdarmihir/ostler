@@ -14,8 +14,9 @@ mkdir -p "$out"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir "$stage/$name"
-cp "$bin" "$stage/$name/ostler"
-chmod 755 "$stage/$name/ostler"
+case "$target" in *windows*) exe=ostler.exe ;; *) exe=ostler ;; esac
+cp "$bin" "$stage/$name/$exe"
+chmod 755 "$stage/$name/$exe"
 cp "$root/LICENSE" "$root/README.md" "$stage/$name/"
 tar -C "$stage" -czf "$out/$name.tar.gz" "$name"
 if command -v sha256sum >/dev/null 2>&1; then h="$(sha256sum "$out/$name.tar.gz" | cut -d' ' -f1)"; else h="$(shasum -a 256 "$out/$name.tar.gz" | cut -d' ' -f1)"; fi

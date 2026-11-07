@@ -12,6 +12,6 @@
   "repository": { "type": "git", "url": "git+https://github.com/inamdarmihir/ostler.git", "directory": "npm" },
   "bugs": "https://github.com/inamdarmihir/ostler/issues",
   "engines": { "node": ">=18" },
-  "os": ["darwin", "linux"],
+  "os": ["darwin", "linux", "win32"],
   "cpu": ["x64", "arm64"]
 }

@@ -30,6 +30,7 @@ jobs:
           # Built on an older glibc so the binary runs on current LTS distributions.
           - { os: ubuntu-22.04,    target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: windows-latest,  target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -37,19 +38,38 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with: { key: "${{ matrix.target }}" }
       - run: cargo build --release --locked -p ostler
+        shell: bash
       - name: Smoke test the binary
-        run: ./target/release/ostler --version
+        shell: bash
+        run: ./target/release/ostler${{ runner.os == 'Windows' && '.exe' || '' }} --version
       - name: Package
-        run: scripts/package.sh "${{ matrix.target }}" target/release/ostler dist
+        shell: bash
+        run: scripts/package.sh "${{ matrix.target }}" "target/release/ostler${{ runner.os == 'Windows' && '.exe' || '' }}" dist
       - name: Package the Claude Desktop extension (macOS only; one double-click install)
         if: contains(matrix.target, 'apple-darwin')
         run: scripts/package-mcpb.sh "${{ matrix.target }}" target/release/ostler dist
       - name: Build the Python wheel (pip install ostler-mcp; the wheel carries this same binary)
+        if: runner.os != 'Windows'
         run: |
           python3 -m venv /tmp/maturin-venv
           /tmp/maturin-venv/bin/pip install maturin
           /tmp/maturin-venv/bin/maturin build --release --locked -o dist
+      - name: Build the Python wheel on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m venv maturin-venv
+          maturin-venv/Scripts/pip install maturin
+          maturin-venv/Scripts/maturin build --release --locked -o dist
+      - name: Smoke test the wheel on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m venv wheel-venv
+          wheel-venv/Scripts/pip install dist/*.whl
+          wheel-venv/Scripts/ostler --version
       - name: Smoke test the wheel in a clean environment
+        if: runner.os != 'Windows'
         run: |
           python3 -m venv /tmp/wheel-venv
           /tmp/wheel-venv/bin/pip install dist/*.whl
@@ -73,6 +93,41 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "Ostler ${GITHUB_REF_NAME}" \
             --notes "Easiest (Claude Desktop, macOS): download the \`.mcpb\` for your Mac and double-click it. Terminal: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+  docker:
+    # Multi-arch (amd64 + arm64) image on GHCR, built from the Linux tarballs above: no compile, no QEMU.
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { path: dist, merge-multiple: true }
+      - name: Unpack the Linux binaries into the build context
+        run: |
+          v="${GITHUB_REF_NAME}"
+          for pair in "amd64 x86_64" "arm64 aarch64"; do
+            set -- $pair
+            mkdir -p "docker/bin/$1"
+            tar -xzf "dist/ostler-${v}-$2-unknown-linux-gnu.tar.gz" -C "$RUNNER_TEMP"
+            cp "$RUNNER_TEMP/ostler-${v}-$2-unknown-linux-gnu/ostler" "docker/bin/$1/ostler"
+          done
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          repo="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr A-Z a-z)"
+          docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=${v}" \
+            -t "$repo:${v}" -t "$repo:latest" --push .
+
   homebrew:
     # Updates the Homebrew tap (inamdarmihir/homebrew-ostler) after the release exists.
     # Skipped, not failed, until the HOMEBREW_TAP_TOKEN secret is set (fine-grained token with

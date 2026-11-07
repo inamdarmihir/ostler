@@ -16,8 +16,10 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 | Claude Desktop (Mac) | download the `.mcpb` from the release and double-click | nothing else; first release |
 | npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
+| Docker (linux/amd64, linux/arm64) | `docker run -i --rm ghcr.io/inamdarmihir/ostler` | Docker; the image bundles Chromium and runs as a non-root user |
+| Windows | download `ostler-v<version>-x86_64-pc-windows-msvc.tar.gz` from the release, or `pip install ostler-mcp`, or `npx -y ostler serve` | Google Chrome or Edge-compatible Chromium installed; experimental, see [COMPATIBILITY](COMPATIBILITY.md) |
 
-> **Status:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [docs/RELEASING.md](RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
+> **Status:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [docs/RELEASING.md](RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows and Docker are new (experimental) in the next release.
 
 Then run `ostler start` to connect every AI app it finds (or `ostler install --client <name>` for one), and check it:
 

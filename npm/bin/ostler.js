@@ -23,6 +23,7 @@ const TARGETS = {
   'darwin/x64': 'x86_64-apple-darwin',
   'linux/x64': 'x86_64-unknown-linux-gnu',
   'linux/arm64': 'aarch64-unknown-linux-gnu',
+  'win32/x64': 'x86_64-pc-windows-msvc',
 };
 
 function binaryPath() {
@@ -34,7 +35,7 @@ function binaryPath() {
   const cacheRoot = process.env.OSTLER_CACHE_DIR
     || path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'ostler');
   const name = `ostler-v${version}-${target}`;
-  const bin = path.join(cacheRoot, name, 'ostler');
+  const bin = path.join(cacheRoot, name, process.platform === 'win32' ? 'ostler.exe' : 'ostler');
   if (fs.existsSync(bin)) return bin;
   return download({ target, name, cacheRoot, bin });
 }
