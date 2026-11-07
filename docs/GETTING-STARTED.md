@@ -2,7 +2,7 @@
 
 Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on your computer: read pages, research a topic with sources it actually read, and fill in web forms. You do **not** need Rust, Node or any code. Back to the [README](../README.md).
 
-**Status:** early (v0.2). No release is published yet, so the download steps below (paths A, C and D, and the install script in B) start working with the first release; until then a developer can build it for you ([INSTALL](INSTALL.md)). Windows is not supported yet.
+**Status:** early (v0.2). v0.2.0 is released, so the download steps below work (macOS and Linux; Windows and Docker arrive in the next release, experimental). The VS Code Marketplace, crates.io and npm are not published yet ([INSTALL](INSTALL.md)).
 
 ## What you need
 
@@ -31,7 +31,7 @@ Then **quit and reopen your AI app**.
 
 ## Path C: VS Code, Cursor or Windsurf extension
 
-Search the extensions panel for **Ostler** (Marketplace for VS Code, Open VSX for Cursor and Windsurf), install it, and Ostler appears as an MCP server. No terminal. It uses an `ostler` already on your PATH, or downloads the matching release once and checks its checksum. Commands: *Ostler: Check setup*, *Ostler: Sign in to a website*. Source: [editors/vscode](../editors/vscode).
+Search the extensions panel for **Ostler** (Open VSX for Cursor and Windsurf; the VS Code Marketplace listing is not published yet), install it, and Ostler appears as an MCP server. No terminal. It uses an `ostler` already on your PATH, or downloads the matching release once and checks its checksum. Commands: *Ostler: Check setup*, *Ostler: Sign in to a website*. Source: [editors/vscode](../editors/vscode).
 
 ## Path D: Python (`pip` or `uvx`)
 

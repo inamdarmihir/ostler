@@ -42,7 +42,7 @@ cargo install --git https://github.com/inamdarmihir/ostler ostler
 ostler doctor     # Chrome launches? Qdrant reachable (optional)? Prints the fix when not
 ```
 
-**Releases are not published yet.** No release has been tagged, so the prebuilt-binary installer, `npx` and crates.io paths described in [docs/INSTALL.md](docs/INSTALL.md) will not work until the first release ([process](docs/RELEASING.md)). Build from source for now. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
+**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
 
 ## Works with Claude Code, Codex, Cursor
 
