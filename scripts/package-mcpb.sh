@@ -8,6 +8,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$root/Cargo.toml" | head -1)"
 [ -n "$version" ] || { echo "could not read version from Cargo.toml" >&2; exit 1; }
 mkdir -p "$out"
+out="$(cd "$out" && pwd)"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir "$stage/server"
@@ -17,5 +18,5 @@ cp "$root/LICENSE" "$stage/"
 sed "s/@VERSION@/$version/" "$root/packaging/mcpb/manifest.json" > "$stage/manifest.json"
 file="$out/ostler-v${version}-${target}.mcpb"
 rm -f "$file"
-(cd "$stage" && zip -qr "$(cd "$out" && pwd)/$(basename "$file")" manifest.json LICENSE server)
+(cd "$stage" && zip -qr "$file" manifest.json LICENSE server)
 echo "$file"
