@@ -45,6 +45,7 @@
 <div class="sidebar-head"><span>Documentation</span><button class="icon-btn sidebar-close" type="button" aria-label="Close navigation">&times;</button></div>
 <a class="side-overview" href="index.html">Overview</a>
 <div class="side-group"><p class="side-title">Get started</p><ul>
+<li><a href="get-started.html">Get started without programming</a></li>
 <li><a href="quickstart.html">Quickstart</a></li>
 <li><a href="install.html">Install</a></li>
 <li><a href="agents.html" aria-current="page">Use with your agent</a></li>
@@ -80,7 +81,7 @@
 <p class="crumbs"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
 <article class="prose"><h1>Connect Ostler to your MCP client</h1>
 <p class="lede">Configure Ostler as a local MCP browser for your coding agent. Find setup commands, configuration locations and troubleshooting steps.</p>
-<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li><li class="toc-l2"><a href="#use-the-chrome-you-already-have">Use the Chrome you already have</a></li></ul></details>
+<details class="toc-inline"><summary>On this page</summary><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#with-uvx-or-pip-no-rust">With uvx or pip (no Rust)</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li><li class="toc-l2"><a href="#use-the-chrome-you-already-have">Use the Chrome you already have</a></li></ul></details>
 <p>Ostler is an MCP server over stdio. Any MCP client can launch it. <code>ostler setup &lt;client&gt;</code> prints the exact config, using this binary's <strong>absolute path</strong>. That avoids "command not found" when an app's <code>PATH</code> differs from your shell's.</p>
 <div class="table-wrap"><table><thead><tr><th>client</th><th>command</th><th>result</th></tr></thead><tbody><tr><td>Claude Code</td><td><code>ostler setup claude --apply</code></td><td>runs <code>claude mcp add</code> for you</td></tr><tr><td>Codex</td><td><code>ostler setup codex</code></td><td>prints the block for <code>~/.codex/config.toml</code></td></tr><tr><td>Cursor</td><td><code>ostler setup cursor</code></td><td>prints JSON for <code>~/.cursor/mcp.json</code></td></tr><tr><td>VS Code</td><td><code>ostler setup vscode</code></td><td>prints JSON for <code>.vscode/mcp.json</code></td></tr><tr><td>anything else</td><td><code>ostler setup json</code></td><td>generic <code>mcpServers</code> JSON</td></tr></tbody></table></div>
 <p>Only Claude Code is applied automatically. Other clients' files are never modified: you paste or merge the printed snippet. Extra <code>serve</code> flags go after <code>--</code>:</p>
@@ -109,6 +110,8 @@ args = ["serve"]</code></pre></div>
   }
 }</code></pre></div>
 <h2 id="vs-code">VS Code<a class="anchor" href="#vs-code" aria-label="Link to this section">#</a></h2>
+<p>Easiest: install the <strong>Ostler</strong> extension from the <a href="https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler" rel="noopener">VS Code Marketplace</a> (or <a href="https://open-vsx.org/extension/inamdarmihir/ostler" rel="noopener">Open VSX</a> for Cursor, Windsurf and other forks). It registers Ostler as an MCP server, uses an <code>ostler</code> on your PATH or downloads and checks the release once, and adds <em>Ostler: Check setup</em> and <em>Ostler: Sign in to a website</em>. Source: <a href="https://github.com/inamdarmihir/ostler/tree/main/editors/vscode" rel="noopener">editors/vscode</a>.</p>
+<p>Or by hand:</p>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup vscode</code></pre></div>
 <p>Prints JSON for <code>.vscode/mcp.json</code>. VS Code uses a <code>servers</code> key and an explicit transport type:</p>
 <div class="code" data-lang="json"><pre tabindex="0"><code>{
@@ -120,6 +123,10 @@ args = ["serve"]</code></pre></div>
     }
   }
 }</code></pre></div>
+<h2 id="with-uvx-or-pip-no-rust">With uvx or pip (no Rust)<a class="anchor" href="#with-uvx-or-pip-no-rust" aria-label="Link to this section">#</a></h2>
+<p>Any MCP client can launch Ostler from the Python package <a href="https://pypi.org/project/ostler-mcp/" rel="noopener"><code>ostler-mcp</code></a> (it carries the same binary):</p>
+<div class="code" data-lang="json"><pre tabindex="0"><code>{ <span class="tok-k">"mcpServers"</span>: { <span class="tok-k">"ostler"</span>: { <span class="tok-k">"command"</span>: <span class="tok-s">"uvx"</span>, <span class="tok-k">"args"</span>: [<span class="tok-s">"--from"</span>, <span class="tok-s">"ostler-mcp"</span>, <span class="tok-s">"ostler"</span>, <span class="tok-s">"serve"</span>] } } }</code></pre></div>
+<p><code>pip install ostler-mcp</code> instead puts the <code>ostler</code> command on your PATH. Use <code>pipx</code> or <code>uv tool install</code> to keep it isolated.</p>
 <h2 id="any-other-mcp-client">Any other MCP client<a class="anchor" href="#any-other-mcp-client" aria-label="Link to this section">#</a></h2>
 <div class="code" data-lang="shell"><pre tabindex="0"><code>ostler setup json</code></pre></div>
 <p>prints the common <code>mcpServers</code> shape. The only requirement is that the client starts <code>ostler serve</code> and speaks MCP over stdio. <code>ostler serve</code> should print one <code>ready</code> line on stderr and wait; stdout carries only MCP messages.</p>
@@ -153,7 +160,7 @@ args = ["serve"]</code></pre></div>
 <a class="pager-next" rel="next" href="frameworks.html"><span>Next</span><strong>LangChain, LlamaIndex, AutoGen</strong></a>
 </nav>
 </main>
-<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li><li class="toc-l2"><a href="#use-the-chrome-you-already-have">Use the Chrome you already have</a></li></ul></aside>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#claude-code">Claude Code</a></li><li class="toc-l2"><a href="#codex">Codex</a></li><li class="toc-l2"><a href="#cursor">Cursor</a></li><li class="toc-l2"><a href="#vs-code">VS Code</a></li><li class="toc-l2"><a href="#with-uvx-or-pip-no-rust">With uvx or pip (no Rust)</a></li><li class="toc-l2"><a href="#any-other-mcp-client">Any other MCP client</a></li><li class="toc-l2"><a href="#a-good-agent-workflow">A good agent workflow</a></li><li class="toc-l2"><a href="#control-what-the-agent-sees-and-can-do">Control what the agent sees and can do</a></li><li class="toc-l2"><a href="#tabs-share-one-browser-context">Tabs share one browser context</a></li><li class="toc-l2"><a href="#other-agents-a2a">Other agents: A2A</a></li><li class="toc-l2"><a href="#use-the-chrome-you-already-have">Use the Chrome you already have</a></li></ul></aside>
 </div>
 <footer class="site-footer"><div class="footer-inner">
 <p>Ostler is Apache-2.0 open source. v0.2, early: tested on local fixtures, not yet on the open web. Maintained by <a href="https://github.com/inamdarmihir" rel="author">Mihir Inamdar</a>.</p>

@@ -15,6 +15,7 @@
 
 - Python package `ostler-mcp` (`pip install ostler-mcp`, `uvx --from ostler-mcp ostler serve`): a maturin wheel carrying the same Rust binary, built and smoke-tested by the release and CI workflows, uploaded to PyPI when `PYPI_TOKEN` is set. The PyPI name `ostler` is taken by an unrelated project.
 - VS Code extension (`editors/vscode`, also for Cursor and Windsurf via Open VSX): registers Ostler as an MCP server, uses `ostler` on PATH or downloads and checksum-verifies the release once, commands for setup check and sign-in. Built, tested and attached to the release by the workflow; published when `VSCE_PAT` / `OVSX_PAT` are set.
+- Website: new [Get started without programming](https://inamdarmihir.github.io/ostler/docs/get-started.html) page; the install page, agents page, landing page, FAQ and `llms.txt` now cover pip/uvx, the VS Code extension, Open VSX, Homebrew, npm and crates.io with links to each listing. Structured-data `sameAs` stays GitHub-only until the packages are live.
 
 ### Changed
 

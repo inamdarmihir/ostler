@@ -62,8 +62,8 @@ SEO = {
               "Set up Ostler, connect an MCP client, research with checked quotations, browse and test web apps, verify form fills, and review memory, security and benchmark limitations.",
               "Ostler MCP browser documentation"),
     "install": ("Install Ostler on macOS or Linux",
-                "Build Ostler from GitHub with Rust 1.89+ and Chrome or Chromium. Check prerequisites, diagnose setup and see which release paths are available.",
-                "Install Ostler from source"),
+                "Install Ostler from source, PyPI (pip, uvx), a VS Code extension, npm, crates.io, Homebrew or a prebuilt binary. Needs Chrome or Chromium. Check prerequisites and diagnose setup.",
+                "Install Ostler: pip, uvx, VS Code, npm, crates.io or source"),
     "quickstart": ("Ostler Quickstart: Connect Your Agent and Try a Form",
                    "Install Ostler, run doctor, connect your MCP client, then try a checked citation or a verified form fill on local test pages without touching real services.",
                    "Start using Ostler: read, cite and fill on local test pages"),
@@ -133,6 +133,7 @@ def seo(page: dict) -> tuple[str, str, str]:
 # --------------------------------------------------------------------------
 GROUPS = [
     ("Get started", [
+        ("get-started", "Get started without programming", "Install Ostler with a double-click, an editor extension, pip or uvx, or one command: no Rust and no config files.", ("repo", "docs/GETTING-STARTED.md")),
         ("quickstart", "Quickstart", "Install, check, connect, then read and cite a demo page or fill a demo form, in five minutes.", ("content", "quickstart.md")),
         ("install", "Install", "Every way to get the binary, what works today, update and uninstall.", ("content", "install.md")),
         ("agents", "Use with your agent", "Add Ostler as an MCP browser to Claude Code, Codex, Cursor, VS Code or any MCP client, with a forms and a research workflow.", ("content", "agents.md")),
@@ -177,6 +178,7 @@ REPO_TO_SLUG = {
     "docs/ARCHITECTURE.md": "architecture",
     "docs/BENCHMARKS.md": "benchmarks",
     "docs/CLIENTS.md": "agents",
+    "docs/GETTING-STARTED.md": "get-started",
     "docs/COOKBOOK.md": "cookbook",
     "docs/ECONOMICS.md": "economics",
     "docs/REVIEW-2026-10.md": "review",
@@ -797,8 +799,9 @@ def llms_txt() -> str:
         "",
         "Key facts:",
         "",
-        "- Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler setup claude --apply` (Claude Code), or see the agents page for Codex, Cursor and VS Code.",
-        "- Requirements: Rust 1.89+ and Chrome or Chromium. Prebuilt binaries arrive with the first tagged release.",
+        "- Install: `cargo install --git https://github.com/inamdarmihir/ostler ostler`, then `ostler start` (connects every AI app it finds) or `ostler setup claude --apply` (Claude Code); or see the agents page for Codex, Cursor and VS Code.",
+        "- Other ways to install, from the first tagged release: Python (`pip install ostler-mcp`, `uvx --from ostler-mcp ostler serve`; https://pypi.org/project/ostler-mcp/), the VS Code extension (https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler, https://open-vsx.org/extension/inamdarmihir/ostler), Claude Desktop `.mcpb`, Homebrew (https://github.com/inamdarmihir/homebrew-ostler), npm (https://www.npmjs.com/package/ostler) and crates.io (https://crates.io/crates/ostler).",
+        "- Requirements: Chrome or Chromium; Rust 1.89+ only for the from-source install.",
         "- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.",
         "- Browsing: a general MCP browser in a real Chrome. 15 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.",
         "- Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).",

@@ -5,12 +5,25 @@ Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You n
 | how | command | needs |
 |---|---|---|
 | **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
-| Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh` | nothing else; macOS and Linux |
-| npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
-| crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
+| Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh`, then `ostler start` | nothing else; macOS and Linux |
+| **Python** ([PyPI: ostler-mcp](https://pypi.org/project/ostler-mcp/)) | `pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve` | Python 3.8+ or uv; the wheel carries the binary |
+| **VS Code, Cursor, Windsurf** ([Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler), [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler)) | install the **Ostler** extension | the editor; no terminal |
+| Claude Desktop (Mac) | download the `.mcpb` from the [release](https://github.com/inamdarmihir/ostler/releases/latest) and double-click it | nothing else |
+| Homebrew ([tap](https://github.com/inamdarmihir/homebrew-ostler)) | `brew install inamdarmihir/ostler/ostler` | Homebrew |
+| npm / `npx` ([npm: ostler](https://www.npmjs.com/package/ostler)) | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
+| crates.io ([crates.io: ostler](https://crates.io/crates/ostler)) | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
 
-> [!WARNING]
-> **Availability:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [RELEASING.md](repo:docs/RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
+> [!NOTE]
+> **Availability:** everything except the first row comes from the tagged release, which publishes the binaries, the Python wheels and the editor extensions ([RELEASING.md](repo:docs/RELEASING.md); every install path is tested against a fake release in CI). If a listing above shows "not found", that channel has not been published yet and the first row still works. Not a developer? Start with [Getting started, no programming needed](get-started.html). Windows is not built or tested.
+
+## Where Ostler is listed
+
+- Source and releases: [GitHub](https://github.com/inamdarmihir/ostler) and [releases](https://github.com/inamdarmihir/ostler/releases)
+- Python: [PyPI, `ostler-mcp`](https://pypi.org/project/ostler-mcp/) (the name `ostler` on PyPI is a different project)
+- Editors: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler) and [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) for Cursor, Windsurf and other forks
+- JavaScript: [npm, `ostler`](https://www.npmjs.com/package/ostler)
+- Rust: [crates.io, `ostler`](https://crates.io/crates/ostler)
+- macOS: [Homebrew tap](https://github.com/inamdarmihir/homebrew-ostler)
 
 ## Verify
 
@@ -22,6 +35,8 @@ ostler doctor --fix  # apply only the safe fixes: create the config directory, c
 `ostler doctor` explains launch failures (sandbox or root problems, a profile already in use, missing libraries, Chrome not installed) with a concrete command for each. `--fix` never creates keys, installs software, edits client configs or touches the network.
 
 ## Connect your agent
+
+Easiest: `ostler start` finds the AI apps on your computer and connects Ostler to each. Or pick one:
 
 ```sh
 ostler install --list                  # clients and their config files
