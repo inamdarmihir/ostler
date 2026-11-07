@@ -13,7 +13,7 @@ Every MCP tool Ostler exposes, and example prompts. Back to the [README](../READ
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
 | other | `stats` |
 
-`--tools auto|core|forms|research|all` controls how many the agent sees. The default, `auto`, lists the 15 core tools (4.9 KB) and adds the research tools (21 in total, after the first `read` or `search`) and the forms and memory tools (once a page shows form fields): the server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. `--tools research` pins core plus research (21 tools, 7.2 KB); the full set (30 tools) is 9.7 KB of schema, roughly 2.4k tokens on every turn; a test keeps it under 10 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+`--tools auto|core|forms|research|all` controls how many the agent sees. The default, `auto`, lists the 16 core tools (5.3 KB) and adds the research tools (23 in total, after the first `read` or `search`) and the forms and memory tools (once a page shows form fields): the server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. `--tools research` pins core plus research (23 tools, 8.2 KB); the full set (32 tools) is 10.8 KB of schema, roughly 2.7k tokens on every turn; a test keeps it under 11 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 ## Research tools
 
@@ -54,6 +54,22 @@ Gaps (not read; say so rather than guess what they contain):
 Limits: `cite` proves the words are on the page, not that the claim is true. Pages are read one at a time, there is no PDF text layer, sources are not kept across sessions, and robots.txt cannot be overridden. The injection check is a phrase heuristic that flags, not a defence: the fencing and the policy gates stay on regardless.
 
 **Tabs share one browser context**, so cookies and logins carry across them, and the `context` tool is a small key/value notepad every tab (and every later call) can read, for things like "applicant = Ada, order id = 4471". It survives a browser restart.
+
+## Keeping bulk data out of the context
+
+- **`where` and `select`** on `extract` and `links`: `where: "price|stock"` keeps only rows containing any term, `select: ["name", 2]` keeps table columns by header name or index. The result says how many rows were kept.
+- **`search_tools`**: names, one-line descriptions or full input schemas for any tool, listed or not (`detail: names|brief|full`).
+- **`{{fact:KEY}}`** as a value in `form_fill` or `fill_field`: Ostler fills the saved fact with that key, so the value does not have to pass through the agent. An unknown key fails the call.
+- **`run`**: a short [Rhai](https://rhai.rs) script for multi-page jobs. `tool("read", #{url: u, query: "price"})` runs any Ostler tool and returns its text; `grep(text, word)`, `lines(text)` and `print(x)` help; the last value is returned, inside the untrusted fence. No files, network, modules or `eval`; at most 60 tool calls; every call keeps the profile, allowlist, robots.txt and submit-gate rules. See [ADR-0019](adr/0019-scripted-runs-and-result-filtering.md).
+
+```
+let hits = [];
+for u in ["https://a.example/pricing", "https://b.example/pricing"] {
+    let t = tool("read", #{url: u, query: "per month"});
+    hits.push(u + ": " + grep(t, "$").len());
+}
+hits
+```
 
 ## Things to ask your agent
 

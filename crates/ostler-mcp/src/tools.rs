@@ -95,6 +95,8 @@ fn defs() -> Vec<Def> {
             props: json!({"ref":{"type":"string"},"full_page":{"type":"boolean"}}) },
         Def { name: "look", desc: "See where to click: a screenshot with every clickable element boxed and numbered by its ref, plus a legend saying what each does (type here, submits the form, error…). Use refs with click/type/fill_field.", group: Core, required: &[],
             props: json!({"max":{"type":"integer"}}) },
+        Def { name: "search_tools", desc: "Find Ostler tools without listing them all. detail: names | brief (default) | full (with input schema). Every tool is callable whether or not it is listed.", group: Core, required: &[],
+            props: json!({"query":{"type":"string"},"detail":{"type":"string","enum":["names","brief","full"]}}) },
         Def { name: "back", desc: "Go back in history.", group: Core, required: &[], props: json!({}) },
         Def { name: "tabs", desc: "Manage tabs (they share cookies and the context tool). list | new [url] | switch tab | close tab. Popups open as new tabs.", group: Core, required: &["action"],
             props: json!({"action":{"type":"string","enum":["list","new","switch","close"]},"tab":{"type":"string","description":"tab id, e.g. t2"},"url":{"type":"string"}}) },
@@ -108,12 +110,14 @@ fn defs() -> Vec<Def> {
         Def { name: "open_many", desc: "Read several URLs (max 10) in a scratch tab, respecting robots.txt and per-host limits. With query: the best passages from each. Reports each page's outcome; your current tab is untouched.", group: Research, required: &["urls"],
             props: json!({"urls":{"type":"array","items":{"type":"string"}},"query":{"type":"string"},"k":{"type":"integer","description":"passages per page (default 2)"},"force":{"type":"boolean","description":"re-read pages already read"}}) },
         Def { name: "extract", desc: "Structured data from the current page: tables (rows) or lists (repeated cards, with pagination hints and whether the list looks complete).", group: Research, required: &["kind"],
-            props: json!({"kind":{"type":"string","enum":["tables","lists"]},"max_rows":{"type":"integer","description":"per table or list (default 30)"}}) },
+            props: json!({"kind":{"type":"string","enum":["tables","lists"]},"max_rows":{"type":"integer","description":"per table or list (default 30)"},"where":{"type":"string","description":"keep only rows containing any of a|b|c"},"select":{"type":"array","items":{},"description":"table columns to keep (header name or index)"}}) },
         Def { name: "links", desc: "Links on the current page with anchor text and context, optionally filtered.", group: Research, required: &[],
-            props: json!({"same_origin":{"type":"boolean"},"text_contains":{"type":"string"},"href_contains":{"type":"string"},"limit":{"type":"integer","description":"default 30"}}) },
+            props: json!({"same_origin":{"type":"boolean"},"text_contains":{"type":"string"},"href_contains":{"type":"string"},"limit":{"type":"integer","description":"default 30"},"where":{"type":"string","description":"keep only lines containing any of a|b|c"}}) },
+        Def { name: "run", desc: "Run a short Rhai script for multi-page jobs; only its result returns. tool(\"name\", #{args}) runs an Ostler tool and returns its text; also grep(text, word), lines(text), print(x). No files or network; 60 calls max.", group: Research, required: &["script"],
+            props: json!({"script":{"type":"string"},"max_chars":{"type":"integer","description":"default 8000"}}) },
         Def { name: "form_inspect", desc: "List the page's forms as typed fields (label, kind, required, options, errors) plus submit controls and what memory knows.", group: Forms, required: &[],
             props: json!({"form":{"type":"string","description":"form ref"}}) },
-        Def { name: "form_fill", desc: "Fill many fields at once from {label|name|ref: value}. Handles selects, radios, checkbox groups, dates, files, comboboxes, dependent dropdowns; verifies each field. auto=required|all fills the rest from memory.", group: Forms, required: &[],
+        Def { name: "form_fill", desc: "Fill many fields at once from {label|name|ref: value}; a value {{fact:KEY}} uses that saved fact without you seeing it. Handles selects, radios, checkbox groups, dates, files, comboboxes, dependent dropdowns; verifies each field. auto=required|all fills the rest from memory.", group: Forms, required: &[],
             props: json!({"values":{"type":"object","additionalProperties":true},"form":{"type":"string"},"auto":{"type":"string","enum":["off","required","all"]},"min_confidence":{"type":"number"}}) },
         Def { name: "form_submit", desc: "Click the form's submit/next control and report whether it was accepted, advanced to another step, or failed validation.", group: Forms, required: &[],
             props: json!({"form":{"type":"string"},"control":{"type":"string","description":"submit button ref"},"confirm":{"type":"boolean","description":"required when the server runs with --require-confirm-submit"},"again":{"type":"boolean","description":"resubmit a form submitted moments ago"}}) },
@@ -147,6 +151,39 @@ pub fn list_revealed(profile: Profile, forms_seen: bool, research_seen: bool) ->
             })
         })
         .collect()
+}
+
+/// `search_tools`: tools whose name or description mention every word of `query` (all tools when
+/// empty), at the requested level of detail. Searches the whole catalogue, not just what is listed.
+pub fn search(query: &str, detail: &str) -> String {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let hits: Vec<Def> = defs()
+        .into_iter()
+        .filter(|d| {
+            let hay = format!("{} {}", d.name, d.desc).to_lowercase();
+            words.iter().all(|w| hay.contains(w.as_str()))
+        })
+        .collect();
+    if hits.is_empty() {
+        return format!(
+            "No tool matches {query:?}. Try search_tools with no query to list every name."
+        );
+    }
+    let mut out = format!("{} tool(s):\n", hits.len());
+    for d in hits {
+        match detail {
+            "names" => {
+                out.push_str(d.name);
+                out.push('\n');
+            }
+            "full" => {
+                let schema = json!({"type":"object","properties": d.props, "required": d.required});
+                out.push_str(&format!("{}: {}\n  input: {}\n", d.name, d.desc, schema));
+            }
+            _ => out.push_str(&format!("{}: {}\n", d.name, d.desc)),
+        }
+    }
+    out.trim_end().to_string()
 }
 
 /// Whether `name` may be called under `profile`. `None` for an unknown tool. `auto` allows everything
@@ -210,9 +247,24 @@ mod tests {
     fn schemas_are_small() {
         // A guard on the context cost of just *having* the server connected.
         let all = serde_json::to_string(&list(Profile::All)).unwrap().len();
-        assert!(all < 10_000, "all tool schemas are {all} bytes");
+        assert!(all < 11_000, "all tool schemas are {all} bytes");
         let auto = serde_json::to_string(&list(Profile::Auto)).unwrap().len();
-        assert!(auto < 5_000, "the starting tool list is {auto} bytes");
+        assert!(auto < 5_400, "the starting tool list is {auto} bytes");
+    }
+
+    #[test]
+    fn search_tools_finds_hidden_tools_at_each_detail_level() {
+        let names = search("citation", "names");
+        assert!(names.contains("evidence"), "{names}");
+        assert!(names.lines().skip(1).all(|l| !l.contains(':')), "{names}");
+        let full = search("form_fill", "full");
+        assert!(
+            full.contains("input: {") && full.contains("values"),
+            "{full}"
+        );
+        let brief = search("", "brief");
+        assert!(brief.contains("form_submit:") && brief.contains("search_tools:"));
+        assert!(search("zeppelin", "brief").starts_with("No tool matches"));
     }
 
     #[test]

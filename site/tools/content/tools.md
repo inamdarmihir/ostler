@@ -1,6 +1,6 @@
 # Tools reference
 
-Ostler exposes 30 MCP tools in five profiles. `--tools auto|core|forms|research|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The default, `auto`, starts with the 15 core tools (4.9 KB of schema), adds the research tools after the first `read` or `search`, and adds the form and memory tools once a page shows form fields. The server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set is about 9.7 KB of schema, roughly 2.4k tokens on every turn, and a test keeps it under 10 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+Ostler exposes 32 MCP tools in five profiles. `--tools auto|core|forms|research|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The default, `auto`, starts with the 16 core tools (4.9 KB of schema), adds the research tools after the first `read` or `search`, and adds the form and memory tools once a page shows form fields. The server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set is about 9.7 KB of schema, roughly 2.7k tokens on every turn, and a test keeps it under 11 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 | profile | tools | count |
 |---|---|---:|
@@ -154,6 +154,15 @@ Manage tabs. They share cookies and the `context` tool. Popups open as new tabs.
 | `tab` | string | tab id, for example `t2` |
 | `url` | string | for `new` |
 
+### `search_tools`
+
+Find Ostler tools without listing them all: names, one-line descriptions or full input schemas for any tool, listed or not.
+
+| parameter | type | notes |
+|---|---|---|
+| `query` | string | words that must appear in the name or description |
+| `detail` | string | `names`, `brief` (default) or `full` |
+
 ### `context`
 
 Notes shared by every tab and later calls: `get`, `set`, `delete`, `list`. Keep short facts, not page dumps. Survives a browser restart.
@@ -211,6 +220,8 @@ Structured data from the current page: `tables` as rows, or `lists` of repeated 
 |---|---|---|
 | `kind` | `tables` \| `lists`, **required** | |
 | `max_rows` | integer | per table or list, default 30 |
+| `where` | string | keep only rows containing any of `a\|b\|c` |
+| `select` | array | table columns to keep, by header name or index |
 
 ### `links`
 
@@ -222,6 +233,16 @@ Links on the current page with anchor text and context, optionally filtered.
 | `text_contains` | string | |
 | `href_contains` | string | |
 | `limit` | integer | default 30 |
+| `where` | string | keep only lines containing any of `a\|b\|c` |
+
+### `run`
+
+Run a short [Rhai](https://rhai.rs) script for multi-page jobs. Loops, filtering and counting happen outside the context; only the script's printed lines and final value come back, inside the untrusted fence. In the script, `tool("read", #{url: u, query: "price"})` runs any Ostler tool and returns its text; `grep(text, word)`, `lines(text)` and `print(x)` help. No files, network, modules or `eval`; at most 60 tool calls; every call keeps the profile, allowlist, robots.txt and submit-gate rules, and `run` cannot call `run`. See [ADR-0019](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0019-scripted-runs-and-result-filtering.md).
+
+| parameter | type | notes |
+|---|---|---|
+| `script` | string | required |
+| `max_chars` | integer | default 8000 |
 
 ## Forms (profile: forms)
 
@@ -234,6 +255,8 @@ List the page's forms as typed fields (label, kind, required, options, errors) p
 | `form` | string | form ref |
 
 ### `form_fill`
+
+A value written `{{fact:KEY}}` is replaced by the saved fact with that key, so the value never has to pass through the agent. An unknown key fails the call.
 
 Fill many fields at once from `{label | name | ref: value}`. Handles selects, radios, checkbox groups, dates, files, comboboxes and dependent dropdowns, and verifies each field by reading it back. `auto: "required"` or `"all"` fills the rest from memory.
 

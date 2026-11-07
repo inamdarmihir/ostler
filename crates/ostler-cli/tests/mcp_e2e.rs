@@ -1001,3 +1001,78 @@ async fn search_without_a_provider_says_how_to_configure_one() {
     assert!(err && t.contains("OSTLER_SEARXNG_URL"), "{t}");
     finish(c).await;
 }
+
+#[tokio::test]
+async fn run_scripts_drive_tools_outside_the_context_and_keep_the_gates() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&["--memory", "off"]).await else {
+        return;
+    };
+    // The loop, the filtering and the counting happen in the script; only the answer comes back.
+    let script = format!(
+        r#"
+        tool("navigate", #{{url: "{}", observe: "none"}});
+        let snap = tool("snapshot");
+        let hits = lines(grep(snap, "Far away"));
+        print("matching lines: " + hits.len());
+        hits.len()
+        "#,
+        srv.url("/scrollhover.html")
+    );
+    let (err, t) = c.tool("run", json!({"script": script})).await;
+    assert!(!err, "{t}");
+    assert!(t.contains("Script finished: 2 tool call(s)"), "{t}");
+    assert!(t.contains("matching lines: 1"), "{t}");
+    // The page's snapshot never reached the agent: the answer is a few bytes.
+    assert!(t.len() < 400, "{} bytes: {t}", t.len());
+    // Doing the same steps one tool call at a time returns the whole snapshot to the agent.
+    let (_, direct) = c.tool("snapshot", json!({})).await;
+    eprintln!(
+        "run result: {} bytes; direct snapshot: {} bytes",
+        t.len(),
+        direct.len()
+    );
+    assert!(
+        direct.len() > 2 * t.len(),
+        "{} vs {}",
+        direct.len(),
+        t.len()
+    );
+
+    // A failing call aborts the script with the reason; `run` cannot call itself.
+    let (err, t) = c.tool("run", json!({"script": r#"tool("nope")"#})).await;
+    assert!(
+        err && t.contains("script failed") && t.contains("unknown tool"),
+        "{t}"
+    );
+    let (err, t) = c
+        .tool("run", json!({"script": r#"tool("run", #{script: "1"})"#}))
+        .await;
+    assert!(err && t.contains("run cannot call run"), "{t}");
+    // A script that never ends is stopped, not left hanging.
+    let (err, t) = c.tool("run", json!({"script": "loop { }"})).await;
+    assert!(err && t.contains("script failed"), "{t}");
+
+    // search_tools reaches tools the list has not revealed yet.
+    let (_, t) = c
+        .tool(
+            "search_tools",
+            json!({"query": "form_fill", "detail": "full"}),
+        )
+        .await;
+    assert!(t.contains("form_fill") && t.contains("input:"), "{t}");
+    finish(c).await;
+}
+
+#[tokio::test]
+async fn run_is_not_available_under_the_core_profile() {
+    let Some(mut c) = Client::start(&["--memory", "off", "--tools", "core"]).await else {
+        return;
+    };
+    let (err, t) = c.tool("run", json!({"script": "1"})).await;
+    assert!(
+        err && t.contains("disabled by the server's tool profile"),
+        "{t}"
+    );
+    finish(c).await;
+}

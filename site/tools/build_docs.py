@@ -147,7 +147,7 @@ GROUPS = [
         ("configuration", "Configuration and CLI", "Config file, environment variables, every serve and a2a flag.", ("content", "configuration.md")),
     ]),
     ("Reference", [
-        ("tools", "Tools reference", "All 30 MCP tools: browse, read and cite, search, extract, forms and memory, with parameters and profiles.", ("content", "tools.md")),
+        ("tools", "Tools reference", "All 32 MCP tools: browse, read and cite, search, extract, forms and memory, with parameters and profiles.", ("content", "tools.md")),
         ("security", "Security model", "The threat model: what Ostler does, and what it does not do.", ("repo", "SECURITY.md")),
         ("a2a", "A2A", "Let other agents hand Ostler forms over Agent2Agent v1.0.", ("repo", "docs/A2A.md")),
         ("architecture", "Architecture", "Crates, the injected runtime, the form model, and the decisions behind them.", ("repo", "docs/ARCHITECTURE.md")),
@@ -803,7 +803,7 @@ def llms_txt() -> str:
         "- Other ways to install (v0.2.0): the install script for macOS and Linux (https://inamdarmihir.github.io/ostler/install.sh), Claude Desktop `.mcpb` (macOS), the VS Code extension on Open VSX (https://open-vsx.org/extension/inamdarmihir/ostler), and `cargo install --git https://github.com/inamdarmihir/ostler ostler` from source. Windows (x86_64, experimental) and a Docker image (`ghcr.io/inamdarmihir/ostler`) arrive in v0.2.1. Not published yet: the VS Code Marketplace, Homebrew, npm and crates.io.",
         "- Requirements: Chrome or Chromium; Python 3.8+ for pip (no Rust); Rust 1.89+ only for the from-source install.",
         "- Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.",
-        "- Browsing: a general MCP browser in a real Chrome. 15 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.",
+        "- Browsing: a general MCP browser in a real Chrome. 16 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.",
         "- Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).",
         "- Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).",
         "- Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic. Tool output goes to your MCP client and, through it, to that client's model provider.",

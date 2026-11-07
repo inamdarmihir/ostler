@@ -1,0 +1,7 @@
+# cargo-audit policy. Mirrors deny.toml: an ignore needs a reason and a removal condition.
+[advisories]
+ignore = [
+    # smartstring is unmaintained (no vulnerability); rhai's small-string type, used by the `run` tool's
+    # interpreter (docs/adr/0019). Remove when rhai drops smartstring or the interpreter is replaced.
+    "RUSTSEC-2026-0249",
+]

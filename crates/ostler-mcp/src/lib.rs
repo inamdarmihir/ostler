@@ -5,9 +5,11 @@
 
 mod app;
 mod evidence;
+mod filter;
 mod prompts;
 mod relevance;
 mod render;
+mod script;
 mod tools;
 
 pub use app::{App, AppConfig, Content, FormTask, FormTaskResult, TaskVerdict, ToolOutput};
