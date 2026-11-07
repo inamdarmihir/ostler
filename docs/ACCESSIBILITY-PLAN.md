@@ -6,7 +6,7 @@ Analysis of what stops a non-developer from using Ostler, what this change fixes
 
 | step today | who it stops | fix |
 |---|---|---|
-| `cargo install` needs Rust 1.89+, minutes of compiling | everyone who is not a Rust developer | prebuilt binaries and one-click bundle (below); nothing is published until the first tagged release |
+| `cargo install` needs Rust 1.89+, minutes of compiling | everyone who is not a Rust developer | prebuilt binaries, the `.mcpb` bundle and `pip install ostler-mcp` (all live since v0.2.0) |
 | Terminal, `PATH`, absolute binary paths | most people | `ostler start` needs no flags and no client name |
 | Naming a client and editing its JSON/TOML | anyone unsure which app or file | `ostler start` detects installed apps; `ostler install` already edits safely with backups |
 | No double-click path for Claude Desktop, the largest non-developer MCP client | the main target audience | `.mcpb` extension bundle built by the release workflow |
@@ -31,7 +31,7 @@ Deliberately not done: confirmation on by default (the flag blocks every non-GET
 
 ## Still open, in suggested order
 
-1. **Cut the first release, and set the `PYPI_TOKEN`, `VSCE_PAT` and `OVSX_PAT` secrets.** Everything above depends on it: nothing downloadable exists until a `v*` tag is pushed ([RELEASING](RELEASING.md)). Highest value, no code.
+1. **Finish the channels v0.2.0 started.** Done: GitHub release, PyPI, Open VSX. Left: `VSCE_PAT` (VS Code Marketplace), a working `HOMEBREW_TAP_TOKEN`, and publish jobs for npm and crates.io ([RELEASING](RELEASING.md)).
 2. **Windows build, `.mcpb` and wheel.** Claude Desktop is mostly used on Windows and macOS. Needs a Windows CI job, Chrome discovery and `ostler install` path checks on a real Windows machine; the install code already has Windows paths but nothing has run there.
 3. **Sign and notarize the macOS binary.** An unsigned download triggers Gatekeeper warnings that will stop non-technical users. Needs an Apple Developer account.
 4. **Submit to the Claude Desktop extension directory** and the MCP registry so it can be found without the GitHub releases page.

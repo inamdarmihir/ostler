@@ -1,19 +1,19 @@
 # Quickstart
 
-Install Ostler, check that it can drive Chrome, connect your agent, and try it on a demo page: read and cite a source, or fill a form. About five minutes, most of it compiling.
+Install Ostler, check that it can drive Chrome, connect your agent, and try it on a demo page: read and cite a source, or fill a form. About five minutes.
 
 > [!NOTE]
 > **Status: v0.2, early.** Ostler is tested against real Chrome and a real Qdrant server, but only on local fixtures, not the open web. A [design review](review.html) found real flaws and lists them openly with a fix order. Read [what that means](economics.html#6-what-can-go-wrong) before relying on it.
 
 ## 1. Install
 
-You need **Chrome or Chromium** (Ostler drives a real browser) and Rust 1.89 or newer to build from source.
+You need **Chrome or Chromium** (Ostler drives a real browser) and Python 3.8+ (no Rust needed).
 
 ```sh
-cargo install --git https://github.com/inamdarmihir/ostler ostler
+pip install ostler-mcp
 ```
 
-Prebuilt binaries, `npx` and crates.io are described on the [Install](install.html) page. Nothing is published to crates.io or npm yet, so building from source is the path that works today.
+No Python? Use the install script (macOS and Linux): `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh`. With Rust 1.89+ you can build from source: `cargo install --git https://github.com/inamdarmihir/ostler ostler`. Every option, and what is not published yet (npm, crates.io, Homebrew), is on the [Install](install.html) page.
 
 ## 2. Check it works
 

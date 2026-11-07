@@ -33,7 +33,7 @@
 
 ## Install
 
-**Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds, or a VS Code extension, or `pip install ostler-mcp` / `uvx --from ostler-mcp ostler serve`. (Downloads begin with the first release; see below.) The steps that follow are for developers.
+**Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds, or a VS Code extension, or `pip install ostler-mcp` / `uvx --from ostler-mcp ostler serve`. The steps that follow are for developers.
 
 Needs **Chrome or Chromium** and Python 3.8+ (no Rust). From source: `cargo install --git https://github.com/inamdarmihir/ostler ostler` (Rust 1.89+).
 
@@ -42,7 +42,7 @@ pip install ostler-mcp      # or: uvx --from ostler-mcp ostler serve
 ostler doctor     # Chrome launches? Qdrant reachable (optional)? Prints the fix when not
 ```
 
-**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
+**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image arrive in v0.2.1 and are experimental.
 
 ## Works with Claude Code, Codex, Cursor
 

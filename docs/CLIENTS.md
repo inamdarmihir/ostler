@@ -12,9 +12,10 @@ ostler doctor --fix  # apply the safe ones: create the config directory, chmod 6
 You need Chrome or Chromium, plus one of:
 
 ```sh
-cargo install --git https://github.com/inamdarmihir/ostler ostler   # from source (Rust 1.89+); works today
-curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh     # prebuilt binary, from the first release
-claude mcp add ostler -- npx -y ostler serve                         # no install step: npx downloads it on first run (first release)
+pip install ostler-mcp                                               # Python 3.8+, no Rust (v0.2.0)
+curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh     # prebuilt binary (macOS, Linux; v0.2.0)
+claude mcp add ostler -- uvx --from ostler-mcp ostler serve          # no install step: uv runs it
+cargo install --git https://github.com/inamdarmihir/ostler ostler   # from source (Rust 1.89+)
 ```
 
 See the [README](../README.md#install) for the status of each and [RELEASING](RELEASING.md) for how they get published.
