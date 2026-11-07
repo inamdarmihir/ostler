@@ -11,12 +11,15 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 | **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
 | Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh` | nothing else; macOS and Linux |
 | Homebrew (macOS, Linux) | `brew install inamdarmihir/ostler/ostler` | Homebrew; installs the prebuilt binary |
+| Python | `pip install ostler-mcp` or `uvx --from ostler-mcp ostler serve` | Python 3.8+ (or uv); the wheel carries the binary; first release |
+| VS Code / Cursor / Windsurf | install the **Ostler** extension | the editor; first release (source in [`editors/vscode`](../editors/vscode)) |
+| Claude Desktop (Mac) | download the `.mcpb` from the release and double-click | nothing else; first release |
 | npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
 
 > **Status:** nothing is published to crates.io or npm yet, and the prebuilt binaries are created by the first tagged release (the release process is in [docs/RELEASING.md](RELEASING.md); every install path is tested against a fake release in CI). Until then use the first row. Windows is not built or tested.
 
-Then check it:
+Then run `ostler start` to connect every AI app it finds (or `ostler install --client <name>` for one), and check it:
 
 ```sh
 ostler doctor        # Chrome launches? Memory report (sealing, key, embeddings, isolation, transport); Qdrant reachable? Prints the fix when not

@@ -37,6 +37,27 @@ enum Cmd {
     /// Example: `ostler install --client claude-code`. `--list` shows every client and its config path,
     /// `--dry-run` previews, `--uninstall` removes. Flags after `--` go to `ostler serve`.
     Install(InstallArgs),
+    /// Easiest start: find the AI apps on this computer (Claude, Cursor, Codex, ...), connect Ostler to them, check Chrome.
+    ///
+    /// No config files needed. Safe to run again. `ostler install --list` shows what it would touch.
+    Start {
+        /// Cautious mode: block page requests that change things (POST etc.) unless the assistant uses the
+        /// confirmed `form_submit` tool. Stricter than the default; it can also stop some logins and button clicks.
+        #[arg(long)]
+        cautious: bool,
+    },
+    /// Sign in to a website once in a visible Chrome window; later runs with `--profile-dir` reuse the session.
+    ///
+    /// Example: `ostler login https://mail.example.com`. Sign in, then come back here and press Enter.
+    Login {
+        /// Page to open first.
+        url: String,
+        /// Where the sign-in is kept (default: ~/.ostler/profile).
+        #[arg(long)]
+        profile_dir: Option<PathBuf>,
+        #[arg(long, env = "OSTLER_CHROME")]
+        chrome_path: Option<PathBuf>,
+    },
     /// Serve the Agent2Agent (A2A) protocol so other agents can hand this one form tasks over HTTP.
     A2a(A2aArgs),
     /// Guided setup: save Qdrant URL/key and the privacy choices (sealing, local embeddings, retention), then verify.
@@ -138,6 +159,110 @@ fn install_cmd(a: InstallArgs) -> Result<()> {
     };
     let out = install::apply(client, &paths, &spec, mode, a.dry_run)?;
     install::report(client, &out, mode, a.dry_run);
+    Ok(())
+}
+
+async fn login_cmd(
+    url: String,
+    profile_dir: Option<PathBuf>,
+    chrome_path: Option<PathBuf>,
+) -> Result<()> {
+    let dir = match profile_dir {
+        Some(d) => d,
+        None => {
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .filter(|v| !v.is_empty())
+                .context("cannot find your home directory: pass --profile-dir <folder>")?;
+            PathBuf::from(home).join(".ostler").join("profile")
+        }
+    };
+    std::fs::create_dir_all(&dir)?;
+    let b = Browser::launch(
+        LaunchOptions {
+            chrome_path,
+            headless: false,
+            user_data_dir: Some(dir.clone()),
+            ..Default::default()
+        },
+        Policy::default(),
+    )
+    .await?;
+    b.page().navigate(&url).await?;
+    println!("A Chrome window is open at {url}.");
+    println!(
+        "Sign in there, then come back here and press Enter to save the session and close it."
+    );
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    b.close().await;
+    println!("\nSaved in {}", dir.display());
+    println!("To let your assistant use it, connect Ostler with that folder:");
+    println!(
+        "  ostler install --client <name> -- --profile-dir {}",
+        dir.display()
+    );
+    println!("(Only one Ostler or Chrome can use a profile at a time. Anyone with access to that folder can use your sign-in.)");
+    Ok(())
+}
+
+fn start_cmd(cautious: bool) -> Result<()> {
+    println!("Ostler gives your AI assistant a real web browser.\n");
+    match ostler_cdp::find_chrome(None) {
+        Ok(p) => println!("[ok] Chrome found: {}", p.display()),
+        Err(_) => println!(
+            "[!!] Chrome not found. Install it first: {}\n     (then run `ostler start` again)",
+            chrome_install_hint()
+        ),
+    }
+    let paths = install::Paths::from_env()?;
+    let spec = install::Spec {
+        exe: std::env::current_exe()?.display().to_string(),
+        args: if cautious {
+            vec!["serve".to_string(), "--require-confirm-submit".to_string()]
+        } else {
+            vec!["serve".to_string()]
+        },
+    };
+    let results = install::apply_detected(&paths, &spec);
+    if results.is_empty() {
+        println!("[!!] No supported AI app found on this computer.");
+        println!("     Supported: Claude (Desktop and Code), Cursor, VS Code, Windsurf, Codex.");
+        println!("     Install one, then run `ostler start` again. Others: `ostler setup json`.");
+        return Ok(());
+    }
+    let mut connected = false;
+    for (client, res) in results {
+        match res {
+            Ok(o) => {
+                connected = true;
+                let what = match o.action {
+                    install::Action::Unchanged => "already connected",
+                    _ => "connected",
+                };
+                println!("[ok] {}: {what} ({})", client.name(), o.path.display());
+                if o.wrote {
+                    println!("     next: {}", client.restart_hint());
+                }
+            }
+            Err(e) => println!("[!!] {}: skipped, nothing changed ({e:#})", client.name()),
+        }
+    }
+    if connected {
+        println!("\nTry asking your assistant:");
+        println!("  \"Open https://example.com and tell me what the page says.\"");
+        println!(
+            "  \"Research <a topic> and give me sources, checking every quote against the page.\""
+        );
+        println!("Safe practice first: run `ostler fixtures`, then ask:");
+        println!("  \"Open http://127.0.0.1:8787/dependent.html and fill in the shipping form for Ada Lovelace in Germany, Bavaria. Don't submit.\"");
+        if !cautious {
+            println!(
+                "Want extra protection against accidental submits? `ostler start --cautious`."
+            );
+        }
+        println!("Undo any time: `ostler install --client <name> --uninstall`.");
+    }
     Ok(())
 }
 
@@ -1421,6 +1546,12 @@ async fn main() -> Result<()> {
         Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(d) => doctor(d).await?,
         Cmd::Install(a) => install_cmd(a)?,
+        Cmd::Start { cautious } => start_cmd(cautious)?,
+        Cmd::Login {
+            url,
+            profile_dir,
+            chrome_path,
+        } => login_cmd(url, profile_dir, chrome_path).await?,
         Cmd::Init(a) => init(a).await?,
         Cmd::Config { cmd } => config_cmd(cmd)?,
         Cmd::Setup {

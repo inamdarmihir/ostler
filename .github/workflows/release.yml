@@ -17,6 +17,8 @@ jobs:
         run: |
           v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version $v"; exit 1; }
+          e="$(node -p "require('./editors/vscode/package.json').version")"
+          [ "$e" = "$v" ] || { echo "editors/vscode/package.json version $e does not match Cargo.toml version $v"; exit 1; }
   build:
     needs: check
     strategy:
@@ -39,6 +41,19 @@ jobs:
         run: ./target/release/ostler --version
       - name: Package
         run: scripts/package.sh "${{ matrix.target }}" target/release/ostler dist
+      - name: Package the Claude Desktop extension (macOS only; one double-click install)
+        if: contains(matrix.target, 'apple-darwin')
+        run: scripts/package-mcpb.sh "${{ matrix.target }}" target/release/ostler dist
+      - name: Build the Python wheel (pip install ostler-mcp; the wheel carries this same binary)
+        run: |
+          python3 -m venv /tmp/maturin-venv
+          /tmp/maturin-venv/bin/pip install maturin
+          /tmp/maturin-venv/bin/maturin build --release --locked -o dist
+      - name: Smoke test the wheel in a clean environment
+        run: |
+          python3 -m venv /tmp/wheel-venv
+          /tmp/wheel-venv/bin/pip install dist/*.whl
+          /tmp/wheel-venv/bin/ostler --version
       - uses: actions/upload-artifact@v7
         with:
           name: ostler-${{ matrix.target }}
@@ -57,7 +72,7 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "Ostler ${GITHUB_REF_NAME}" \
-            --notes "Install: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+            --notes "Easiest (Claude Desktop, macOS): download the \`.mcpb\` for your Mac and double-click it. Terminal: \`curl -fsSL https://inamdarmihir.github.io/ostler/install.sh | sh\` · \`cargo binstall ostler\` · \`npx -y ostler serve\`. See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
   homebrew:
     # Updates the Homebrew tap (inamdarmihir/homebrew-ostler) after the release exists.
     # Skipped, not failed, until the HOMEBREW_TAP_TOKEN secret is set (fine-grained token with
@@ -90,3 +105,51 @@ jobs:
           git diff --cached --quiet && { echo "formula unchanged"; exit 0; }
           git commit -m "ostler ${GITHUB_REF_NAME#v}"
           git push origin HEAD:main
+  pypi:
+    # Publishes the wheels to PyPI as `ostler-mcp` after the release exists.
+    # Skipped, not failed, until the PYPI_TOKEN secret is set (a project-scoped PyPI API token).
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+    steps:
+      - name: Skip if no token
+        if: env.PYPI_TOKEN == ''
+        run: echo "PYPI_TOKEN is not set; skipping the PyPI upload."
+      - uses: actions/download-artifact@v8
+        if: env.PYPI_TOKEN != ''
+        with: { path: dist, merge-multiple: true }
+      - name: Upload the wheels
+        if: env.PYPI_TOKEN != ''
+        env: { TWINE_USERNAME: __token__, TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}" }
+        run: |
+          python3 -m venv /tmp/twine-venv
+          /tmp/twine-venv/bin/pip install twine
+          /tmp/twine-venv/bin/twine upload --skip-existing dist/*.whl
+  vscode:
+    # Builds the VS Code extension, attaches it to the release, and publishes it when tokens exist.
+    # Marketplace (VSCE_PAT) and Open VSX (OVSX_PAT, for Cursor, Windsurf and forks) are each skipped, not failed, until set.
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    defaults:
+      run: { working-directory: editors/vscode }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm test
+      - name: Package
+        run: npx vsce package --no-dependencies -o "ostler-vscode-${GITHUB_REF_NAME}.vsix"
+      - name: Attach to the release
+        run: gh release upload "${GITHUB_REF_NAME}" "ostler-vscode-${GITHUB_REF_NAME}.vsix" --repo "${GITHUB_REPOSITORY}"
+      - name: Publish to the VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish --no-dependencies --packagePath "ostler-vscode-${GITHUB_REF_NAME}.vsix" -p "$VSCE_PAT"
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        run: npx ovsx publish "ostler-vscode-${GITHUB_REF_NAME}.vsix" -p "$OVSX_PAT"

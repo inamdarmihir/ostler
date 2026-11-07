@@ -48,7 +48,7 @@ impl InstallClient {
     }
 
     /// The restart hint printed after a change.
-    fn restart(self) -> &'static str {
+    pub fn restart_hint(self) -> &'static str {
         match self {
             Self::ClaudeCode => "Restart Claude Code (or run /mcp), then ask it to use ostler.",
             Self::ClaudeDesktop => "Quit and reopen Claude Desktop.",
@@ -143,6 +143,24 @@ impl Paths {
                 Os::Linux => Ok(self.home.join(".config/Code/User/mcp.json")),
                 _ => app_support("Code", "User/mcp.json"),
             },
+        }
+    }
+}
+
+impl Paths {
+    /// Whether the client looks installed here: its config file, or the folder that holds it, exists.
+    /// Used by `ostler start` so a non-technical user never has to name a client.
+    pub fn detected(&self, c: InstallClient) -> bool {
+        let Ok(path) = self.config_path(c) else {
+            return false;
+        };
+        if path.exists() {
+            return true;
+        }
+        match c {
+            // Claude Code keeps `~/.claude.json` and a `~/.claude` folder.
+            InstallClient::ClaudeCode => self.home.join(".claude").is_dir(),
+            _ => path.parent().is_some_and(Path::is_dir),
         }
     }
 }
@@ -647,6 +665,15 @@ pub fn list(paths: &Paths, spec: &Spec) {
     );
 }
 
+/// Register with every client that looks installed. Returns the clients that were changed or already set up.
+pub fn apply_detected(paths: &Paths, spec: &Spec) -> Vec<(InstallClient, Result<Outcome>)> {
+    InstallClient::ALL
+        .into_iter()
+        .filter(|c| paths.detected(*c))
+        .map(|c| (c, apply(c, paths, spec, Mode::Install, false)))
+        .collect()
+}
+
 pub fn report(c: InstallClient, o: &Outcome, mode: Mode, dry_run: bool) {
     let dry = if dry_run {
         " (dry run: nothing written)"
@@ -678,7 +705,7 @@ pub fn report(c: InstallClient, o: &Outcome, mode: Mode, dry_run: bool) {
         println!("The file did not exist, so it was created (no backup needed).");
     }
     if o.wrote {
-        println!("\n{}", c.restart());
+        println!("\n{}", c.restart_hint());
         if mode == Mode::Install {
             println!("Zero-config: memory is in-process and nothing needs Qdrant. First demo: `ostler fixtures`.");
         }
@@ -928,6 +955,27 @@ mod tests {
         std::fs::write(&f, "[mcp_servers.ostler]\ncommand = \"a\"\nargs = []\n[mcp_servers.ostler.env]\nA = \"1\"\n[mcp_servers.keep]\ncommand = \"k\"\n").unwrap();
         apply(InstallClient::Codex, &p, &spec(), Mode::Uninstall, false).unwrap();
         assert_eq!(read(&f), "[mcp_servers.keep]\ncommand = \"k\"\n");
+    }
+
+    #[test]
+    fn detection_and_apply_detected() {
+        let d = tempfile::tempdir().unwrap();
+        let p = paths(d.path(), Os::Mac);
+        assert!(InstallClient::ALL.iter().all(|c| !p.detected(*c)));
+        std::fs::create_dir_all(d.path().join(".cursor")).unwrap();
+        std::fs::create_dir_all(d.path().join("Library/Application Support/Claude")).unwrap();
+        assert!(p.detected(InstallClient::Cursor));
+        assert!(p.detected(InstallClient::ClaudeDesktop));
+        assert!(!p.detected(InstallClient::Codex));
+        let done = apply_detected(&p, &spec());
+        assert_eq!(done.len(), 2);
+        assert!(done.iter().all(|(_, r)| r.is_ok()));
+        assert!(d.path().join(".cursor/mcp.json").exists());
+        // Running again changes nothing.
+        let again = apply_detected(&p, &spec());
+        assert!(again
+            .iter()
+            .all(|(_, r)| matches!(r, Ok(o) if o.action == Action::Unchanged)));
     }
 
     #[test]

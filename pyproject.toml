@@ -1,0 +1,32 @@
+# Python distribution: `pip install ostler-mcp` / `uvx --from ostler-mcp ostler serve`.
+# The wheel carries the same Rust binary (built by maturin, bindings = "bin"); there is no Python code and no
+# runtime download. The PyPI name `ostler` belongs to an unrelated project, hence `ostler-mcp`.
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "ostler-mcp"
+description = "Open-source MCP browser for AI agents: reading, research that cites only pages it read, web tasks, forms read back. Installs the `ostler` command."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Mihir Inamdar" }]
+requires-python = ">=3.8"
+keywords = ["mcp", "mcp-server", "browser", "ai-agents", "research", "citations", "forms"]
+classifiers = [
+  "Programming Language :: Rust",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Internet :: WWW/HTTP :: Browsers",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://inamdarmihir.github.io/ostler/"
+Repository = "https://github.com/inamdarmihir/ostler"
+Issues = "https://github.com/inamdarmihir/ostler/issues"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/ostler-cli/Cargo.toml"
+strip = true

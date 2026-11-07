@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+- `ostler start`: one command that finds the AI apps on the computer (Claude Desktop and Code, Cursor, VS Code, Windsurf, Codex), connects Ostler to each (same safe edit as `ostler install`: backup, other servers kept, idempotent), checks Chrome and prints example prompts.
+- Claude Desktop extension bundle (`.mcpb`, macOS) built by the release workflow via `scripts/package-mcpb.sh`: download, double-click, done.
+- [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) for non-technical users and [docs/ACCESSIBILITY-PLAN.md](docs/ACCESSIBILITY-PLAN.md) (who is blocked today, what this change fixes, what is left).
+
+- MCP prompts: five ready-made tasks (summarize a page, research with checked sources, fill a form and review before sending, check my page, compare pages) served over `prompts/list` and `prompts/get`, so clients can show them in a menu.
+- `ostler login <url>`: sign in once in a visible Chrome window; the session is kept in `~/.ostler/profile` for `--profile-dir`.
+- Cursor and VS Code install links in the getting-started guide.
+
+- `ostler start --cautious` registers Ostler with `--require-confirm-submit`; `start` prints a practice prompt; the guide explains the tool messages in plain English; [docs/DISTRIBUTION-CHECKLIST.md](docs/DISTRIBUTION-CHECKLIST.md).
+
+- Python package `ostler-mcp` (`pip install ostler-mcp`, `uvx --from ostler-mcp ostler serve`): a maturin wheel carrying the same Rust binary, built and smoke-tested by the release and CI workflows, uploaded to PyPI when `PYPI_TOKEN` is set. The PyPI name `ostler` is taken by an unrelated project.
+- VS Code extension (`editors/vscode`, also for Cursor and Windsurf via Open VSX): registers Ostler as an MCP server, uses `ostler` on PATH or downloads and checksum-verifies the release once, commands for setup check and sign-in. Built, tested and attached to the release by the workflow; published when `VSCE_PAT` / `OVSX_PAT` are set.
+
+### Changed
+
 - **Framework docs, a research demo, and a fix for the first release.** New page [LangChain, LlamaIndex and AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html): each snippet was run against Ostler 0.2.0 over stdio (tools loaded, `read` then `cite` returned VERIFIED and NOT VERIFIED), with no model in the loop. It records the one rule that matters: keep one Ostler session open, because LangChain's default `get_tools()` and LlamaIndex's `BasicMCPClient` start a new Ostler process per call, so `cite` answers `NOT READ`; AutoGen needs `mcp<2`. New `assets/demo-research.gif` (real replies and page screenshots: read, a VERIFIED and a NOT VERIFIED cite, an evidence report with a paywalled gap), now in the README and on the homepage beside the existing browse-and-forms GIF. The release workflow built the Intel macOS binary on `macos-13`, which GitHub has retired; it now uses `macos-15-intel`, so a tag will not wait for a runner that no longer exists. Adds `glama.json` for claiming the Glama listing. `docs/RELEASING.md` lists all eleven publishable crates, not eight.
 
 - **Website and README describe what Ostler is now, and are easier to find.** One definition ("an open-source MCP browser for AI coding agents that checks its own work: research that cites only pages it read, forms filled in one call with every value read back") is used by the landing page, README, docs, `llms.txt`, npm and crates.io metadata. The landing page gains a research section with real `cite`/`evidence` output, a Firecrawl row and a research column in the comparison, research limits, and FAQ entries (what Ostler is, adding it to Claude Code, research with citations, Firecrawl). The site's tools reference was stale (21 tools, `all` as default); it now lists all 30 tools, the five profiles and the research tools. The docs generator now writes `sitemap.xml`, `llms.txt` and `llms-full.txt` (llmstxt.org) and schema.org JSON-LD (`TechArticle`, `BreadcrumbList`; the landing page has `SoftwareApplication`, `SoftwareSourceCode` and `FAQPage`). The Pages deploy smoke-tests these files and pings IndexNow. Also `CITATION.cff` and a `server.json` for the official MCP registry (to publish once npm is live; see `docs/RELEASING.md`).
