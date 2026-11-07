@@ -1,29 +1,29 @@
 # Install
 
-Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You need **Chrome or Chromium** installed. Pick one way to get the binary.
+Ostler is a single Rust binary, `ostler`, that launches and drives Chrome. You need **Chrome or Chromium** installed. Pick one way to get the binary. v0.2.0 is released; the table says what is live today.
 
 | how | command | needs |
 |---|---|---|
-| **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
-| Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh`, then `ostler start` | nothing else; macOS and Linux |
-| **Python** ([PyPI: ostler-mcp](https://pypi.org/project/ostler-mcp/)) | `pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve` | Python 3.8+ or uv; the wheel carries the binary |
-| **VS Code, Cursor, Windsurf** ([Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler), [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler)) | install the **Ostler** extension | the editor; no terminal |
-| Claude Desktop (Mac) | download the `.mcpb` from the [release](https://github.com/inamdarmihir/ostler/releases/latest) and double-click it | nothing else |
-| Homebrew ([tap](https://github.com/inamdarmihir/homebrew-ostler)) | `brew install inamdarmihir/ostler/ostler` | Homebrew |
-| npm / `npx` ([npm: ostler](https://www.npmjs.com/package/ostler)) | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
-| crates.io ([crates.io: ostler](https://crates.io/crates/ostler)) | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |
+| **Python** ([PyPI: ostler-mcp](https://pypi.org/project/ostler-mcp/)), **live** | `pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve` | Python 3.8+ or uv; the wheel carries the binary |
+| Prebuilt binary, **live** | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh`, then `ostler start` | nothing else; macOS and Linux |
+| Claude Desktop (Mac), **live** | download the `.mcpb` from the [release](https://github.com/inamdarmihir/ostler/releases/latest) and double-click it | nothing else |
+| **VS Code, Cursor, Windsurf**, **live on Open VSX** ([Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler)) | install the **Ostler** extension. The VS Code Marketplace listing is not published yet. | the editor; no terminal |
+| **From source**, works anywhere | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
+| Docker, next release (v0.2.1) | `docker run -i --rm ghcr.io/inamdarmihir/ostler` | Docker; bundles Chromium, runs as a non-root user |
+| Windows (x86_64), next release (v0.2.1), experimental | download `ostler-v<version>-x86_64-pc-windows-msvc.tar.gz` from the release, or `pip install ostler-mcp` | Chrome or Edge installed |
+| Homebrew, not working yet | `brew install inamdarmihir/ostler/ostler` | the tap is not being updated yet |
+| npm / `npx`, not published yet | `npx -y ostler doctor` | Node 18+ |
+| crates.io, not published yet | `cargo install ostler` or `cargo binstall ostler` | Rust |
 
 > [!NOTE]
-> **Availability:** everything except the first row comes from the tagged release, which publishes the binaries, the Python wheels and the editor extensions ([RELEASING.md](repo:docs/RELEASING.md); every install path is tested against a fake release in CI). If a listing above shows "not found", that channel has not been published yet and the first row still works. Not a developer? Start with [Getting started, no programming needed](get-started.html). Windows is not built or tested.
+> **Availability (v0.2.0):** the rows marked live work today. The others are not published yet, so their pages show "not found"; PyPI and the install script always work. Release process: [RELEASING.md](repo:docs/RELEASING.md). Not a developer? Start with [Getting started, no programming needed](get-started.html).
 
 ## Where Ostler is listed
 
 - Source and releases: [GitHub](https://github.com/inamdarmihir/ostler) and [releases](https://github.com/inamdarmihir/ostler/releases)
 - Python: [PyPI, `ostler-mcp`](https://pypi.org/project/ostler-mcp/) (the name `ostler` on PyPI is a different project)
-- Editors: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler) and [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) for Cursor, Windsurf and other forks
-- JavaScript: [npm, `ostler`](https://www.npmjs.com/package/ostler)
-- Rust: [crates.io, `ostler`](https://crates.io/crates/ostler)
-- macOS: [Homebrew tap](https://github.com/inamdarmihir/homebrew-ostler)
+- Editors: [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) for Cursor, Windsurf and other forks (the VS Code Marketplace listing is not published yet)
+- Not published yet: npm (`ostler`), crates.io (`ostler`), the Homebrew tap and the Docker image (`ghcr.io/inamdarmihir/ostler`, next release)
 
 ## Verify
 
@@ -61,7 +61,8 @@ Only loopback is accepted. Ostler never opens the port for you, works in its own
 
 - **macOS:** tested locally.
 - **Linux:** tested in CI. In containers or as root you may need `OSTLER_NO_SANDBOX=1`, plus a larger `/dev/shm` (`--shm-size=1g`) for Chrome. See [Troubleshooting](troubleshooting.html).
-- **Windows:** not built or tested.
+- **Windows (x86_64):** builds and runs its test suite in CI; ships from the next release (v0.2.1). Experimental, with no day-to-day use yet.
+- **Docker (linux/amd64, linux/arm64):** ships from the next release (v0.2.1).
 - **Browser:** Chrome or Chromium only. If Chrome is in a non-standard place, set `OSTLER_CHROME=/path/to/chrome` or pass `--chrome-path`.
 
 ## Update

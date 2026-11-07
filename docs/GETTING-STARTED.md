@@ -6,7 +6,7 @@ Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on yo
 
 ## What you need
 
-- A Mac or Linux computer (Windows is experimental; Docker also works, see [INSTALL](INSTALL.md)).
+- A Mac or Linux computer (Windows and Docker arrive in the next release, experimental; see [INSTALL](INSTALL.md)).
 - **Google Chrome** ([download](https://www.google.com/chrome/)).
 - An AI app that supports MCP: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf or Codex.
 

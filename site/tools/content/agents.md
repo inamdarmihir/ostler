@@ -64,7 +64,7 @@ Prints JSON for `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
 
 ## VS Code
 
-Easiest: install the **Ostler** extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=inamdarmihir.ostler) (or [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) for Cursor, Windsurf and other forks). It registers Ostler as an MCP server, uses an `ostler` on your PATH or downloads and checks the release once, and adds *Ostler: Check setup* and *Ostler: Sign in to a website*. Source: [editors/vscode](https://github.com/inamdarmihir/ostler/tree/main/editors/vscode).
+Easiest: install the **Ostler** extension from [Open VSX](https://open-vsx.org/extension/inamdarmihir/ostler) (Cursor, Windsurf and other forks; the VS Code Marketplace listing is not published yet). It registers Ostler as an MCP server, uses an `ostler` on your PATH or downloads and checks the release once, and adds *Ostler: Check setup* and *Ostler: Sign in to a website*. Source: [editors/vscode](https://github.com/inamdarmihir/ostler/tree/main/editors/vscode).
 
 Or by hand:
 

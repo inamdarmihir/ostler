@@ -7,8 +7,8 @@ Gives VS Code's AI chat (and Cursor, Windsurf and other VS Code forks) a real we
 ## Needs
 
 - Google Chrome
-- macOS or Linux (Windows is not supported yet)
-- A released version of Ostler. Until the first release is published, install the `ostler` command yourself (`cargo install --git https://github.com/inamdarmihir/ostler ostler`, or `pip install ostler-mcp`); the extension uses an `ostler` on your PATH before it downloads anything.
+- macOS or Linux (Windows support is experimental and arrives with Ostler v0.2.1)
+- Ostler v0.2.0 or newer. The extension uses an `ostler` on your PATH if there is one (`pip install ostler-mcp`), and otherwise downloads the matching release once.
 
 ## Commands
 

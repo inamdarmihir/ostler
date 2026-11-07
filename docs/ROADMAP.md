@@ -28,7 +28,7 @@ browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does
 6. **Streamable HTTP transport** for remote agents (stdio only today, A2A covers one remote case).
 7. **Record and replay** of a successful flow as a playbook the agent can re-run in one call.
 8. **Windows** build and CI. Done (experimental): built and tested in CI; needs real-world use before it is called supported.
-9. **Published binaries and packages**: nothing is on crates.io or npm until the first tagged release.
+9. **Published binaries and packages**: v0.2.0 is on GitHub releases and PyPI (and Open VSX). Still to publish: crates.io, npm, the VS Code Marketplace, Homebrew, and the Docker image on GHCR.
 
 ## Next sprint (in order)
 

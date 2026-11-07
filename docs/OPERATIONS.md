@@ -37,13 +37,13 @@ ostler doctor --fix      # applies only the safe fixes (creates the config dir, 
 
 1. Read the CHANGELOG entries between your version and the target, especially "Breaking" ([COMPATIBILITY.md](COMPATIBILITY.md)).
 2. Back up the key: `ostler memory key export --yes-print > memory.key.backup && chmod 600 memory.key.backup`. Back up the config file (path: `ostler config path`).
-3. Install the new binary (`npx -y ostler`, release archive from [RELEASING.md](RELEASING.md), or `cargo install`). The launcher verifies checksums and refuses a mismatch.
+3. Install the new binary (`pip install -U ostler-mcp`, the install script, a release archive from [RELEASING.md](RELEASING.md), or `cargo install`). The launcher verifies checksums and refuses a mismatch.
 4. Run `ostler doctor`. If it asks for `ostler memory seal`, run it; start-up refuses until stored data is current.
 5. Reconnect the MCP client; clients keep the old server process until restarted (Claude Code: `/mcp`).
 
 ## 5. Rollback
 
-1. Reinstall the previous version of the binary (pin the version in `npx -y ostler@X.Y.Z` or reinstall the previous archive).
+1. Reinstall the previous version of the binary (`pip install ostler-mcp==X.Y.Z` or reinstall the previous archive).
 2. Check the CHANGELOG for a data-format change between the two versions. Sealed `v2` memory is not readable by builds that only know `v1`, and a migration (`memory seal`) is one-way for the points it upgrades. If a migration ran, either stay on the new version or restore Qdrant from a snapshot taken before the upgrade (take one in step 2 of the upgrade if memory matters; Qdrant snapshots are your operator's responsibility).
 3. `ostler doctor`, then reconnect the client.
 
