@@ -24,13 +24,15 @@ Analysis of what stops a non-developer from using Ostler, what this change fixes
 6. Cursor and VS Code install links in the guide (formats not verified against the apps).
 7. `ostler start --cautious` (registers `--require-confirm-submit`), a practice prompt printed by `start`, and a plain-English table of the tool messages in the guide.
 8. [DISTRIBUTION-CHECKLIST.md](DISTRIBUTION-CHECKLIST.md): where to list Ostler, with honest status.
+9. **Python distribution:** `pyproject.toml` (maturin, `bindings = "bin"`) builds `ostler-mcp` wheels carrying the binary. Built here, installed in a clean virtualenv, and run through `uvx --from <wheel> ostler serve` including an MCP `initialize` and `prompts/list`. Release CI builds per-platform wheels and uploads them to PyPI when `PYPI_TOKEN` exists. Not a rewrite: there is no Python code. The PyPI name `ostler` is taken (an unrelated project), so the project name is `ostler-mcp`.
+10. **VS Code extension** (`editors/vscode`): registers an MCP server definition provider, resolves the binary (setting, PATH, then a checksum-verified one-time download), adds *Check setup* and *Sign in* commands. The download, checksum and settings logic has Node tests against a local fake release; the extension was packaged into a `.vsix`. It has **not** been run inside VS Code (no editor here), so the MCP provider API use needs a check in a real VS Code 1.101+ before publishing.
 
 Deliberately not done: confirmation on by default (the flag blocks every non-GET request, which breaks logins), a visible-browser default (changes behaviour for existing agents), and an update notice (needs a network call).
 
 ## Still open, in suggested order
 
-1. **Cut the first release.** Everything above depends on it: nothing downloadable exists until a `v*` tag is pushed ([RELEASING](RELEASING.md)). Highest value, no code.
-2. **Windows build and `.mcpb`.** Claude Desktop is mostly used on Windows and macOS. Needs a Windows CI job, Chrome discovery and `ostler install` path checks on a real Windows machine; the install code already has Windows paths but nothing has run there.
+1. **Cut the first release, and set the `PYPI_TOKEN`, `VSCE_PAT` and `OVSX_PAT` secrets.** Everything above depends on it: nothing downloadable exists until a `v*` tag is pushed ([RELEASING](RELEASING.md)). Highest value, no code.
+2. **Windows build, `.mcpb` and wheel.** Claude Desktop is mostly used on Windows and macOS. Needs a Windows CI job, Chrome discovery and `ostler install` path checks on a real Windows machine; the install code already has Windows paths but nothing has run there.
 3. **Sign and notarize the macOS binary.** An unsigned download triggers Gatekeeper warnings that will stop non-technical users. Needs an Apple Developer account.
 4. **Submit to the Claude Desktop extension directory** and the MCP registry so it can be found without the GitHub releases page.
 5. **Bundle or auto-fetch Chrome for Testing** so "install Chrome first" disappears (trade-off: download size, licensing review).

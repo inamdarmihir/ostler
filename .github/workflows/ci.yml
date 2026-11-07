@@ -87,6 +87,35 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo publish --workspace --dry-run
+  # The VS Code extension: tests (download logic against a local fake release) and a packaging check.
+  vscode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run: { working-directory: editors/vscode }
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm test
+      - run: node --check extension.js
+      - run: npx vsce package --no-dependencies -o /tmp/ostler.vsix
+  # The Python wheel (pip install ostler-mcp) must build and run. Publishes nothing.
+  wheel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          python3 -m venv /tmp/mt && /tmp/mt/bin/pip install maturin
+          /tmp/mt/bin/maturin build --locked -o /tmp/wheels
+          python3 -m venv /tmp/wv && /tmp/wv/bin/pip install /tmp/wheels/*.whl
+          /tmp/wv/bin/ostler --version
   # The install paths (install.sh, npx launcher) against a fake local release. Publishes nothing.
   installers:
     runs-on: ubuntu-latest

@@ -2,7 +2,7 @@
 
 Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on your computer: read pages, research a topic with sources it actually read, and fill in web forms. You do **not** need Rust, Node or any code. Back to the [README](../README.md).
 
-**Status:** early (v0.2). No release is published yet, so the download steps below start working with the first release; until then a developer can build it for you ([INSTALL](INSTALL.md)). Windows is not supported yet.
+**Status:** early (v0.2). No release is published yet, so the download steps below (paths A, C and D, and the install script in B) start working with the first release; until then a developer can build it for you ([INSTALL](INSTALL.md)). Windows is not supported yet.
 
 ## What you need
 
@@ -29,7 +29,20 @@ ostler start
 
 Then **quit and reopen your AI app**.
 
-## Path C: one-click links for Cursor and VS Code
+## Path C: VS Code, Cursor or Windsurf extension
+
+Search the extensions panel for **Ostler** (Marketplace for VS Code, Open VSX for Cursor and Windsurf), install it, and Ostler appears as an MCP server. No terminal. It uses an `ostler` already on your PATH, or downloads the matching release once and checks its checksum. Commands: *Ostler: Check setup*, *Ostler: Sign in to a website*. Source: [editors/vscode](../editors/vscode).
+
+## Path D: Python (`pip` or `uvx`)
+
+```sh
+pip install ostler-mcp        # adds the `ostler` command (use pipx or `uv tool install` to keep it isolated)
+ostler start
+```
+
+Or with no install step, in any MCP client's config: command `uvx`, arguments `["--from", "ostler-mcp", "ostler", "serve"]`. The package is the same Rust program inside a Python wheel (no Python code, nothing downloaded at run time). The name is `ostler-mcp` because `ostler` on PyPI is a different project.
+
+## Path E: one-click links for Cursor and VS Code
 
 After installing the `ostler` command (Path B, first line), these links add it to the app:
 

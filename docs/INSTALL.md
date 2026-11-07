@@ -11,6 +11,8 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 | **From source** (works today) | `cargo install --git https://github.com/inamdarmihir/ostler ostler` | Rust 1.89+, a minute or two to compile |
 | Prebuilt binary | `curl -fsSL https://inamdarmihir.github.io/ostler/install.sh \| sh` | nothing else; macOS and Linux |
 | Homebrew (macOS, Linux) | `brew install inamdarmihir/ostler/ostler` | Homebrew; installs the prebuilt binary |
+| Python | `pip install ostler-mcp` or `uvx --from ostler-mcp ostler serve` | Python 3.8+ (or uv); the wheel carries the binary; first release |
+| VS Code / Cursor / Windsurf | install the **Ostler** extension | the editor; first release (source in [`editors/vscode`](../editors/vscode)) |
 | Claude Desktop (Mac) | download the `.mcpb` from the release and double-click | nothing else; first release |
 | npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run |
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt) |

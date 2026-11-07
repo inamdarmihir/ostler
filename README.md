@@ -33,7 +33,7 @@
 
 ## Install
 
-**Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds. (Downloads begin with the first release; see below.) The steps that follow are for developers.
+**Not a developer?** Follow [Getting started, no programming needed](docs/GETTING-STARTED.md): a double-click install for Claude Desktop (Mac) or `ostler start`, which connects every AI app it finds, or a VS Code extension, or `pip install ostler-mcp` / `uvx --from ostler-mcp ostler serve`. (Downloads begin with the first release; see below.) The steps that follow are for developers.
 
 Needs **Chrome or Chromium** and Rust 1.89+.
 
