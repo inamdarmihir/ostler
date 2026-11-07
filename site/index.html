@@ -367,7 +367,7 @@ ostler setup vscode</code></pre></div>
 <h2>What Ostler is not</h2>
 <div class="grid g2" style="margin-top:20px">
 <div class="card"><h3>Not proven on the open web</h3><p>v0.2 is early. It is evaluated on local fixtures built to reproduce known form-filling failures. A real-site success rate has not been published, so read "reliable" as "reliable on the failure modes in our fixtures".</p></div>
-<div class="card"><h3>Not a crawler or a scraping API</h3><p>It reads tens of pages in an agent's session, in one Chrome, one page at a time, and obeys robots.txt. For millions of pages, hosted scale or anti-bot handling, use a crawler. It is not a general-purpose test framework either. It runs Chrome only; Windows is not built or tested.</p></div>
+<div class="card"><h3>Not a crawler or a scraping API</h3><p>It reads tens of pages in an agent's session, in one Chrome, one page at a time, and obeys robots.txt. For millions of pages, hosted scale or anti-bot handling, use a crawler. It is not a general-purpose test framework either. It runs Chrome only; Windows and Docker are new and experimental.</p></div>
 <div class="card"><h3>Not a CAPTCHA, 2FA or anti-bot tool</h3><p>It never solves CAPTCHAs (it hands them to you) and does not handle 2FA. Cross-origin iframes and closed shadow roots are not supported.</p></div>
 <div class="card"><h3>Not a benchmark winner on real tasks</h3><p>Our numbers are <b>scripted fixtures, model-free</b>: call counts and bytes, not whether a model succeeds. No head-to-head on identical real-site tasks has been run. It is also not an externally audited security product.</p></div>
 </div>
@@ -377,7 +377,7 @@ ostler setup vscode</code></pre></div>
 <p class="kicker">Limits and roadmap</p>
 <h2>What it does not do yet</h2>
 <div class="grid g2" style="margin-top:20px">
-<div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. Research reads pages one at a time, has no PDF text layer, does not keep sources across sessions, and its search providers are tested against mock servers only. It runs Chrome only, and is tested on macOS locally and Linux in CI. Windows is not built or tested.</p></div>
+<div class="card"><h3>Today it does not</h3><p>Handle cross-origin iframes, closed shadow roots, or 2FA, and it never solves CAPTCHAs (it hands them to you). <code>look</code> covers only the visible viewport. Research reads pages one at a time, has no PDF text layer, does not keep sources across sessions, and its search providers are tested against mock servers only. It runs Chrome only, and is tested on macOS locally and Linux in CI. Windows builds and runs its tests in CI but is experimental; a Docker image is also published.</p></div>
 <div class="card"><h3>Next</h3><p>Head-to-head research benchmark with a real model (answer accuracy, citation precision, tokens per answer) &middot; real-site form evaluation with published failures &middot; sources remembered in Qdrant across sessions &middot; PDF text &middot; live Qdrant Cloud Inference validation &middot; cross-origin frames &middot; an optional Lightpanda backend if it earns its keep.</p><a class="more" href="docs/review.html">The design review, with its findings &rarr;</a></div>
 </div>
 </div></section>

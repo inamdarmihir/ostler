@@ -42,7 +42,7 @@ cargo install --git https://github.com/inamdarmihir/ostler ostler
 ostler doctor     # Chrome launches? Qdrant reachable (optional)? Prints the fix when not
 ```
 
-**Releases are not published yet.** No release has been tagged, so the prebuilt-binary installer, `npx` and crates.io paths described in [docs/INSTALL.md](docs/INSTALL.md) will not work until the first release ([process](docs/RELEASING.md)). Build from source for now. macOS and Linux only; Windows is not built or tested.
+**Releases are not published yet.** No release has been tagged, so the prebuilt-binary installer, `npx` and crates.io paths described in [docs/INSTALL.md](docs/INSTALL.md) will not work until the first release ([process](docs/RELEASING.md)). Build from source for now. macOS and Linux are tested; Windows (x86_64) and a Docker image are new and experimental, see [INSTALL](docs/INSTALL.md).
 
 ## Works with Claude Code, Codex, Cursor
 
@@ -156,7 +156,7 @@ Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which
 ## What Ostler is not
 
 - **Not a CAPTCHA solver or anti-bot tool.** CAPTCHAs and verification walls are reported with a `CHALLENGE:` line, never solved or bypassed; there is no stealth, user-agent spoofing or proxying. With `--headed`, `wait_for_human` lets a person clear the wall. See [docs/WEB-SEARCH.md](docs/WEB-SEARCH.md).
-- **Not a Windows build.** macOS and Linux only; Windows is not built or tested.
+- **Windows is experimental.** It builds and runs its test suite in CI, but nobody has used it day to day yet. macOS and Linux are the tested platforms. A Docker image (Linux, amd64 and arm64) is also published with each release.
 - **Not a browser extension.** It launches its own Chrome and talks to it over a pipe.
 - **Not hosted browsers.** It drives one local Chrome on your machine; nothing runs in a cloud.
 - **Not a crawler or scraping API.** It reads tens of pages in a session, one at a time, in one Chrome, and obeys robots.txt.

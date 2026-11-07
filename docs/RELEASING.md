@@ -61,4 +61,4 @@ Names checked free on 2026-11-06: crates.io `ostler`, `ostler-a2a`, `ostler-brow
 
 ## Platforms
 
-Prebuilt binaries: macOS (Apple silicon, Intel) and Linux (x86_64, aarch64, built on an older glibc). **Windows is not built or tested.** Chrome detection has Windows paths, but nothing has run there; use `cargo install ostler` at your own risk, and treat a Windows report as a new feature.
+Prebuilt binaries: macOS (Apple silicon, Intel) and Linux (x86_64, aarch64, built on an older glibc). **Windows (x86_64) is built and tested in CI but experimental**, and a multi-arch Docker image is pushed to GHCR; `cargo install ostler` also works on Windows at your own risk, and treat a Windows report as a new feature.
