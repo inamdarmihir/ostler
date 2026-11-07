@@ -25,11 +25,11 @@ Source: https://inamdarmihir.github.io/ostler/docs/get-started.html
 
 Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on your computer: read pages, research a topic with sources it actually read, and fill in web forms. You do **not** need Rust, Node or any code. Back to the [README](https://github.com/inamdarmihir/ostler/blob/main/README.md).
 
-**Status:** early (v0.2). No release is published yet, so the download steps below (paths A, C and D, and the install script in B) start working with the first release; until then a developer can build it for you ([INSTALL](https://github.com/inamdarmihir/ostler/blob/main/docs/INSTALL.md)). Windows is not supported yet.
+**Status:** early (v0.2). v0.2.0 is released, so the download steps below work (macOS and Linux; Windows and Docker arrive in the next release, experimental). The VS Code Marketplace, crates.io and npm are not published yet ([INSTALL](https://github.com/inamdarmihir/ostler/blob/main/docs/INSTALL.md)).
 
 ## What you need
 
-- A Mac or Linux computer (Windows: not yet).
+- A Mac or Linux computer (Windows is experimental; Docker also works, see [INSTALL](https://github.com/inamdarmihir/ostler/blob/main/docs/INSTALL.md)).
 - **Google Chrome** ([download](https://www.google.com/chrome/)).
 - An AI app that supports MCP: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf or Codex.
 
@@ -54,7 +54,7 @@ Then **quit and reopen your AI app**.
 
 ## Path C: VS Code, Cursor or Windsurf extension
 
-Search the extensions panel for **Ostler** (Marketplace for VS Code, Open VSX for Cursor and Windsurf), install it, and Ostler appears as an MCP server. No terminal. It uses an `ostler` already on your PATH, or downloads the matching release once and checks its checksum. Commands: *Ostler: Check setup*, *Ostler: Sign in to a website*. Source: [editors/vscode](https://github.com/inamdarmihir/ostler/tree/main/editors/vscode).
+Search the extensions panel for **Ostler** (Open VSX for Cursor and Windsurf; the VS Code Marketplace listing is not published yet), install it, and Ostler appears as an MCP server. No terminal. It uses an `ostler` already on your PATH, or downloads the matching release once and checks its checksum. Commands: *Ostler: Check setup*, *Ostler: Sign in to a website*. Source: [editors/vscode](https://github.com/inamdarmihir/ostler/tree/main/editors/vscode).
 
 ## Path D: Python (`pip` or `uvx`)
 
@@ -1977,7 +1977,7 @@ Each has an ADR in [`docs/adr/`](https://github.com/inamdarmihir/ostler/tree/mai
 - No CAPTCHA solving, 2FA, anti-bot evasion or login-state management beyond `--profile-dir`. Verification walls are *detected and handed to a person* (`CHALLENGE:` notice, `wait_for_human`, A2A `input-required`); this is deliberate, see [ADR-0009](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0009-challenges-are-handed-off.md).
 - Calendar pickers on read-only inputs are handled heuristically (month header, prev/next, day cells); dropdown-only and year-only pickers are not.
 - MCP runs over stdio only; `ostler a2a` is the HTTP surface.
-- Linux and Windows are untested locally; CI covers Linux.
+- Linux and Windows are untested locally; CI covers Linux and Windows (Windows is experimental).
 
 ## Related
 
