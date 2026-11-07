@@ -124,5 +124,5 @@ See [Memory and privacy](memory.html) for exactly what is stored and what is hid
 ## Next steps
 
 - [Use with your agent](agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
-- [Tools reference](tools.html): all 30 tools and their parameters.
+- [Tools reference](tools.html): all 32 tools and their parameters.
 - [Security model](security.html): the allowlist, uploads, dialogs, CAPTCHAs.

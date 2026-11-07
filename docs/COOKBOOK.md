@@ -2,7 +2,7 @@
 
 Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](../README.md); tool details are in [TOOLS.md](TOOLS.md).
 
-Ostler is a general browser first: the 15 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
+Ostler is a general browser first: the 16 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
 
 Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.
 
@@ -117,7 +117,7 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 
 ## 12. Keep a run cheap
 
-- `--tools auto` (default) shows 15 core tools (about 4.9 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
+- `--tools auto` (default) shows 16 core tools (about 5.3 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
 - `read` with a `query` returns only the best-matching passages, so a long page costs a few hundred tokens instead of the whole page.
 - Use `snapshot` with `delta` and heading refs rather than re-reading whole pages.
 - Call `stats` to see calls, time and estimated tokens for the session.

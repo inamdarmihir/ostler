@@ -67,7 +67,7 @@ Ostler is a general MCP browser (navigate, read, click, type, tabs, screenshots,
 
 ### Browse and test web apps
 
-Read a page, compare pages in tabs, check a web app after a change, get past a cookie wall or modal, log in once and reuse the session (`--profile-dir`), and hand a CAPTCHA to a person (`wait_for_human`): these need only the 15 core tools, no form or research tools. `look` returns a screenshot with numbered click targets. Page text arrives fenced as untrusted, and a domain allowlist is enforced inside the browser. Recipes 1 to 6 in the [cookbook](docs/COOKBOOK.md).
+Read a page, compare pages in tabs, check a web app after a change, get past a cookie wall or modal, log in once and reuse the session (`--profile-dir`), and hand a CAPTCHA to a person (`wait_for_human`): these need only the 16 core tools, no form or research tools. `look` returns a screenshot with numbered click targets. Page text arrives fenced as untrusted, and a domain allowlist is enforced inside the browser. Recipes 1 to 6 in the [cookbook](docs/COOKBOOK.md).
 
 ### Research with checked citations
 

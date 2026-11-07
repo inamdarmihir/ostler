@@ -10,7 +10,7 @@ Playwright MCP and Ostler are both MCP servers that give an agent a browser, and
 | Form filling | `form_fill` takes a label-to-value map, then reads every value back from the live page and reports mismatches. `form_submit` is a separate step with its own outcome. | `browser_fill_form` fills several fields in one call from a page snapshot. |
 | Research | `read`, `cite` and `evidence` check quotations against pages read in the session and report pages that could not be read. See [research with checked citations](research-with-citations.html). | Reads pages as accessibility snapshots. This project did not evaluate it for quotation checking, so no claim is made either way. |
 | Memory | Optional, in your own Qdrant: saved facts and per-site playbooks. See [memory and privacy](memory.html). | Browser profile only. |
-| Tool list size | 21 tools in the tested version, about 1,513 estimated tokens of definitions. Today's full list is 30 tools in five profiles; the default `auto` profile starts with 15. | 25 tools, about 5,265 estimated tokens of definitions. |
+| Tool list size | 21 tools in the tested version, about 1,513 estimated tokens of definitions. Today's full list is 32 tools in five profiles; the default `auto` profile starts with 15. | 25 tools, about 5,265 estimated tokens of definitions. |
 | Platforms | Chrome or Chromium; tested on macOS locally and Linux in CI. Windows and Docker are experimental and arrive in v0.2.1. | See Playwright MCP's own documentation. |
 
 The Ostler column is from this project's own documentation. For Playwright MCP, the only facts used here are the ones this project measured on the version below; check its documentation for anything else.

@@ -203,7 +203,8 @@ async fn with_deadline<T>(
     limit: Option<Duration>,
     fut: impl std::future::Future<Output = Result<T, ToolError>>,
 ) -> Result<T, ToolError> {
-    let Some(limit) = limit.filter(|_| !matches!(name, "wait_for" | "wait_for_human")) else {
+    let Some(limit) = limit.filter(|_| !matches!(name, "wait_for" | "wait_for_human" | "run"))
+    else {
         return fut.await;
     };
     match tokio::time::timeout(limit, fut).await {
@@ -449,6 +450,12 @@ fn quarantine(s: &str) -> String {
 /// page-derived detail beneath it (labels, option text, validation messages). Our own hints at the very
 /// end ("Ready: form_submit.") stay outside the wrapper so the agent still treats them as guidance; page
 /// text cannot forge one because every page string is quoted onto a single line before it gets here.
+/// `{{fact:KEY}}` (whole value) names a saved fact.
+fn fact_ref(s: &str) -> Option<&str> {
+    let k = s.trim().strip_prefix("{{fact:")?.strip_suffix("}}")?.trim();
+    (!k.is_empty()).then_some(k)
+}
+
 fn wrap_detail(s: &str) -> String {
     let is_hint = |l: &str| {
         l.trim().is_empty()
@@ -680,6 +687,14 @@ impl App {
             }
         };
         let mut out = out;
+        // `where` / `select` trim list results here, so rows the agent does not need never reach it.
+        if !out.is_error && matches!(name, "extract" | "links") {
+            if let Some(f) = crate::filter::Filter::from_args(args) {
+                if let Some(Content::Text(t)) = out.content.first_mut() {
+                    *t = crate::filter::apply(t, &f);
+                }
+            }
+        }
         self.reveal_on_forms(name, &mut out);
         self.reveal_on_research(name, &mut out);
         // A verification wall changes what the agent should do next, so say so right where it looks.
@@ -1177,9 +1192,10 @@ impl App {
                     .get("value")
                     .cloned()
                     .ok_or("missing required argument \"value\"")?;
+                let mut values = BTreeMap::new();
+                values.insert(r, value);
+                self.resolve_fact_refs(&mut values).await?;
                 br!(self, b, {
-                    let mut values = BTreeMap::new();
-                    values.insert(r, value);
                     let rep = b
                         .page()
                         .fill_form(
@@ -1260,6 +1276,11 @@ impl App {
                 }))
             }
             "stats" => Ok(ToolOutput::text(self.stats().await)),
+            "run" => self.run_tool(a).await,
+            "search_tools" => Ok(ToolOutput::text(tools::search(
+                arg_str(a, "query").unwrap_or(""),
+                arg_str(a, "detail").unwrap_or("brief"),
+            ))),
             "read" => self.read_tool(a).await,
             "cite" => self.cite_tool(a),
             "evidence" => Ok(self.evidence_tool()),
@@ -1280,13 +1301,118 @@ impl App {
         ))))
     }
 
+    /// `run`: execute a sandboxed script whose only way out is `tool(name, args)`. Every call goes
+    /// back through [`App::call`], so profiles, the allowlist, the submit gate and deadlines apply.
+    async fn run_tool(&self, a: &Value) -> Result<ToolOutput, ToolError> {
+        let script = need_str(a, "script")?.to_string();
+        let max_chars = a
+            .get("max_chars")
+            .and_then(Value::as_u64)
+            .unwrap_or(8000)
+            .clamp(200, 40_000) as usize;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<crate::script::Req>();
+        let worker = tokio::task::spawn_blocking(move || {
+            crate::script::run(&script, tx, crate::script::Limits::default())
+        });
+        while let Some(req) = rx.recv().await {
+            let reply = if req.name == "run" {
+                Err("run cannot call run".to_string())
+            } else {
+                let out = Box::pin(self.call(&req.name, &req.args)).await;
+                let text: String = out
+                    .content
+                    .iter()
+                    .filter_map(|c| match c {
+                        Content::Text(t) => Some(t.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if out.is_error {
+                    Err(text)
+                } else {
+                    Ok(text)
+                }
+            };
+            let _ = req.reply.send(reply);
+        }
+        let outcome = worker
+            .await
+            .map_err(|e| ToolError::from(format!("the script thread failed: {e}")))?;
+        match outcome {
+            Ok(o) => {
+                let mut body = String::new();
+                if !o.printed.is_empty() {
+                    body.push_str(&o.printed);
+                }
+                if !o.value.is_empty() {
+                    body.push_str(&o.value);
+                }
+                if body.trim().is_empty() {
+                    body.push_str("(the script returned nothing)");
+                }
+                let cut = body.chars().count() > max_chars;
+                let body: String = body.chars().take(max_chars).collect();
+                Ok(ToolOutput::text(format!(
+                    "Script finished: {} tool call(s){}.\n{}",
+                    o.calls,
+                    if cut {
+                        ", output cut (raise max_chars or return less)"
+                    } else {
+                        ""
+                    },
+                    wrap(&body)
+                )))
+            }
+            Err(e) => Err(ToolError::from(format!("script failed: {e}"))),
+        }
+    }
+
+    /// Replace `{{fact:KEY}}` values with the saved fact of that key. The agent names *which* fact
+    /// goes in a field; the value is read here and typed into the page, so the agent never has to see,
+    /// copy or re-type it (and cannot get it wrong). An unknown key fails the whole call.
+    async fn resolve_fact_refs(
+        &self,
+        values: &mut BTreeMap<String, Value>,
+    ) -> Result<(), ToolError> {
+        let wanted: Vec<(String, String)> = values
+            .iter()
+            .filter_map(|(k, v)| {
+                v.as_str()
+                    .and_then(fact_ref)
+                    .map(|f| (k.clone(), f.to_string()))
+            })
+            .collect();
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let mem = self.cfg.memory.as_ref().ok_or(NO_MEMORY)?;
+        let facts = mem.facts(500).await?;
+        for (field, key) in wanted {
+            let hit = facts.iter().find(|f| f.key.eq_ignore_ascii_case(&key));
+            match hit {
+                Some(f) => {
+                    values.insert(field, f.value.clone());
+                }
+                None => {
+                    return Err(format!(
+                        "no saved fact {key:?} for {{{{fact:{key}}}}}; save it with memory_remember or pass the value"
+                    )
+                    .into())
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Fill a form from tool-style arguments and return the structured report (shared by MCP and A2A).
     async fn fill_report(&self, a: &Value) -> Result<FillReport, ToolError> {
-        let values: BTreeMap<String, Value> = match a.get("values") {
+        let mut values: BTreeMap<String, Value> = match a.get("values") {
             Some(Value::Object(m)) => m.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             Some(_) => return Err("\"values\" must be an object of {label or ref: value}".into()),
             None => BTreeMap::new(),
         };
+        self.resolve_fact_refs(&mut values).await?;
         let auto = match arg_str(a, "auto") {
             Some("all") => AutoMode::All,
             Some("required") => AutoMode::Required,
@@ -1784,6 +1910,20 @@ impl App {
 }
 
 const NO_MEMORY: &str = "memory is not configured. Start the server with --memory local (an encrypted file on this machine) or --memory ephemeral (this session only), or set QDRANT_URL (and QDRANT_API_KEY) to use Qdrant.";
+
+#[cfg(test)]
+mod fact_ref_tests {
+    use super::fact_ref;
+
+    #[test]
+    fn only_a_whole_value_of_the_right_shape_is_a_reference() {
+        assert_eq!(fact_ref("{{fact:email}}"), Some("email"));
+        assert_eq!(fact_ref(" {{fact: given name }} "), Some("given name"));
+        assert_eq!(fact_ref("{{fact:}}"), None);
+        assert_eq!(fact_ref("mail {{fact:email}}"), None);
+        assert_eq!(fact_ref("plain"), None);
+    }
+}
 
 #[cfg(test)]
 mod scrub_tests {

@@ -10,7 +10,7 @@ Key facts:
 - Other ways to install (v0.2.0): the install script for macOS and Linux (https://inamdarmihir.github.io/ostler/install.sh), Claude Desktop `.mcpb` (macOS), the VS Code extension on Open VSX (https://open-vsx.org/extension/inamdarmihir/ostler), and `cargo install --git https://github.com/inamdarmihir/ostler ostler` from source. Windows (x86_64, experimental) and a Docker image (`ghcr.io/inamdarmihir/ostler`) arrive in v0.2.1. Not published yet: the VS Code Marketplace, Homebrew, npm and crates.io.
 - Requirements: Chrome or Chromium; Python 3.8+ for pip (no Rust); Rust 1.89+ only for the from-source install.
 - Evidence: local fixtures; a five-task scripted comparison with Playwright MCP and Chrome DevTools MCP; seven live public practice pages. Not yet measured on the open web.
-- Browsing: a general MCP browser in a real Chrome. 15 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.
+- Browsing: a general MCP browser in a real Chrome. 16 core tools: navigate, snapshot, read, click, type, tabs, screenshots and `look` (numbered click targets). Log in once with `--profile-dir`; CAPTCHAs are handed to a person, never solved.
 - Research: `read` returns the best passages for a query; `cite` marks a quote VERIFIED only if its words are on a page read this session; `evidence` lists citations and the pages that could not be read (paywall, bot wall, robots.txt).
 - Forms: `form_fill` fills a whole form in one call and reads every value back; 3 tool calls instead of 22 on a 20-field form (same engine, one call per field; scripted, model-free, local fixtures).
 - Memory: optional, in Qdrant or an encrypted local file; stores facts you save and per-site playbooks (structure, not values). Secret-looking values are refused; detection is heuristic. Tool output goes to your MCP client and, through it, to that client's model provider.
@@ -253,7 +253,7 @@ See [Memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html)
 ## Next steps
 
 - [Use with your agent](https://inamdarmihir.github.io/ostler/docs/agents.html): Claude Code, Codex, Cursor, VS Code, anything else.
-- [Tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html): all 30 tools and their parameters.
+- [Tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html): all 32 tools and their parameters.
 - [Security model](https://inamdarmihir.github.io/ostler/docs/security.html): the allowlist, uploads, dialogs, CAPTCHAs.
 
 
@@ -695,7 +695,7 @@ Ostler checks a quotation against the text of a page it actually read in this se
 
 ## The workflow
 
-Three tools carry it. They are in the `research` profile; `--tools research` pins them, and the default `--tools auto` reveals them after the first `read`. All 30 tools are in the [tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html#research-profile-research).
+Three tools carry it. They are in the `research` profile; `--tools research` pins them, and the default `--tools auto` reveals them after the first `read`. All 32 tools are in the [tools reference](https://inamdarmihir.github.io/ostler/docs/tools.html#research-profile-research).
 
 | step | tool | what it does |
 |---|---|---|
@@ -832,7 +832,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/cookbook.html
 
 Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](https://github.com/inamdarmihir/ostler/blob/main/README.md); tool details are in [TOOLS.md](https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md).
 
-Ostler is a general browser first: the 15 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
+Ostler is a general browser first: the 16 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
 
 Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.
 
@@ -947,7 +947,7 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 
 ## 12. Keep a run cheap
 
-- `--tools auto` (default) shows 15 core tools (about 4.9 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
+- `--tools auto` (default) shows 16 core tools (about 5.3 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
 - `read` with a `query` returns only the best-matching passages, so a long page costs a few hundred tokens instead of the whole page.
 - Use `snapshot` with `delta` and heading refs rather than re-reading whole pages.
 - Call `stats` to see calls, time and estimated tokens for the session.
@@ -1414,7 +1414,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/tools.html
 
 # Tools reference
 
-Ostler exposes 30 MCP tools in five profiles. `--tools auto|core|forms|research|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The default, `auto`, starts with the 15 core tools (4.9 KB of schema), adds the research tools after the first `read` or `search`, and adds the form and memory tools once a page shows form fields. The server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set is about 9.7 KB of schema, roughly 2.4k tokens on every turn, and a test keeps it under 10 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+Ostler exposes 32 MCP tools in five profiles. `--tools auto|core|forms|research|all` (or `OSTLER_TOOLS`) controls how many the agent sees. The default, `auto`, starts with the 16 core tools (4.9 KB of schema), adds the research tools after the first `read` or `search`, and adds the form and memory tools once a page shows form fields. The server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. The full set is about 9.7 KB of schema, roughly 2.7k tokens on every turn, and a test keeps it under 11 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 | profile | tools | count |
 |---|---|---:|
@@ -1568,6 +1568,15 @@ Manage tabs. They share cookies and the `context` tool. Popups open as new tabs.
 | `tab` | string | tab id, for example `t2` |
 | `url` | string | for `new` |
 
+### `search_tools`
+
+Find Ostler tools without listing them all: names, one-line descriptions or full input schemas for any tool, listed or not.
+
+| parameter | type | notes |
+|---|---|---|
+| `query` | string | words that must appear in the name or description |
+| `detail` | string | `names`, `brief` (default) or `full` |
+
 ### `context`
 
 Notes shared by every tab and later calls: `get`, `set`, `delete`, `list`. Keep short facts, not page dumps. Survives a browser restart.
@@ -1625,6 +1634,8 @@ Structured data from the current page: `tables` as rows, or `lists` of repeated 
 |---|---|---|
 | `kind` | `tables` \| `lists`, **required** | |
 | `max_rows` | integer | per table or list, default 30 |
+| `where` | string | keep only rows containing any of `a\|b\|c` |
+| `select` | array | table columns to keep, by header name or index |
 
 ### `links`
 
@@ -1636,6 +1647,16 @@ Links on the current page with anchor text and context, optionally filtered.
 | `text_contains` | string | |
 | `href_contains` | string | |
 | `limit` | integer | default 30 |
+| `where` | string | keep only lines containing any of `a\|b\|c` |
+
+### `run`
+
+Run a short [Rhai](https://rhai.rs) script for multi-page jobs. Loops, filtering and counting happen outside the context; only the script's printed lines and final value come back, inside the untrusted fence. In the script, `tool("read", #{url: u, query: "price"})` runs any Ostler tool and returns its text; `grep(text, word)`, `lines(text)` and `print(x)` help. No files, network, modules or `eval`; at most 60 tool calls; every call keeps the profile, allowlist, robots.txt and submit-gate rules, and `run` cannot call `run`. See [ADR-0019](https://github.com/inamdarmihir/ostler/blob/main/docs/adr/0019-scripted-runs-and-result-filtering.md).
+
+| parameter | type | notes |
+|---|---|---|
+| `script` | string | required |
+| `max_chars` | integer | default 8000 |
 
 ## Forms (profile: forms)
 
@@ -1648,6 +1669,8 @@ List the page's forms as typed fields (label, kind, required, options, errors) p
 | `form` | string | form ref |
 
 ### `form_fill`
+
+A value written `{{fact:KEY}}` is replaced by the saved fact with that key, so the value never has to pass through the agent. An unknown key fails the call.
 
 Fill many fields at once from `{label | name | ref: value}`. Handles selects, radios, checkbox groups, dates, files, comboboxes and dependent dropdowns, and verifies each field by reading it back. `auto: "required"` or `"all"` fills the rest from memory.
 
@@ -1939,7 +1962,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/architecture.html
 | `ostler-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
 | `ostler-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
 | `ostler-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors from a local embedder: Ollama or the non-semantic hash), `InMemoryStore` and `SealedStore` (client-side encryption wrapper); `Memory` API for one tenant; per-tenant Qdrant access tokens (`token.rs`). |
-| `ostler-mcp` | JSON-RPC loop, 30 tools in 5 profiles (15 core, 19 forms, 21 research, 30 all; `auto` grows from core), lazy browser, per-tool metrics, background memory writes. `evidence.rs` holds the research session: pages read (markdown for passages, plain words for verification), verified citations, re-verification when a page changes; `app/research.rs` wires `read`, `cite`, `evidence`, `search`, `open_many`, `extract` and `links` to `ostler-browser`, `ostler-extract` and `ostler-research`. |
+| `ostler-mcp` | JSON-RPC loop, 32 tools in 5 profiles (16 core, 20 forms, 23 research, 32 all; `auto` grows from core), lazy browser, per-tool metrics, background memory writes. `evidence.rs` holds the research session: pages read (markdown for passages, plain words for verification), verified citations, re-verification when a page changes; `app/research.rs` wires `read`, `cite`, `evidence`, `search`, `open_many`, `extract` and `links` to `ostler-browser`, `ostler-extract` and `ostler-research`. |
 | `ostler-a2a` | The Agent2Agent HTTP surface (`ostler a2a`); see [A2A.md](https://inamdarmihir.github.io/ostler/docs/a2a.html). |
 | `ostler` (`crates/ostler-cli`) | `serve`, `a2a`, `init`, `config`, `setup`, `doctor`, `inspect`, `memory`, `fixtures`. |
 | `ostler-fixtures` | The 49 form test pages (`PAGES` in `crates/ostler-fixtures/src/lib.rs`, plus an internal 404 page), the domain packs under `packs/` (research, gov-forms, jobs, dev-qa, commerce: 34 tasks, 29 pages), and a recording HTTP server (`/__records`, `/__reset`, `/exfil`, `/pay`, `robots.txt`, a second origin port). |
@@ -2217,7 +2240,7 @@ Playwright MCP and Ostler are both MCP servers that give an agent a browser, and
 | Form filling | `form_fill` takes a label-to-value map, then reads every value back from the live page and reports mismatches. `form_submit` is a separate step with its own outcome. | `browser_fill_form` fills several fields in one call from a page snapshot. |
 | Research | `read`, `cite` and `evidence` check quotations against pages read in the session and report pages that could not be read. See [research with checked citations](https://inamdarmihir.github.io/ostler/docs/research-with-citations.html). | Reads pages as accessibility snapshots. This project did not evaluate it for quotation checking, so no claim is made either way. |
 | Memory | Optional, in your own Qdrant: saved facts and per-site playbooks. See [memory and privacy](https://inamdarmihir.github.io/ostler/docs/memory.html). | Browser profile only. |
-| Tool list size | 21 tools in the tested version, about 1,513 estimated tokens of definitions. Today's full list is 30 tools in five profiles; the default `auto` profile starts with 15. | 25 tools, about 5,265 estimated tokens of definitions. |
+| Tool list size | 21 tools in the tested version, about 1,513 estimated tokens of definitions. Today's full list is 32 tools in five profiles; the default `auto` profile starts with 15. | 25 tools, about 5,265 estimated tokens of definitions. |
 | Platforms | Chrome or Chromium; tested on macOS locally and Linux in CI. Windows and Docker are experimental and arrive in v0.2.1. | See Playwright MCP's own documentation. |
 
 The Ostler column is from this project's own documentation. For Playwright MCP, the only facts used here are the ones this project measured on the version below; check its documentation for anything else.

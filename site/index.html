@@ -91,7 +91,7 @@ Gaps (not read; say so rather than guess what they contain):
 <div class="status"><b>v0.2, early.</b> Tested end to end against real Chrome and a real Qdrant server. Evaluated on local fixtures (test pages for forms, research and QA), <b>not yet on the open web</b>. This page says what we measured, how, and what we do not know.</div>
 
 <div class="stats" role="list">
-<div class="stat" role="listitem"><div class="n">15 <small>core tools</small></div><div class="l">of 30 in total, about 4.9 KB of schema. Research, form and memory tools appear when a page needs them (<code>--tools auto</code>)</div></div>
+<div class="stat" role="listitem"><div class="n">16 <small>core tools</small></div><div class="l">of 32 in total, about 5.3 KB of schema. Research, form and memory tools appear when a page needs them (<code>--tools auto</code>)</div></div>
 <div class="stat" role="listitem"><div class="n">~0.6 <small>s</small></div><div class="l">cold start: launch Chrome and first navigation</div></div>
 <div class="stat" role="listitem"><div class="n">160 <small>ms</small></div><div class="l">page round-trip, down from 3,031 ms after a benchmark found a settle bug</div></div>
 <div class="stat" role="listitem"><div class="n">3 <small>vs 22</small></div><div class="l">tool calls for a 20-field form, engine versus one call per field (scripted agent)</div></div>
@@ -103,7 +103,7 @@ Gaps (not read; say so rather than guess what they contain):
 <section class="section" id="capabilities"><div class="wrap">
 <p class="kicker">What it does</p>
 <h2>One browser for reading, researching and acting, with each result checked</h2>
-<p class="sub">Ostler is a general MCP browser first. Two checked layers sit on its 15 core tools: research that refuses to cite what it did not read, and a form engine that reads every value back. Optional memory in Qdrant, and A2A for handing work to other agents, sit beside them.</p>
+<p class="sub">Ostler is a general MCP browser first. Two checked layers sit on its 16 core tools: research that refuses to cite what it did not read, and a form engine that reads every value back. Optional memory in Qdrant, and A2A for handing work to other agents, sit beside them.</p>
 <div class="grid g3" style="margin-top:20px">
 <div class="card"><h3>Read and research</h3><p><code>read</code> returns the best passages of a page, <code>cite</code> marks a quote <b>VERIFIED</b> only if its words are on a page read this session, and <code>evidence</code> lists what could not be read. <code>open_many</code>, <code>search</code>, <code>extract</code> and <code>links</code> gather sources.</p><a class="more" href="docs/research-with-citations.html">Research with checked citations &rarr;</a></div>
 <div class="card"><h3>Browse and test web apps</h3><p><code>navigate</code>, <code>snapshot</code>, <code>click</code>, <code>type</code>, tabs, screenshots and <code>look</code>, which boxes and numbers every clickable element. Compare pages, check a web app after a change, get past a cookie wall, log in once with <code>--profile-dir</code>, and hand a CAPTCHA to a person. No form or research tools needed.</p><a class="more" href="docs/cookbook.html">The recipes &rarr;</a></div>
@@ -419,7 +419,7 @@ ostler setup vscode</code></pre></div>
 <div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:22px">
 <a class="doc-card" href="docs/quickstart.html"><strong>Quickstart</strong><span>Install, check, connect and fill a demo form.</span></a>
 <a class="doc-card" href="docs/agents.html"><strong>Use with your agent</strong><span>Claude Code, Codex, Cursor, VS Code.</span></a>
-<a class="doc-card" href="docs/tools.html"><strong>Tools reference</strong><span>All 30 tools and their parameters.</span></a>
+<a class="doc-card" href="docs/tools.html"><strong>Tools reference</strong><span>All 32 tools and their parameters.</span></a>
 <a class="doc-card" href="docs/cookbook.html"><strong>Cookbook</strong><span>Research with checked citations, QA, logins, forms.</span></a>
 <a class="doc-card" href="docs/forms.html"><strong>Forms and verification</strong><span>How a fill is resolved, verified and judged.</span></a>
 <a class="doc-card" href="docs/memory.html"><strong>Memory and privacy</strong><span>Sealing, local embeddings, per-tenant tokens.</span></a>

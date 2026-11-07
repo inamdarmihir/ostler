@@ -6,7 +6,7 @@ Ostler checks a quotation against the text of a page it actually read in this se
 
 ## The workflow
 
-Three tools carry it. They are in the `research` profile; `--tools research` pins them, and the default `--tools auto` reveals them after the first `read`. All 30 tools are in the [tools reference](tools.html#research-profile-research).
+Three tools carry it. They are in the `research` profile; `--tools research` pins them, and the default `--tools auto` reveals them after the first `read`. All 32 tools are in the [tools reference](tools.html#research-profile-research).
 
 | step | tool | what it does |
 |---|---|---|
