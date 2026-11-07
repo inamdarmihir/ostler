@@ -106,21 +106,35 @@ jobs:
           git commit -m "ostler ${GITHUB_REF_NAME#v}"
           git push origin HEAD:main
   pypi:
-    # Publishes the wheels to PyPI as `ostler-mcp` after the release exists.
-    # Skipped, not failed, until the PYPI_TOKEN secret is set (a project-scoped PyPI API token).
+    # Publishes the wheels to PyPI as `ostler-mcp` after the release exists. Two ways, neither needed to release:
+    #  * trusted publishing (preferred, no secret): register this repository and workflow file (release.yml) as a
+    #    trusted publisher on PyPI, then set the repository variable PYPI_TRUSTED=true;
+    #  * an API token in the PYPI_TOKEN secret.
+    # With neither, the job skips itself.
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # lets PyPI verify this run for trusted publishing
     env:
       PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      PYPI_TRUSTED: ${{ vars.PYPI_TRUSTED }}
     steps:
-      - name: Skip if no token
-        if: env.PYPI_TOKEN == ''
-        run: echo "PYPI_TOKEN is not set; skipping the PyPI upload."
+      - name: Skip if not configured
+        if: env.PYPI_TOKEN == '' && env.PYPI_TRUSTED != 'true'
+        run: echo "Neither PYPI_TRUSTED nor PYPI_TOKEN is set; skipping the PyPI upload."
       - uses: actions/download-artifact@v8
-        if: env.PYPI_TOKEN != ''
+        if: env.PYPI_TOKEN != '' || env.PYPI_TRUSTED == 'true'
         with: { path: dist, merge-multiple: true }
-      - name: Upload the wheels
-        if: env.PYPI_TOKEN != ''
+      - name: Keep only the wheels
+        if: env.PYPI_TOKEN != '' || env.PYPI_TRUSTED == 'true'
+        run: find dist -type f ! -name '*.whl' -delete
+      - name: Upload with trusted publishing
+        if: env.PYPI_TRUSTED == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with: { skip-existing: true }
+      - name: Upload with the API token
+        if: env.PYPI_TRUSTED != 'true' && env.PYPI_TOKEN != ''
         env: { TWINE_USERNAME: __token__, TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}" }
         run: |
           python3 -m venv /tmp/twine-venv
