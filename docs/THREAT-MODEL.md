@@ -70,7 +70,7 @@ Qdrant is treated as honest-but-curious: it may be read by its operator, leaked,
 1. Prompt injection that a human could also read cannot be filtered; the controls are the allowlist and the confirm gate, both opt-in on `serve`.
 2. Same-world runtime: treat page-reported state as advisory on hostile sites.
 3. No third-party audit; a `deny.toml` for cargo-deny is in the tree; dependabot and a security workflow are not, and are not claimed here (see [ADR-0011](adr/0011-reliability-principles.md) and the CHANGELOG).
-4. Windows is untested; Linux secret-service key store is tested against a scripted fake `secret-tool`, not a real keyring.
+4. Windows is experimental (CI only, no day-to-day use); Linux secret-service key store is tested against a scripted fake `secret-tool`, not a real keyring.
 
 ## Verifying
 
