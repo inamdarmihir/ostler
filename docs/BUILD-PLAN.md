@@ -1,6 +1,6 @@
 # Ostler build plan: v0.3 to public launch
 
-Status: **plan of record, draft 1**, 2026-11-06. Supersedes the roadmap's "next sprint" and folds in [SCOPE-RESEARCH.md](SCOPE-RESEARCH.md) and [SCOPE-TASKS.md](SCOPE-TASKS.md), which stay as background. Section 11 lists the defaults this plan assumes; change any of them and the affected milestone moves.
+Status: **plan of record, draft 1**, 2026-11-06. Supersedes the roadmap's "next sprint" and folds in [SCOPE-RESEARCH.md](SCOPE-RESEARCH.md) and [SCOPE-TASKS.md](SCOPE-TASKS.md), which stay as background. Section 11 lists the defaults this plan assumes; change any of them and the affected milestone moves. The workflow layer (P5) is expanded into missions, handoff, skills and an executor for Anthropic's browser toolset in [AGENTIC-PLAN.md](AGENTIC-PLAN.md), which also reorders the first milestones.
 
 ## 1. What we are building
 
