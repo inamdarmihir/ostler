@@ -16,6 +16,28 @@ pub mod suite;
 #[cfg(test)]
 mod packs_tests;
 
+/// Kill a Chrome process with SIGKILL, to simulate a browser crash mid-task.
+///
+/// A pid that has already exited is ignored. Pid 0 (and anything out of range) is refused, because
+/// `kill(0, ..)` would signal the caller's whole process group.
+#[cfg(unix)]
+pub fn kill_chrome(pid: u32) {
+    if let Ok(pid) = libc::pid_t::try_from(pid) {
+        if pid > 0 {
+            // SAFETY: kill(2) takes a pid and a signal number and touches no memory of ours; an error
+            // (ESRCH for a dead pid) is ignored on purpose.
+            unsafe {
+                libc::kill(pid, libc::SIGKILL);
+            }
+        }
+    }
+}
+
+/// No-op on platforms other than unix. The plan calls for `taskkill` on Windows; that is not wired up
+/// here yet, so crash tests that need it are skipped there.
+#[cfg(not(unix))]
+pub fn kill_chrome(_pid: u32) {}
+
 pub const PAGES: &[(&str, &str)] = &[
     ("basic", include_str!("../fixtures/basic.html")),
     ("scrollhover", include_str!("../fixtures/scrollhover.html")),
@@ -418,6 +440,27 @@ fn serve(server: Server, shared: Shared, stop2: Arc<AtomicBool>) {
                         (Method::Get, "/poll") => {
                             thread::sleep(Duration::from_secs(4));
                             let _ = req.respond(Response::from_string("{}"));
+                        }
+                        // `/slow/<n>` answers after n seconds (capped at 60), for timeout and concurrency tests.
+                        (Method::Get, p) if p.starts_with("/slow/") => {
+                            match p["/slow/".len()..].parse::<u64>() {
+                                Ok(n) => {
+                                    let n = n.min(60);
+                                    thread::sleep(Duration::from_secs(n));
+                                    let _ = req.respond(Response::from_string(format!("slow {n}")));
+                                }
+                                Err(_) => {
+                                    let _ = req.respond(
+                                        Response::from_string("not found").with_status_code(404),
+                                    );
+                                }
+                            }
+                        }
+                        // The "slow submit" trap: the form answers only after 15 seconds.
+                        (Method::Post, "/trap/slow-submit") => {
+                            thread::sleep(Duration::from_secs(15));
+                            let page = "<!doctype html><meta charset=utf-8><title>Saved</title><h1>Saved</h1>";
+                            let _ = req.respond(Response::from_string(page).with_header(html));
                         }
                         // A subresource that never arrives in useful time (an ad, a tracker): holds the
                         // `load` event open while the document itself is long since usable.
