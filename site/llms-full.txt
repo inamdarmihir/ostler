@@ -834,7 +834,7 @@ Recipes for what you can do with Ostler **today**. Each one names the tools invo
 
 Ostler is a general browser first: the 16 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
 
-Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.
+Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect. Runnable versions of these recipes, with their real output, are in [examples/](https://github.com/inamdarmihir/ostler/tree/main/examples).
 
 ## Contents
 

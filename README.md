@@ -180,6 +180,7 @@ Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which
 | Install options, update, uninstall | [docs/INSTALL.md](docs/INSTALL.md) |
 | Config file, env vars, which keys you need | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
 | Recipes for each use case | [docs/COOKBOOK.md](docs/COOKBOOK.md) |
+| Runnable examples, one per use case, checked against the fixtures | [examples/](examples/) |
 | Tool list, `--tools auto`, tabs, example prompts | [docs/TOOLS.md](docs/TOOLS.md) |
 | Memory, the learning loop, privacy model | [docs/MEMORY.md](docs/MEMORY.md) |
 | CLI commands, `ostler serve` flags, A2A server | [docs/CLI.md](docs/CLI.md), [docs/A2A.md](docs/A2A.md) |

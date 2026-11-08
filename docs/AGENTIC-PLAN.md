@@ -9,7 +9,7 @@ Status: **proposal, draft 1**, 2026-11-08. An addendum to [BUILD-PLAN.md](BUILD-
 - **Two MCP features give Ostler agency without putting a model inside it**: *sampling* (Ostler asks the client's model one narrow question, for example when a replayed skill diverges) and *elicitation* (Ostler asks the user directly for an approval, a missing fact or a 2FA code). Both degrade to plain text replies on clients that lack them.
 - **A third front door: an open executor for Anthropic's browser toolset.** Anthropic's `browser_toolset_20260801` leaves the browser to the application. Ostler becomes the executor any Messages API app can drop in, with read-back, postconditions and policy on every member call.
 - **Differentiation in one sentence:** the others ship browsers and agents; Ostler ships **verdicts**: an outcome check, a cited evidence report, a receipt and a replayable record for every mission, locally, for any model and any browser backend, from an agent that says it is one.
-- **Order of work:** the review's critical fixes first (they are the verification promise), then missions and the session log, then handoff and live view, then the executor, then skills with replay, then WebMCP and identity. About 22 weeks for one maintainer, including the fixes; cut line in section 6.
+- **Order of work:** the review's critical fixes first (they are the verification promise), then click and research quality, then missions and the session log, then handoff and live view, then the executor, then skills with replay, then WebMCP and identity. About 26 weeks for one maintainer, including the fixes; cut line in section 6. Section 9 details the browsing and research work; runnable examples of what works today are in [examples/](../examples/).
 
 ## 1. Lessons from Anthropic and Cloudflare, and what Ostler does with each
 
@@ -202,6 +202,7 @@ Phase letters run after BUILD-PLAN's M0. Estimates are for one maintainer.
 | phase | weeks | contents | exit criteria |
 |---|---|---|---|
 | **M-0 Keep the promise** | 3 | Review fixes 1 to 3: frozen key resolution, gated memory suggestions, final re-verify; browser relaunch and signal handling; in-browser policy with `Fetch` interception and the submit gate on every path; masking of notes and snapshots | every "C" item in flaws 1 and 2 has a fixture that failed before and passes now |
+| **M-Q Click and research quality** | 4 | Section 9: click effects, no silent script clicks, actionability waits, ref repair, `find`, coordinate clicks, `act` batches; claim support with exact numbers, independent sources and conflicts, parallel `open_many`, PDF text, source metadata, coverage; the research benchmark | each item has a fixture that fails today and passes after; research benchmark results committed |
 | **M-A Missions** | 4 | `mission` tool over `ostler-workflow`; `done_when`; append-only log; resume after crash; risk ceiling; receipts; false-success scored from mission verdicts in `ostler-bench` | a killed Chrome mid-mission resumes and finishes; pack suites report verdicts |
 | **M-B Person in the loop** | 3 | `handoff` and `approve`; MCP elicitation with text fallback; desktop notifications; per-site first-action approval; session import per site with risky categories off; taint rule | approvals and 2FA work in Claude Code and one other client; injection fixtures cannot trigger a cross-origin write without approval |
 | **M-C See it** | 2 | `ostler watch` live view (CDP screencast plus trace) and per-mission recordings with verdict overlay; `ostler replay` | a recording opens offline and shows each verdict at its step |
@@ -209,7 +210,7 @@ Phase letters run after BUILD-PLAN's M0. Estimates are for one maintainer.
 | **M-E Skills and watchers** | 4 | `skill save/run` with postconditions per step, sampling on divergence, healed-step records; `watch` with polite polling and wake paths; `ostler service install` | a recorded skill survives a fixture redesign and reports the healed step; a watch wakes a client |
 | **M-F Open web** | 3 | WebMCP discovery and calls with postconditions; optional Web Bot Auth signing; remote CDP backend profile (read-only missions only) | a WebMCP fixture page works with and without the flag; signed requests verify against a test key directory |
 
-Total about 22 weeks including M-0. BUILD-PLAN's M2 (Qdrant-native memory) and M4 (domain packs) run alongside from M-A on; packs gain `done_when` checks instead of bespoke scorers.
+Total about 26 weeks including M-0 and M-Q. BUILD-PLAN's M2 (Qdrant-native memory) and M4 (domain packs) run alongside from M-A on; packs gain `done_when` checks instead of bespoke scorers.
 
 **Cut line:** drop the remote backend profile, Web Bot Auth and the TypeScript helper first. Keep M-0, missions, handoff and the executor: the differentiation depends on them.
 
@@ -231,6 +232,10 @@ Total about 22 weeks including M-0. BUILD-PLAN's M2 (Qdrant-native memory) and M
 | Skill replay on redesigned fixtures | passes or stops with a named divergence; never a silent wrong step |
 | Executor conformance | all documented result shapes and the halt rule |
 | Schema added to `auto` | under 600 bytes |
+| Clicks that fall back to a script click without saying so | 0 |
+| Snapshot calls per click on the dev-qa and commerce packs | at least a third fewer than v0.2 |
+| Research benchmark: claims with a number that does not match its quote, accepted by `evidence` | 0 |
+| `open_many` wall time for 10 fixture URLs | at least 2x faster than sequential |
 
 ## 8. Risks and open questions
 
@@ -243,3 +248,50 @@ Total about 22 weeks including M-0. BUILD-PLAN's M2 (Qdrant-native memory) and M
 | The session log is a new place for secrets | references only, the same masking as snapshots, retention and `ostler mission forget` |
 | Scope against one maintainer | the cut line above; packs and executor conformance cases are contributor-friendly |
 | Decision for the maintainer | whether `mission` replaces the planned `task` tool name (proposed: yes, one concept) |
+
+## 9. Browsing and research quality
+
+Two places where agents lose the most time and accuracy today: clicking (misclicks, extra snapshots, stale refs) and deep research (claims the quotes do not support). Each item below names where the code is now, the best practice it follows, and the fixture that proves it. Nothing here needs a model inside Ostler.
+
+### 9.1 Best practices this section follows
+
+| practice | source |
+|---|---|
+| Check that an element is visible, stable, enabled and would receive the event before acting; wait for those, not for a fixed time | Playwright's actionability checks |
+| Refs stay valid until navigation; never renumber; a stale ref is an error that tells the agent to re-read | Anthropic browser toolset docs |
+| Prefer the accessibility tree and refs; fall back to coordinates for canvas, maps and virtualized lists; read the tree before a screenshot | Anthropic browser toolset docs |
+| Several actions in one turn run in order and stop at the first failure | Anthropic browser toolset batch rule |
+| A failure degrades to a clear result, never a dead session | Cloudflare Kitesurf design rules |
+| Research fans out to sub-questions, then a separate pass checks citations against sources | Anthropic multi-agent research system |
+| Verification is outside the model and returns a verdict | Ostler's own principle (ADR-0007, ADR-0011) |
+
+### 9.2 Clicking and browsing
+
+| # | change | today | done when |
+|---|---|---|---|
+| C1 | **Click effects.** Report what a click did: navigated, new tab, dialog, a region that appeared (with its new refs), or nothing; on nothing, say what usually helps (hover first, scroll, a covering element) | `ActionOutcome` carries only `navigated` and `changed: bool` from a markup signature (`ostler-browser/src/page.rs:328`) | a menu fixture returns its items in the click result; a no-op click says so; snapshot calls per click drop on the packs |
+| C2 | **No silent script clicks.** When the target is covered: try other uncovered points in its box, then adjust scroll for sticky headers, then report a known overlay (cookie banner, modal) and offer its dismiss ref; script click only when asked | a covered target falls back to `el.click()` with a warning (`runtime.js:1238`, `page.rs:1318`) | `overlay.html` click under the modal returns `COVERED by dialog` with the dismiss ref instead of clicking through |
+| C3 | **Actionability waits.** Before a pointer click, wait (bounded) until the element is visible, its box is unchanged across two animation frames, it is enabled and the hit test lands on it | no stability check; one hit test | a new fixture with a sliding menu: v0.2 misclicks, the fix clicks the right item |
+| C4 | **Ref repair.** Store a fingerprint per ref (role, accessible name, label, parent path, position); when a ref goes stale, re-resolve it only if exactly one element matches and say `re-resolved`; otherwise the stale error stands | refs map to element objects; a re-render makes them `STALE_REF` (`runtime.js:139`) | `remount.html`: a click after a framework re-mount succeeds and reports the re-resolution; an ambiguous re-mount still errors |
+| C5 | **Cross-origin iframes.** Inject the runtime into auto-attached child targets, prefix their refs (`f2:e5`), translate coordinates; payment frames stay detected and refused | snapshot prints `cross-origin: content not accessible`; child targets are attached only for policy (`page.rs:195`) | a cross-origin fixture widget can be read and clicked; `pay-frame.html` is still refused |
+| C6 | **`find {query}`** returns up to 10 refs ranked by role, name and label with the existing BM25 code, instead of a full snapshot | not available | a 500-element fixture: `find "save button"` returns the right ref in under 1 KB |
+| C7 | **Coordinate actions** (`click {x, y}`, `zoom`) for canvas and virtualized content, coordinates from `look` | refs only | a canvas fixture is operable; coordinates are policy-checked like refs |
+| C8 | **`act` batches**: an ordered list of actions with the halt rule and one observation at the end | one action per call | a three-step search (click, type, press) is one call; a failure in step 1 reports steps 2 and 3 as not executed |
+| C9 | **Isolated world** for the runtime (review finding), so page scripts cannot see or tamper with it | page world, wrapped `fetch` and `setTimeout` visible | a fixture that probes for `window.__wm` sees nothing |
+
+### 9.3 Deep research
+
+| # | change | today | done when |
+|---|---|---|---|
+| R1 | **Claim support.** `claim {text, citations}` checks, without a model, that the claim's numbers, dates and names occur in its quotes, and that each number matches exactly; `evidence` lists claims as supported, weak or `NUMBER MISMATCH` | `cite` verifies that the words are on the page (`ostler-extract/src/quote.rs:215`), not that they back the claim | a planted "19 kr" claim against a "9 kr" quote is flagged; no false flags on the research pack |
+| R2 | **Independent sources and conflicts.** Pages sharing syndicated text (shingle similarity) count once; the same quantity with different values across sources is `CONFLICT`; single-source claims are labelled | every page counts as a source | a fixture pair that copies one article counts as one source; a planted contradiction is reported |
+| R3 | **Parallel `open_many`.** A pool of 3 to 4 scratch tabs under the existing `HostLimiter` and robots rules | pages are read one after another in one tab (`ostler-mcp/src/app/research.rs:647`) | 10 fixture URLs on 3 hosts at least 2x faster, per-host spacing unchanged |
+| R4 | **PDF text.** Extract text from fetched PDF bytes with a permissively licensed Rust crate (licence and maintenance checked in an ADR), chunk by page, cite with `#page=` | no PDF text layer | a PDF fixture can be read and a quote on page 3 cited with its page link |
+| R5 | **Source metadata.** Publish date, author, canonical URL and primary or secondary (does the page link the source it reports on) from JSON-LD and meta tags; `links {kind: "references"}` lists outbound citations and DOIs to follow upstream | not recorded | `evidence` shows dates; a news fixture points to the study it cites |
+| R6 | **Coverage.** The agent declares sub-questions; `evidence` lists which have no verified citation; becomes a mission check (`done_when: every sub-question cited, no open conflicts`) | not available | an unanswered sub-question is listed as open |
+| R7 | **Source memory across sessions.** Expose the `source` memory kind so follow-ups reuse what was read, with freshness re-checked against the stored content hash | library only | a second session cites a page read in the first only after a fresh hash check |
+| R8 | **Research benchmark.** Multi-hop fixtures with a planted conflict, a stale page, a number mismatch, a syndicated copy and an injection; scores citation precision, claim support, conflicts found and gaps reported, with a real model and without | none | results committed per release, negative ones included |
+
+### 9.4 Order
+
+C1, C2, C3 and C4 first: together they remove most misclicks and extra snapshot turns, and C2 closes a correctness hole. Then R1, R3, R4 and R8: claim support is the research equivalent of form read-back, and the benchmark is what lets a research accuracy number be published at all. C5 to C9 and R2, R5 to R7 follow. Each item lands with its fixture first, failing, as the design review asks.

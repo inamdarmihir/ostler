@@ -1,0 +1,33 @@
+# Runs every example against the bundled fixture pages, with no model in the loop.
+# Ostler is built from the main branch because examples 07 to 09 use features not yet in a release.
+name: examples
+on:
+  push:
+  pull_request:
+  schedule: [{ cron: "17 6 * * 1" }]   # weekly, so a change in Ostler that breaks an example shows up
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Ostler from main
+        run: cargo install --locked --git https://github.com/inamdarmihir/ostler ostler
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Check Chrome is found
+        run: ostler doctor
+      - name: Start the fixture pages and the A2A server
+        run: |
+          ostler fixtures &
+          ostler a2a --allow-domain 127.0.0.1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/basic.html >/dev/null && curl -sf http://127.0.0.1:8765/healthz >/dev/null && break; sleep 1; done
+      - name: Run the examples
+        run: python run_all.py
