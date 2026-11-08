@@ -185,12 +185,12 @@ Pick Firecrawl for crawling many pages, hosted scale or anti-bot handling, which
 | CLI commands, `ostler serve` flags, A2A server | [docs/CLI.md](docs/CLI.md), [docs/A2A.md](docs/A2A.md) |
 | Safety controls and what is still open | [docs/SAFETY.md](docs/SAFETY.md), [SECURITY.md](SECURITY.md), [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) |
 | Searching the web, bot walls | [docs/WEB-SEARCH.md](docs/WEB-SEARCH.md) |
-| Build plan, scope background, domain packs | [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md), [docs/SCOPE-RESEARCH.md](docs/SCOPE-RESEARCH.md), [docs/SCOPE-TASKS.md](docs/SCOPE-TASKS.md) |
+| Build plan, agentic plan, scope background, domain packs | [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md), [docs/AGENTIC-PLAN.md](docs/AGENTIC-PLAN.md), [docs/SCOPE-RESEARCH.md](docs/SCOPE-RESEARCH.md), [docs/SCOPE-TASKS.md](docs/SCOPE-TASKS.md) |
 | Comparison with other tools, roadmap | [docs/COMPARISON-AND-ROADMAP.md](docs/COMPARISON-AND-ROADMAP.md), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Earlier README benchmark table, full benchmarks, economics | [docs/BENCHMARK-SUMMARY.md](docs/BENCHMARK-SUMMARY.md), [docs/BENCHMARKS.md](docs/BENCHMARKS.md), [docs/ECONOMICS.md](docs/ECONOMICS.md) |
 | Architecture, system design, ADRs | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/SYSTEM-DESIGN.md](docs/SYSTEM-DESIGN.md), [docs/adr/](docs/adr/) |
 | Operations, failure modes, SLOs, compatibility, testing | [docs/OPERATIONS.md](docs/OPERATIONS.md), [docs/FAILURE-MODES.md](docs/FAILURE-MODES.md), [docs/SLOS.md](docs/SLOS.md), [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [docs/TESTING.md](docs/TESTING.md) |
-| Design review, research | [docs/REVIEW-2026-10.md](docs/REVIEW-2026-10.md), [docs/research/landscape.md](docs/research/landscape.md) |
+| Design review, research | [docs/REVIEW-2026-10.md](docs/REVIEW-2026-10.md), [docs/research/landscape.md](docs/research/landscape.md), [agent platforms 2026-11](docs/research/agent-platforms-2026-11.md) |
 | Releasing | [docs/RELEASING.md](docs/RELEASING.md) |
 | Website | [inamdarmihir.github.io/ostler](https://inamdarmihir.github.io/ostler/) |
 
