@@ -1,7 +1,8 @@
 //! MCP (Model Context Protocol) server over stdio: newline-delimited JSON-RPC 2.0.
 //!
-//! Requests are handled one at a time: the browser is stateful and an agent's tool calls
-//! are inherently sequential. Logs go to stderr; stdout carries protocol messages only.
+//! Cheap requests (`ping`, `initialize`, `tools/list`) are answered inline; each tool call runs as its own
+//! task, bounded by `OSTLER_MAX_INFLIGHT`, and can be cancelled. Logs go to stderr; stdout carries
+//! protocol messages only.
 
 mod app;
 mod envelope;
@@ -17,8 +18,12 @@ pub use app::{App, AppConfig, Content, FormTask, FormTaskResult, TaskVerdict, To
 pub use envelope::{Envelope, RetryPolicy, Status as OutcomeStatus};
 pub use tools::Profile;
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex as StdMutex};
+
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio_util::sync::CancellationToken;
 
 const SUPPORTED: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
@@ -36,6 +41,11 @@ fn rpc_err(id: &Value, code: i64, message: impl Into<String>) -> Value {
 
 /// Handle one JSON-RPC message. Returns `None` for notifications.
 pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
+    handle_with(app, msg, CancellationToken::new()).await
+}
+
+/// `handle`, with a token that cancels a `tools/call` in flight.
+async fn handle_with(app: &App, msg: &Value, cancel: CancellationToken) -> Option<Value> {
     let method = msg.get("method").and_then(Value::as_str)?;
     let id = msg.get("id");
     let Some(id) = id else {
@@ -76,7 +86,7 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
             if tools::allowed(app.profile(), name).is_none() {
                 return Some(rpc_err(id, -32602, format!("unknown tool {name:?}")));
             }
-            let mut out = app.call(name, &args).await.to_json();
+            let mut out = app.call_cancellable(name, &args, cancel).await.to_json();
             if !app.structured() {
                 if let Some(o) = out.as_object_mut() {
                     o.remove("structuredContent");
@@ -123,11 +133,75 @@ async fn termination() {
     }
 }
 
+/// How many tool calls may run at once (`OSTLER_MAX_INFLIGHT`, default 4). Calls on the same page still
+/// take turns on the browser; this bounds the queue, not the page.
+fn max_inflight() -> usize {
+    std::env::var("OSTLER_MAX_INFLIGHT")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(4)
+}
+
+/// The key a request id is tracked by for `notifications/cancelled` (ids may be numbers or strings).
+fn id_key(id: &Value) -> String {
+    id.to_string()
+}
+
 /// Serve MCP on stdin/stdout until stdin closes or the process is asked to stop.
-pub async fn serve_stdio(app: App) -> std::io::Result<()> {
-    let mut lines = BufReader::new(tokio::io::stdin()).lines();
-    let mut out = tokio::io::stdout();
-    let mut stop = Box::pin(termination());
+pub async fn serve_stdio(app: Arc<App>) -> std::io::Result<()> {
+    let signalled = serve(
+        app,
+        BufReader::new(tokio::io::stdin()),
+        tokio::io::stdout(),
+        termination(),
+    )
+    .await?;
+    if signalled {
+        // The stdin reader is a blocking thread that only ends when stdin closes; waiting for the runtime
+        // to drain it would hang here. Chrome and its profile are already cleaned up.
+        std::process::exit(0);
+    }
+    Ok(())
+}
+
+/// Serve MCP over any line stream. Returns whether `stop` fired (rather than the input closing).
+///
+/// `ping`, `initialize`, `tools/list` and the other cheap methods are answered inline, so they never wait
+/// behind a tool call. Each `tools/call` runs as its own task (at most `OSTLER_MAX_INFLIGHT` at once) and
+/// can be cancelled with `notifications/cancelled`. One writer task owns the output, so lines never
+/// interleave. When the input closes, calls in flight get up to 5 s to finish before shutdown.
+pub async fn serve<R, W>(
+    app: Arc<App>,
+    input: R,
+    output: W,
+    stop: impl std::future::Future<Output = ()>,
+) -> std::io::Result<bool>
+where
+    R: tokio::io::AsyncBufRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Value>();
+    let writer_app = app.clone();
+    let writer = tokio::spawn(async move {
+        let mut out = output;
+        while let Some(resp) = rx.recv().await {
+            out.write_all(format!("{resp}\n").as_bytes()).await?;
+            if writer_app.take_list_changed() {
+                out.write_all(
+                    b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}\n",
+                )
+                .await?;
+            }
+            out.flush().await?;
+        }
+        Ok::<(), std::io::Error>(())
+    });
+    let inflight: Arc<StdMutex<HashMap<String, CancellationToken>>> = Arc::default();
+    let permits = Arc::new(tokio::sync::Semaphore::new(max_inflight()));
+    let mut tasks = tokio::task::JoinSet::new();
+    let mut lines = input.lines();
+    let mut stop = Box::pin(stop);
     let mut signalled = false;
     loop {
         // SIGINT/SIGTERM take the same exit as a closed stdin, so Chrome is closed and its temporary
@@ -142,15 +216,15 @@ pub async fn serve_stdio(app: App) -> std::io::Result<()> {
                 break;
             }
         };
+        // Reap finished calls so the set does not grow for the whole session.
+        while tasks.try_join_next().is_some() {}
         if line.trim().is_empty() {
             continue;
         }
         let msg: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
-                let r = rpc_err(&Value::Null, -32700, format!("parse error: {e}"));
-                out.write_all(format!("{r}\n").as_bytes()).await?;
-                out.flush().await?;
+                let _ = tx.send(rpc_err(&Value::Null, -32700, format!("parse error: {e}")));
                 continue;
             }
         };
@@ -159,31 +233,67 @@ pub async fn serve_stdio(app: App) -> std::io::Result<()> {
             one => vec![one],
         };
         for m in msgs {
-            if let Some(resp) = handle(&app, &m).await {
-                out.write_all(format!("{resp}\n").as_bytes()).await?;
-                if app.take_list_changed() {
-                    out.write_all(
-                        b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}\n",
-                    )
-                    .await?;
+            let method = m.get("method").and_then(Value::as_str).unwrap_or("");
+            if method == "notifications/cancelled" {
+                if let Some(id) = m.get("params").and_then(|p| p.get("requestId")) {
+                    if let Some(t) = inflight.lock().unwrap().get(&id_key(id)) {
+                        t.cancel();
+                    }
                 }
-                out.flush().await?;
+                continue;
+            }
+            match (method, m.get("id")) {
+                ("tools/call", Some(id)) => {
+                    let key = id_key(id);
+                    let cancel = CancellationToken::new();
+                    inflight.lock().unwrap().insert(key.clone(), cancel.clone());
+                    let (app, tx, inflight, permits) =
+                        (app.clone(), tx.clone(), inflight.clone(), permits.clone());
+                    tasks.spawn(async move {
+                        let resp = tokio::select! {
+                            biased;
+                            () = cancel.cancelled() => {
+                                // Cancelled while queued: it never ran.
+                                handle_with(&app, &m, cancel.clone()).await
+                            }
+                            p = permits.acquire_owned() => {
+                                let _p = p;
+                                handle_with(&app, &m, cancel.clone()).await
+                            }
+                        };
+                        inflight.lock().unwrap().remove(&key);
+                        if let Some(r) = resp {
+                            let _ = tx.send(r);
+                        }
+                    });
+                }
+                _ => {
+                    if let Some(resp) = handle(&app, &m).await {
+                        let _ = tx.send(resp);
+                    }
+                }
             }
         }
     }
-    app.shutdown().await;
-    if signalled {
-        // The stdin reader is a blocking thread that only ends when stdin closes; waiting for the runtime
-        // to drain it would hang here. Chrome and its profile are already cleaned up.
-        std::process::exit(0);
+    // Give calls in flight a moment to finish and answer before the browser goes away.
+    let drain = async { while tasks.join_next().await.is_some() {} };
+    if tokio::time::timeout(std::time::Duration::from_secs(5), drain)
+        .await
+        .is_err()
+    {
+        tasks.abort_all();
     }
-    Ok(())
+    drop(tx);
+    let _ = writer.await;
+    app.shutdown().await;
+    Ok(signalled)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ostler_browser::{LaunchOptions, Policy};
+    use tokio_util::sync::CancellationToken;
 
     fn app() -> App {
         App::new(AppConfig {
@@ -394,6 +504,106 @@ mod tests {
         handle(&a, &json!({"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-03-26"}})).await.unwrap();
         let r = handle(&a, &json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"context","arguments":{"action":"list"}}})).await.unwrap();
         assert!(r["result"].get("structuredContent").is_none(), "{r}");
+    }
+
+    /// A server on an in-memory pipe: (writer to its stdin, reader of its stdout, server task).
+    fn piped() -> (
+        tokio::io::DuplexStream,
+        tokio::io::Lines<BufReader<tokio::io::DuplexStream>>,
+        tokio::task::JoinHandle<std::io::Result<bool>>,
+    ) {
+        let (client_in, server_in) = tokio::io::duplex(1 << 16);
+        let (server_out, client_out) = tokio::io::duplex(1 << 16);
+        let srv = tokio::spawn(serve(
+            std::sync::Arc::new(app()),
+            BufReader::new(server_in),
+            server_out,
+            std::future::pending::<()>(),
+        ));
+        (client_in, BufReader::new(client_out).lines(), srv)
+    }
+
+    async fn send(w: &mut tokio::io::DuplexStream, v: Value) {
+        w.write_all(format!("{v}\n").as_bytes()).await.unwrap();
+        w.flush().await.unwrap();
+    }
+
+    async fn next(r: &mut tokio::io::Lines<BufReader<tokio::io::DuplexStream>>) -> Value {
+        let l = tokio::time::timeout(std::time::Duration::from_secs(10), r.next_line())
+            .await
+            .expect("timeout")
+            .unwrap()
+            .expect("eof");
+        serde_json::from_str(&l).unwrap_or_else(|e| panic!("interleaved or bad line {l:?}: {e}"))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn ping_answers_during_a_slow_call() {
+        let (mut w, mut r, _srv) = piped();
+        send(&mut w, json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for","arguments":{"ms":3000}}})).await;
+        let t0 = std::time::Instant::now();
+        send(&mut w, json!({"jsonrpc":"2.0","id":2,"method":"ping"})).await;
+        let first = next(&mut r).await;
+        assert_eq!(
+            first["id"], 2,
+            "ping must not queue behind the slow call: {first}"
+        );
+        assert!(t0.elapsed() < std::time::Duration::from_secs(1));
+        let second = next(&mut r).await;
+        assert_eq!(second["id"], 1);
+        assert_eq!(second["result"]["structuredContent"]["status"], "completed");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_write_reports_unknown_effect() {
+        // A cancelled write may already have reached the page: its effect is unknown.
+        let a = app();
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let v = a
+            .call_cancellable("click", &json!({"ref":"e1"}), cancel)
+            .await
+            .to_json();
+        assert_eq!(v["structuredContent"]["status"], "uncertain", "{v}");
+        assert_eq!(
+            v["structuredContent"]["code"], "CANCELLED_EFFECT_UNKNOWN",
+            "{v}"
+        );
+        assert_eq!(v["structuredContent"]["retry_policy"], "reconcile_first");
+        // A cancelled read just failed, over the wire, and promptly.
+        let (mut w, mut r, _srv) = piped();
+        send(&mut w, json!({"jsonrpc":"2.0","id":"slow","method":"tools/call","params":{"name":"wait_for","arguments":{"ms":5000}}})).await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let t0 = std::time::Instant::now();
+        send(&mut w, json!({"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"slow","reason":"user"}})).await;
+        let v = next(&mut r).await;
+        assert!(t0.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(v["id"], "slow");
+        assert_eq!(v["result"]["structuredContent"]["status"], "failed", "{v}");
+        assert_eq!(v["result"]["structuredContent"]["code"], "CANCELLED", "{v}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn responses_never_interleave() {
+        let (mut w, mut r, srv) = piped();
+        for i in 0..30 {
+            let m = if i % 3 == 0 {
+                json!({"jsonrpc":"2.0","id":i,"method":"tools/list"})
+            } else {
+                json!({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":"wait_for","arguments":{"ms": (i % 5) * 20}}})
+            };
+            send(&mut w, m).await;
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        for _ in 0..30 {
+            let v = next(&mut r).await;
+            ids.insert(v["id"].as_i64().unwrap());
+        }
+        assert_eq!(ids.len(), 30);
+        // Closing stdin drains and stops the server.
+        drop(w);
+        let stopped = tokio::time::timeout(std::time::Duration::from_secs(10), srv).await;
+        assert!(matches!(stopped, Ok(Ok(Ok(false)))), "{stopped:?}");
     }
 
     #[tokio::test]

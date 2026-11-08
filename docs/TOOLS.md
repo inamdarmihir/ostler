@@ -129,6 +129,10 @@ versions get only the text). The text content is unchanged.
 | `uncertain` | it may or may not have happened (timeout, HTTP error after submit): check before repeating | false |
 | `failed` | it did not run or failed (stale ref, navigation failed, no observed effect, unclassified) | true |
 
+A cancelled call (`notifications/cancelled`) returns `CANCELLED` for a read and `CANCELLED_EFFECT_UNKNOWN`
+(`uncertain`) for a write tool, whose effect may already have happened. `OSTLER_MAX_INFLIGHT` (default 4)
+bounds how many tool calls run at once; `ping` and `tools/list` never wait behind them.
+
 `retry_policy` is one of `safe`, `after_snapshot`, `reconcile_first`, `never`, `after_change`. `form_submit`
 codes: `VALIDATION_FAILED`, `NEXT_STEP`, `NO_OBSERVED_EFFECT`, `SERVER_ERROR`. Tools do not declare an
 `outputSchema` yet (it would add about 2 KB to every tool list).

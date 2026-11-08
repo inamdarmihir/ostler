@@ -13,6 +13,7 @@ use ostler_forms::Field;
 use ostler_memory::{FieldOutcome, FieldQuery, Memory};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::envelope::{Envelope, RetryPolicy, Status};
 use crate::render;
@@ -127,6 +128,10 @@ enum ErrKind {
     Blocked,
     NotActionable,
     Navigation,
+    /// The caller cancelled a read: nothing changed.
+    Cancelled,
+    /// The caller cancelled a write: it may already have reached the page.
+    CancelledWrite,
 }
 
 impl ToolError {
@@ -152,6 +157,12 @@ impl ToolError {
                 (Status::Rejected, "NOT_ACTIONABLE", RetryPolicy::AfterChange)
             }
             Some(ErrKind::Navigation) => (Status::Failed, "NAVIGATION_FAILED", RetryPolicy::Safe),
+            Some(ErrKind::Cancelled) => (Status::Failed, "CANCELLED", RetryPolicy::Safe),
+            Some(ErrKind::CancelledWrite) => (
+                Status::Uncertain,
+                "CANCELLED_EFFECT_UNKNOWN",
+                RetryPolicy::ReconcileFirst,
+            ),
             None => return Envelope::new(Status::Failed, None, RetryPolicy::Never),
         };
         Envelope::new(status, Some(code), retry)
@@ -170,6 +181,11 @@ impl ToolError {
                 ("NOT_ACTIONABLE", "never until the page state changes")
             }
             Some(ErrKind::Navigation) => ("NAVIGATION_FAILED", "safe"),
+            Some(ErrKind::Cancelled) => ("CANCELLED", "safe"),
+            Some(ErrKind::CancelledWrite) => (
+                "CANCELLED_EFFECT_UNKNOWN",
+                "unsafe: it may have completed; check the page first",
+            ),
             None => return self.msg,
         };
         format!("ERROR {code} (retry: {retry}): {}", self.msg)
@@ -247,6 +263,18 @@ pub(crate) async fn with_deadline<T>(
                 limit.as_secs()
             ),
         )),
+    }
+}
+
+/// The error for a call the client cancelled.
+fn cancelled(name: &str) -> ToolError {
+    if is_write_tool(name) {
+        ToolError::typed(
+            ErrKind::CancelledWrite,
+            format!("{name} was cancelled; it may already have reached the page. Check the page (snapshot) before repeating it."),
+        )
+    } else {
+        ToolError::typed(ErrKind::Cancelled, format!("{name} was cancelled."))
     }
 }
 
@@ -763,6 +791,18 @@ impl App {
     }
 
     pub async fn call(&self, name: &str, args: &Value) -> ToolOutput {
+        self.call_cancellable(name, args, CancellationToken::new())
+            .await
+    }
+
+    /// `call`, abandoned when `cancel` fires (MCP `notifications/cancelled`). A cancelled write reports
+    /// `CANCELLED_EFFECT_UNKNOWN` (it may already have reached the page); a cancelled read, `CANCELLED`.
+    pub async fn call_cancellable(
+        &self,
+        name: &str,
+        args: &Value,
+        cancel: CancellationToken,
+    ) -> ToolOutput {
         let t0 = Instant::now();
         let out = match tools::allowed(self.cfg.profile, name) {
             None => ToolOutput::err(format!("unknown tool {name:?}")),
@@ -770,7 +810,13 @@ impl App {
                 "tool {name:?} is disabled by the server's tool profile"
             )),
             Some(true) => {
-                match with_deadline(name, tool_timeout(), self.dispatch(name, args)).await {
+                let run = with_deadline(name, tool_timeout(), self.dispatch(name, args));
+                let res = tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => Err(cancelled(name)),
+                    r = run => r,
+                };
+                match res {
                     Ok(o) => o,
                     Err(e) => ToolOutput::from_error(e),
                 }
