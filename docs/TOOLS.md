@@ -109,6 +109,30 @@ A key that matches nothing is reported, not guessed. A rejected submit says why,
 
 Verification is strict by design: a combobox must show the option you asked for (not a longer one that merely contains it), a `datetime-local` must read back as the requested instant, and `form_fill` reports `unsettled` when the page was still busy at the end of the fill so the verdicts can be treated with care.
 
+## Structured results
+
+Every tool result carries `structuredContent` (for clients that negotiated MCP protocol `2025-06-18`; older
+versions get only the text). The text content is unchanged.
+
+```json
+{"schema": "ostler.result/1", "status": "rejected", "code": "VALIDATION_FAILED",
+ "effect": {"kind": "validation_failed"}, "checks": [], "evidence_ids": [],
+ "retry_policy": "after_change", "next_action": {"tool": "form_fill", "why": "fix the reported fields"}}
+```
+
+| `status` | Meaning | `isError` |
+|---|---|---|
+| `completed` | the call did what it was asked; for `form_submit` the record is not yet checked (`effect.persisted: "unknown"`) | false |
+| `rejected` | the site or the page refused it (validation failed, element not actionable) | false |
+| `blocked` | policy refused it (`BLOCKED`) | false |
+| `needs_input` | the next step needs the caller (a new form step is showing) | false |
+| `uncertain` | it may or may not have happened (timeout, HTTP error after submit): check before repeating | false |
+| `failed` | it did not run or failed (stale ref, navigation failed, no observed effect, unclassified) | true |
+
+`retry_policy` is one of `safe`, `after_snapshot`, `reconcile_first`, `never`, `after_change`. `form_submit`
+codes: `VALIDATION_FAILED`, `NEXT_STEP`, `NO_OBSERVED_EFFECT`, `SERVER_ERROR`. Tools do not declare an
+`outputSchema` yet (it would add about 2 KB to every tool list).
+
 ## At a glance
 
 | | |

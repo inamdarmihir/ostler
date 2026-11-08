@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Structured tool results** (PLAN-LEVEL-100 step 1.1): every tool result carries `structuredContent` (`schema: "ostler.result/1"`, `status`, `code`, `effect`, `retry_policy`, `next_action`) for clients on MCP protocol 2025-06-18; older clients get text only. `form_submit` maps its outcome to a status: accepted is `completed` with `effect.persisted: "unknown"`, validation failure is `rejected`, a new step is `needs_input`, an HTTP error is `uncertain`, nothing changed is `failed`. The A2A form task result carries the same envelope as `outcome`. See [docs/TOOLS.md](docs/TOOLS.md#structured-results). Tools do not declare `outputSchema` yet.
 - **Readiness work toward "level 100"** (the plan is [docs/PLAN-LEVEL-100.md](docs/PLAN-LEVEL-100.md); the verified starting point is [docs/GAP-MATRIX.md](docs/GAP-MATRIX.md)). Library-level only so far; none of these is an MCP tool yet:
   - `ostler-extract::pdf`: per-page PDF text with a `scanned` flag, input and page caps, and panic-safe parsing (`pdf-extract`, MIT).
   - `ostler-research::archive`: an insert-only store of source versions and passages (JSONL, 0600, refuses symlinks); a changed page creates a new version and old citations keep their original text.
@@ -23,6 +24,8 @@
 - Website: new [Get started without programming](https://inamdarmihir.github.io/ostler/docs/get-started.html) page; the install page, agents page, landing page, FAQ and `llms.txt` now cover pip/uvx, the VS Code extension, Open VSX, Homebrew, npm and crates.io with links to each listing. Structured-data `sameAs` stays GitHub-only until the packages are live.
 
 ### Changed
+
+- **`isError` now means "the call failed to execute"** (PLAN-LEVEL-100 step 1.1). Results whose status is `rejected`, `blocked`, `needs_input` or `uncertain` (policy blocks, not-actionable elements, timeouts, rejected or server-error submits) return `isError: false`; read `structuredContent.status`. The text still starts with `ERROR <CODE>` for these. A `form_submit` where nothing changed now returns `isError: true`.
 
 - **Framework docs, a research demo, and a fix for the first release.** New page [LangChain, LlamaIndex and AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html): each snippet was run against Ostler 0.2.0 over stdio (tools loaded, `read` then `cite` returned VERIFIED and NOT VERIFIED), with no model in the loop. It records the one rule that matters: keep one Ostler session open, because LangChain's default `get_tools()` and LlamaIndex's `BasicMCPClient` start a new Ostler process per call, so `cite` answers `NOT READ`; AutoGen needs `mcp<2`. New `assets/demo-research.gif` (real replies and page screenshots: read, a VERIFIED and a NOT VERIFIED cite, an evidence report with a paywalled gap), now in the README and on the homepage beside the existing browse-and-forms GIF. The release workflow built the Intel macOS binary on `macos-13`, which GitHub has retired; it now uses `macos-15-intel`, so a tag will not wait for a runner that no longer exists. Adds `glama.json` for claiming the Glama listing. `docs/RELEASING.md` lists all eleven publishable crates, not eight.
 

@@ -84,10 +84,7 @@ impl Client {
 
     /// Call a tool and return (is_error, text).
     async fn tool(&mut self, name: &str, args: Value) -> (bool, String) {
-        let r = self
-            .rpc("tools/call", json!({"name": name, "arguments": args}))
-            .await;
-        assert!(r.get("error").is_none(), "{r}");
+        let r = self.tool_result(name, args).await;
         let text = r["result"]["content"]
             .as_array()
             .unwrap()
@@ -96,6 +93,15 @@ impl Client {
             .collect::<Vec<_>>()
             .join("\n");
         (r["result"]["isError"].as_bool().unwrap_or(false), text)
+    }
+
+    /// Call a tool and return the whole JSON-RPC response (to read `structuredContent`).
+    async fn tool_result(&mut self, name: &str, args: Value) -> Value {
+        let r = self
+            .rpc("tools/call", json!({"name": name, "arguments": args}))
+            .await;
+        assert!(r.get("error").is_none(), "{r}");
+        r
     }
 }
 
@@ -413,6 +419,29 @@ async fn validation_failure_is_learned_as_an_episode() {
 }
 
 #[tokio::test]
+async fn rejected_form_submit_is_a_domain_result_not_a_protocol_error() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&[]).await else {
+        return;
+    };
+    c.tool(
+        "navigate",
+        json!({"url": srv.url("/validation.html"), "observe": "none"}),
+    )
+    .await;
+    let r = c.tool_result("form_submit", json!({})).await;
+    assert_eq!(r["result"]["isError"], false, "{r}");
+    assert_eq!(
+        r["result"]["structuredContent"]["status"], "rejected",
+        "{r}"
+    );
+    assert_eq!(
+        r["result"]["structuredContent"]["code"], "VALIDATION_FAILED",
+        "{r}"
+    );
+}
+
+#[tokio::test]
 async fn confirm_gate_and_domain_policy_over_the_wire() {
     let srv = FixtureServer::start();
     let Some(mut c) =
@@ -420,10 +449,19 @@ async fn confirm_gate_and_domain_policy_over_the_wire() {
     else {
         return;
     };
-    let (err, _) = c
-        .tool("navigate", json!({"url": "https://example.com"}))
+    // A policy block is a domain outcome (structuredContent.status = blocked), not a protocol error.
+    let r = c
+        .tool_result("navigate", json!({"url": "https://example.com"}))
         .await;
-    assert!(err, "domain policy must block example.com");
+    assert_eq!(
+        r["result"]["structuredContent"]["status"], "blocked",
+        "domain policy must block example.com: {r}"
+    );
+    assert_eq!(r["result"]["isError"], false, "{r}");
+    assert!(r["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("ERROR BLOCKED"));
     c.tool(
         "navigate",
         json!({"url": srv.url("/basic.html"), "observe": "none"}),

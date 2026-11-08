@@ -14,6 +14,7 @@ mod script;
 mod tools;
 
 pub use app::{App, AppConfig, Content, FormTask, FormTaskResult, TaskVerdict, ToolOutput};
+pub use envelope::{Envelope, RetryPolicy, Status as OutcomeStatus};
 pub use tools::Profile;
 
 use serde_json::{json, Value};
@@ -51,6 +52,7 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
                 .iter()
                 .find(|v| **v == want)
                 .unwrap_or(&SUPPORTED[0]);
+            app.set_protocol(version);
             ok(
                 id,
                 json!({
@@ -74,7 +76,13 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
             if tools::allowed(app.profile(), name).is_none() {
                 return Some(rpc_err(id, -32602, format!("unknown tool {name:?}")));
             }
-            ok(id, app.call(name, &args).await.to_json())
+            let mut out = app.call(name, &args).await.to_json();
+            if !app.structured() {
+                if let Some(o) = out.as_object_mut() {
+                    o.remove("structuredContent");
+                }
+            }
+            ok(id, out)
         }
         "resources/list" => ok(id, json!({"resources": []})),
         "prompts/list" => ok(id, json!({"prompts": prompts::list()})),
@@ -296,6 +304,96 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("confirm"));
+    }
+
+    #[test]
+    fn structured_result_for_validation_rejection() {
+        use ostler_browser::SubmitStatus;
+        let v = app::submit_output(
+            "NOT ACCEPTED: the page reported problems.".into(),
+            SubmitStatus::ValidationFailed,
+        )
+        .to_json();
+        assert_eq!(v["isError"], false, "{v}");
+        assert_eq!(v["structuredContent"]["status"], "rejected", "{v}");
+        assert_eq!(v["structuredContent"]["code"], "VALIDATION_FAILED", "{v}");
+        let ok = app::submit_output("Submitted".into(), SubmitStatus::Submitted).to_json();
+        assert_eq!(ok["structuredContent"]["status"], "completed");
+        assert_eq!(ok["structuredContent"]["effect"]["persisted"], "unknown");
+        let adv = app::submit_output("Advanced".into(), SubmitStatus::Advanced).to_json();
+        assert_eq!(adv["structuredContent"]["status"], "needs_input");
+        let srv = app::submit_output("SERVER ERROR".into(), SubmitStatus::ServerError).to_json();
+        assert_eq!(srv["structuredContent"]["status"], "uncertain");
+        assert_eq!(srv["isError"], false);
+    }
+
+    #[tokio::test]
+    async fn structured_result_for_uncertain_timeout() {
+        let slow = async {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            Ok::<ToolOutput, app::ToolError>(app::ToolOutput::text("never"))
+        };
+        let e = app::with_deadline("click", Some(std::time::Duration::from_millis(50)), slow)
+            .await
+            .err()
+            .expect("deadline");
+        let v = ToolOutput::from_error(e).to_json();
+        assert_eq!(v["isError"], false, "{v}");
+        assert_eq!(v["structuredContent"]["status"], "uncertain", "{v}");
+        assert_eq!(v["structuredContent"]["code"], "ACTION_UNCERTAIN");
+        assert_eq!(v["structuredContent"]["retry_policy"], "reconcile_first");
+        assert!(v["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("ERROR ACTION_UNCERTAIN"));
+    }
+
+    #[tokio::test]
+    async fn protocol_error_only_for_execution_failure() {
+        use ostler_browser::{BrowserError, SubmitStatus};
+        // Domain outcomes the caller can act on are not protocol errors.
+        for e in [
+            BrowserError::Policy("host x".into()),
+            BrowserError::NotActionable("e3 is disabled".into()),
+            BrowserError::Uncertain("x".into()),
+        ] {
+            let v = ToolOutput::from_error(e.into()).to_json();
+            assert_eq!(v["isError"], false, "{v}");
+            assert_ne!(v["structuredContent"]["status"], "failed", "{v}");
+        }
+        // Execution failures are.
+        for e in [
+            BrowserError::StaleRef("e1".into()),
+            BrowserError::Navigation("x".into()),
+            BrowserError::Other("boom".into()),
+        ] {
+            let v = ToolOutput::from_error(e.into()).to_json();
+            assert_eq!(v["isError"], true, "{v}");
+            assert_eq!(v["structuredContent"]["status"], "failed", "{v}");
+        }
+        let v = app::submit_output("Nothing changed".into(), SubmitStatus::Unchanged).to_json();
+        assert_eq!(v["isError"], true, "{v}");
+        // Over the wire every result, success or not, carries the envelope.
+        let a = app();
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"navigate","arguments":{}}})).await.unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(r["result"]["structuredContent"]["status"], "failed");
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"context","arguments":{"action":"list"}}})).await.unwrap();
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert_eq!(r["result"]["structuredContent"]["status"], "completed");
+        assert_eq!(
+            r["result"]["structuredContent"]["schema"],
+            "ostler.result/1"
+        );
+    }
+
+    #[tokio::test]
+    async fn old_clients_get_no_structured_content() {
+        let a = app();
+        // A client that negotiated a version older than 2025-06-18 does not know the field.
+        handle(&a, &json!({"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-03-26"}})).await.unwrap();
+        let r = handle(&a, &json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"context","arguments":{"action":"list"}}})).await.unwrap();
+        assert!(r["result"].get("structuredContent").is_none(), "{r}");
     }
 
     #[tokio::test]

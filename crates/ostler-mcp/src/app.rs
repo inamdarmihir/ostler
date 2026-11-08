@@ -71,6 +71,8 @@ pub struct FormTaskResult {
     pub summary: String,
     /// The same information as JSON for a program.
     pub data: Value,
+    /// The structured outcome (the same envelope the MCP tools return).
+    pub outcome: Envelope,
 }
 
 impl FormTaskResult {
@@ -79,6 +81,7 @@ impl FormTaskResult {
             verdict: TaskVerdict::Completed,
             summary,
             data,
+            outcome: Envelope::new(Status::Completed, None, RetryPolicy::Safe),
         }
     }
     fn input_required(summary: String, data: Value) -> Self {
@@ -86,6 +89,7 @@ impl FormTaskResult {
             verdict: TaskVerdict::InputRequired,
             summary,
             data,
+            outcome: Envelope::new(Status::NeedsInput, None, RetryPolicy::AfterChange),
         }
     }
     fn failed(summary: String) -> Self {
@@ -93,7 +97,12 @@ impl FormTaskResult {
             verdict: TaskVerdict::Failed,
             summary,
             data: Value::Null,
+            outcome: Envelope::new(Status::Failed, None, RetryPolicy::Never),
         }
+    }
+    fn with_outcome(mut self, outcome: Envelope) -> Self {
+        self.outcome = outcome;
+        self
     }
 }
 
@@ -219,7 +228,7 @@ fn tool_timeout() -> Option<Duration> {
 }
 
 /// Run a tool future under the deadline. The waiting tools take their own timeout argument and are exempt.
-async fn with_deadline<T>(
+pub(crate) async fn with_deadline<T>(
     name: &str,
     limit: Option<Duration>,
     fut: impl std::future::Future<Output = Result<T, ToolError>>,
@@ -244,12 +253,26 @@ async fn with_deadline<T>(
 pub struct ToolOutput {
     pub content: Vec<Content>,
     pub is_error: bool,
-    /// The structured outcome, when the call failed in a way the envelope describes.
+    /// The structured outcome. `App::call` fills in a default (`completed`, or `failed` for an error)
+    /// when the tool did not set one, so every result over the wire carries it.
     pub envelope: Option<Envelope>,
 }
 
+/// The result of a form submit: the text plus the envelope its `SubmitStatus` maps to.
+pub(crate) fn submit_output(text: String, status: SubmitStatus) -> ToolOutput {
+    ToolOutput::text(text).with_envelope(Envelope::for_submit(status))
+}
+
+/// Tools that change the page or send data. Repeating one that completed repeats its effect.
+pub(crate) fn is_write_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "click" | "type" | "press" | "form_submit" | "fill_field" | "form_fill"
+    )
+}
+
 impl ToolOutput {
-    fn text(s: impl Into<String>) -> Self {
+    pub(crate) fn text(s: impl Into<String>) -> Self {
         Self {
             content: vec![Content::Text(s.into())],
             is_error: false,
@@ -263,6 +286,26 @@ impl ToolOutput {
             envelope: None,
         }
     }
+    pub(crate) fn with_envelope(mut self, env: Envelope) -> Self {
+        self.envelope = Some(env);
+        self
+    }
+
+    /// A failed call: the tagged message plus the envelope its error kind maps to.
+    pub(crate) fn from_error(e: ToolError) -> Self {
+        let env = e.envelope();
+        Self::err(e.tagged()).with_envelope(env)
+    }
+
+    /// `isError` over the wire: true only for execution failures. A rejected, blocked, uncertain or
+    /// needs-input outcome is a domain result the caller acts on, described by `structuredContent`.
+    pub fn is_protocol_error(&self) -> bool {
+        match &self.envelope {
+            Some(env) => env.is_protocol_error(),
+            None => self.is_error,
+        }
+    }
+
     pub fn text_content(&self) -> String {
         self.content
             .iter()
@@ -288,7 +331,7 @@ impl ToolOutput {
                 }),
             })
             .collect();
-        let mut out = json!({"content": content, "isError": self.is_error});
+        let mut out = json!({"content": content, "isError": self.is_protocol_error()});
         if let Some(env) = &self.envelope {
             out["structuredContent"] = env.to_value();
         }
@@ -340,6 +383,9 @@ pub struct App {
     notice: StdMutex<Option<String>>,
     revealed: std::sync::atomic::AtomicBool,
     research_revealed: std::sync::atomic::AtomicBool,
+    /// The client negotiated protocol 2025-06-18 or later, so it understands `structuredContent` and
+    /// `outputSchema`. True until `initialize` says otherwise.
+    structured: std::sync::atomic::AtomicBool,
     list_changed: std::sync::atomic::AtomicBool,
     /// Pages read, citations verified, sources and gaps: what the agent may state as found.
     research: research::Research,
@@ -528,6 +574,7 @@ impl App {
             notice: StdMutex::default(),
             revealed: Default::default(),
             research_revealed: Default::default(),
+            structured: std::sync::atomic::AtomicBool::new(true),
             list_changed: Default::default(),
             research: Default::default(),
             context: StdMutex::default(),
@@ -565,6 +612,20 @@ impl App {
 
     pub fn profile(&self) -> Profile {
         self.cfg.profile
+    }
+
+    /// Record the protocol version chosen at `initialize`. Versions before 2025-06-18 do not get
+    /// `structuredContent`.
+    pub fn set_protocol(&self, version: &str) {
+        self.structured.store(
+            version >= "2025-06-18",
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// Whether results carry `structuredContent` for this client.
+    pub fn structured(&self) -> bool {
+        self.structured.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// The tools to list right now (`auto` grows once a page with form fields has been seen, and again
@@ -711,16 +772,20 @@ impl App {
             Some(true) => {
                 match with_deadline(name, tool_timeout(), self.dispatch(name, args)).await {
                     Ok(o) => o,
-                    Err(e) => {
-                        let env = e.envelope();
-                        let mut o = ToolOutput::err(e.tagged());
-                        o.envelope = Some(env);
-                        o
-                    }
+                    Err(e) => ToolOutput::from_error(e),
                 }
             }
         };
         let mut out = out;
+        if out.envelope.is_none() {
+            out.envelope = Some(if out.is_error {
+                Envelope::new(Status::Failed, None, RetryPolicy::Never)
+            } else if is_write_tool(name) {
+                Envelope::new(Status::Completed, None, RetryPolicy::Never)
+            } else {
+                Envelope::new(Status::Completed, None, RetryPolicy::Safe)
+            });
+        }
         // `where` / `select` trim list results here, so rows the agent does not need never reach it.
         if !out.is_error && matches!(name, "extract" | "links") {
             if let Some(f) = crate::filter::Filter::from_args(args) {
@@ -1743,13 +1808,15 @@ impl App {
             "pageErrors": out.page_errors,
             "excerpt": out.excerpt,
         });
+        let outcome = Envelope::for_submit(out.status);
         Ok(match out.status {
             SubmitStatus::Submitted => FormTaskResult::completed(text, data),
             SubmitStatus::Advanced | SubmitStatus::ValidationFailed => {
                 FormTaskResult::input_required(text, data)
             }
             SubmitStatus::Unchanged | SubmitStatus::ServerError => FormTaskResult::failed(text),
-        })
+        }
+        .with_outcome(outcome))
     }
 
     async fn form_submit(&self, a: &Value) -> Result<ToolOutput, ToolError> {
@@ -1767,11 +1834,10 @@ impl App {
             b.page().submit(form.as_deref(), ctl.as_deref()).await
         })?;
         self.learn_from_submit(&out);
-        Ok(ToolOutput::text(wrap_detail(&render::submit_shots(
-            &out,
-            self.cfg.verbose,
-            true,
-        ))))
+        Ok(submit_output(
+            wrap_detail(&render::submit_shots(&out, self.cfg.verbose, true)),
+            out.status,
+        ))
     }
 
     /// Turn what just happened into memory, off the critical path.

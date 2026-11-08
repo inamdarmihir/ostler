@@ -1,8 +1,10 @@
 //! The structured outcome of a tool call (PLAN-LEVEL-100 step 1.1).
 //!
-//! Every failed call carries an [`Envelope`] in `structuredContent`, so a client can act on the domain
-//! outcome without parsing the prose. The text content is unchanged for people reading the transcript.
+//! Every call carries an [`Envelope`] in `structuredContent` (for clients that negotiated protocol
+//! 2025-06-18 or later), so a client can act on the domain outcome without parsing the prose. The text
+//! content is unchanged for people reading the transcript.
 
+use ostler_browser::SubmitStatus;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -37,7 +39,7 @@ pub enum RetryPolicy {
     AfterChange,
 }
 
-/// The structured result attached to a failed tool call.
+/// The structured result attached to every tool call.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Envelope {
     pub schema: &'static str,
@@ -72,6 +74,58 @@ impl Envelope {
     /// The JSON placed under `structuredContent`.
     pub fn to_value(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
+    }
+
+    pub fn with_effect(mut self, effect: Value) -> Self {
+        self.effect = Some(effect);
+        self
+    }
+
+    pub fn with_next(mut self, next: Value) -> Self {
+        self.next_action = Some(next);
+        self
+    }
+
+    /// Whether this outcome is an execution error at the protocol level (`isError: true`). Domain
+    /// outcomes the caller can act on (rejected, blocked, needs input, uncertain) are not.
+    pub fn is_protocol_error(&self) -> bool {
+        self.status == Status::Failed
+    }
+
+    /// The outcome of a form submit. A submit that looks accepted is `completed`, but nothing has checked
+    /// that the site stored the record yet, so `effect.persisted` is `"unknown"`.
+    pub fn for_submit(s: SubmitStatus) -> Self {
+        use serde_json::json;
+        match s {
+            SubmitStatus::Submitted => Self::new(Status::Completed, None, RetryPolicy::Never)
+                .with_effect(json!({"kind": "submitted", "persisted": "unknown"})),
+            SubmitStatus::ValidationFailed => Self::new(
+                Status::Rejected,
+                Some("VALIDATION_FAILED"),
+                RetryPolicy::AfterChange,
+            )
+            .with_effect(json!({"kind": "validation_failed"}))
+            .with_next(json!({"tool": "form_fill", "why": "fix the reported fields"})),
+            SubmitStatus::Advanced => {
+                Self::new(Status::NeedsInput, Some("NEXT_STEP"), RetryPolicy::Never)
+                    .with_effect(json!({"kind": "advanced"}))
+                    .with_next(json!({"tool": "form_inspect", "why": "a new step is showing"}))
+            }
+            SubmitStatus::Unchanged => Self::new(
+                Status::Failed,
+                Some("NO_OBSERVED_EFFECT"),
+                RetryPolicy::ReconcileFirst,
+            )
+            .with_effect(json!({"kind": "no_observed_effect"}))
+            .with_next(json!({"tool": "snapshot", "why": "check whether it was sent"})),
+            SubmitStatus::ServerError => Self::new(
+                Status::Uncertain,
+                Some("SERVER_ERROR"),
+                RetryPolicy::ReconcileFirst,
+            )
+            .with_effect(json!({"kind": "server_error", "persisted": "unknown"}))
+            .with_next(json!({"tool": "snapshot", "why": "the data may or may not be stored"})),
+        }
     }
 }
 
