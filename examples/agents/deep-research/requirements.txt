@@ -1,3 +1,0 @@
-anthropic>=2.6
-mcp>=1.30
-pydantic>=2
