@@ -14,6 +14,7 @@ use ostler_memory::{FieldOutcome, FieldQuery, Memory};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
+use crate::envelope::{Envelope, RetryPolicy, Status};
 use crate::render;
 use crate::tools::{self, Profile};
 
@@ -127,6 +128,26 @@ impl ToolError {
         }
     }
 
+    /// The structured outcome of this failure (see `envelope.rs`). Unclassified failures are `failed`
+    /// with no code and no retry: the caller cannot tell whether repeating is safe, so it must not assume.
+    pub(crate) fn envelope(&self) -> Envelope {
+        let (status, code, retry) = match self.kind {
+            Some(ErrKind::StaleRef) => (Status::Failed, "STALE_REF", RetryPolicy::AfterSnapshot),
+            Some(ErrKind::Uncertain) => (
+                Status::Uncertain,
+                "ACTION_UNCERTAIN",
+                RetryPolicy::ReconcileFirst,
+            ),
+            Some(ErrKind::Blocked) => (Status::Blocked, "BLOCKED", RetryPolicy::Never),
+            Some(ErrKind::NotActionable) => {
+                (Status::Rejected, "NOT_ACTIONABLE", RetryPolicy::AfterChange)
+            }
+            Some(ErrKind::Navigation) => (Status::Failed, "NAVIGATION_FAILED", RetryPolicy::Safe),
+            None => return Envelope::new(Status::Failed, None, RetryPolicy::Never),
+        };
+        Envelope::new(status, Some(code), retry)
+    }
+
     /// The message with its code and retry rule, if the cause is known.
     fn tagged(self) -> String {
         let (code, retry) = match self.kind {
@@ -223,6 +244,8 @@ async fn with_deadline<T>(
 pub struct ToolOutput {
     pub content: Vec<Content>,
     pub is_error: bool,
+    /// The structured outcome, when the call failed in a way the envelope describes.
+    pub envelope: Option<Envelope>,
 }
 
 impl ToolOutput {
@@ -230,12 +253,14 @@ impl ToolOutput {
         Self {
             content: vec![Content::Text(s.into())],
             is_error: false,
+            envelope: None,
         }
     }
     fn err(s: impl Into<String>) -> Self {
         Self {
             content: vec![Content::Text(s.into())],
             is_error: true,
+            envelope: None,
         }
     }
     pub fn text_content(&self) -> String {
@@ -263,7 +288,11 @@ impl ToolOutput {
                 }),
             })
             .collect();
-        json!({"content": content, "isError": self.is_error})
+        let mut out = json!({"content": content, "isError": self.is_error});
+        if let Some(env) = &self.envelope {
+            out["structuredContent"] = env.to_value();
+        }
+        out
     }
     pub fn bytes(&self) -> usize {
         self.content
@@ -682,7 +711,12 @@ impl App {
             Some(true) => {
                 match with_deadline(name, tool_timeout(), self.dispatch(name, args)).await {
                     Ok(o) => o,
-                    Err(e) => ToolOutput::err(e.tagged()),
+                    Err(e) => {
+                        let env = e.envelope();
+                        let mut o = ToolOutput::err(e.tagged());
+                        o.envelope = Some(env);
+                        o
+                    }
                 }
             }
         };
@@ -1104,6 +1138,7 @@ impl App {
                             Content::Image { png },
                         ],
                         is_error: false,
+                        envelope: None,
                     })
                 })
             }
@@ -1115,6 +1150,7 @@ impl App {
                     Ok(ToolOutput {
                         content: vec![Content::Image { png }],
                         is_error: false,
+                        envelope: None,
                     })
                 })
             }
@@ -2135,5 +2171,72 @@ mod tag_error_tests {
             "something else"
         );
         assert_eq!(ToolError::from("plain").tagged(), "plain");
+    }
+
+    #[test]
+    fn each_typed_failure_has_a_domain_status_and_retry_rule() {
+        use crate::envelope::{RetryPolicy, Status};
+        let cases: Vec<(BrowserError, Status, Option<&str>, RetryPolicy)> = vec![
+            (
+                BrowserError::StaleRef("e1".into()),
+                Status::Failed,
+                Some("STALE_REF"),
+                RetryPolicy::AfterSnapshot,
+            ),
+            (
+                BrowserError::Uncertain("x".into()),
+                Status::Uncertain,
+                Some("ACTION_UNCERTAIN"),
+                RetryPolicy::ReconcileFirst,
+            ),
+            (
+                BrowserError::Policy("x".into()),
+                Status::Blocked,
+                Some("BLOCKED"),
+                RetryPolicy::Never,
+            ),
+            (
+                BrowserError::NotActionable("x".into()),
+                Status::Rejected,
+                Some("NOT_ACTIONABLE"),
+                RetryPolicy::AfterChange,
+            ),
+            (
+                BrowserError::Navigation("x".into()),
+                Status::Failed,
+                Some("NAVIGATION_FAILED"),
+                RetryPolicy::Safe,
+            ),
+            (
+                BrowserError::Other("x".into()),
+                Status::Failed,
+                None,
+                RetryPolicy::Never,
+            ),
+        ];
+        for (err, status, code, retry) in cases {
+            let env = ToolError::from(err).envelope();
+            assert_eq!(
+                (env.status, env.code, env.retry_policy),
+                (status, code, retry)
+            );
+        }
+    }
+
+    #[test]
+    fn failed_calls_carry_structured_content_and_successes_do_not() {
+        let failed = ToolOutput {
+            content: vec![Content::Text("x".into())],
+            is_error: true,
+            envelope: Some(ToolError::from(BrowserError::Navigation("x".into())).envelope()),
+        };
+        let v = failed.to_json();
+        assert_eq!(v["isError"], true);
+        assert_eq!(v["structuredContent"]["status"], "failed");
+        assert_eq!(v["structuredContent"]["code"], "NAVIGATION_FAILED");
+        assert!(ToolOutput::text("ok")
+            .to_json()
+            .get("structuredContent")
+            .is_none());
     }
 }
