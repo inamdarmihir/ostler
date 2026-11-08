@@ -288,6 +288,9 @@ pub struct Page {
     shared: Arc<Shared>,
     pub(crate) state: Arc<Mutex<PageState>>,
     pub(crate) policy: Arc<Policy>,
+    /// Held for the whole of a call that changes this page, so two writes on one tab never overlap.
+    /// Reads do not take it. Writes on different tabs run in parallel.
+    write_gate: Arc<tokio::sync::Mutex<()>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -407,6 +410,12 @@ const CONTEXT_GONE: [&str; 4] = [
 ];
 
 impl Page {
+    /// Take this page's write gate (see `Page::write_gate`). The caller holds it for the whole action,
+    /// including the settle and the snapshot that follow, so nothing else writes to the page meanwhile.
+    pub async fn lock_writes(&self) -> tokio::sync::OwnedMutexGuard<()> {
+        self.write_gate.clone().lock_owned().await
+    }
+
     pub fn target_id(&self) -> &str {
         &self.session.target_id
     }
@@ -440,6 +449,7 @@ impl Page {
             shared: Arc::default(),
             state: Arc::default(),
             policy: Arc::new(policy),
+            write_gate: Arc::default(),
         };
         page.shared.gate.store(gate, Ordering::SeqCst);
         page.shared

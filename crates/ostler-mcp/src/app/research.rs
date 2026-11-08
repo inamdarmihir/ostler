@@ -642,66 +642,71 @@ impl App {
 
         let tracker = BudgetTracker::new(budget);
         let outcome: Result<(), ToolError> = br!(self, b, {
-            let prev = b.active_tab();
-            let tab = b.new_tab(None).await?;
-            for pf in &planned.to_fetch {
-                if tracker.try_start_page().is_err() {
-                    let _ = self
-                        .research
-                        .ledger
-                        .record(SourceEntry::new(&pf.url, Outcome::BudgetExceeded));
-                    lines.push(format!("GAP budget_exceeded — {}", inert(&pf.url)));
-                    continue;
-                }
-                let _permit = self.research.limiter.acquire(&host_of(&pf.url)).await;
-                let res = tokio::time::timeout(Duration::from_secs(PAGE_SECS), async {
-                    let o = b.page().navigate(&pf.url).await?;
-                    self.ingest(b, Some(&pf.url), o.status).await
-                })
-                .await;
-                match res {
-                    Ok(Ok(Ingest::Read {
-                        doc,
-                        change,
-                        paywalled,
-                    })) => {
-                        let mut s = self.summarise(&doc, query.as_deref(), k, false, paywalled);
-                        if let Some(c) = change {
-                            let _ = write!(s, "\n  CHANGED since the earlier read ({} earlier citation(s) no longer verify)", c.stale);
-                        }
-                        shown.push((pf.url.clone(), s));
-                    }
-                    Ok(Ok(Ingest::Gap { outcome, line })) => {
-                        lines.push(format!(
-                            "GAP {} — {} — {}",
-                            outcome.reason_key(),
-                            inert(&pf.url),
-                            line
-                        ));
-                    }
-                    Ok(Err(e)) => {
-                        let why: String = e.into();
+            // A background tab: the active tab never changes, so concurrent calls never land on it.
+            let (tab, scratch) = b.new_background_tab().await?;
+            let read_all = async {
+                for pf in &planned.to_fetch {
+                    if tracker.try_start_page().is_err() {
                         let _ = self
                             .research
                             .ledger
-                            .record(SourceEntry::new(&pf.url, Outcome::Failed(short(&why))));
-                        lines.push(format!("GAP failed — {} — {}", inert(&pf.url), inert(&why)));
+                            .record(SourceEntry::new(&pf.url, Outcome::BudgetExceeded));
+                        lines.push(format!("GAP budget_exceeded — {}", inert(&pf.url)));
+                        continue;
                     }
-                    Err(_) => {
-                        let _ = self.research.ledger.record(SourceEntry::new(
-                            &pf.url,
-                            Outcome::Failed(format!("timed out after {PAGE_SECS}s")),
-                        ));
-                        lines.push(format!(
-                            "GAP failed: timed out after {PAGE_SECS}s — {}",
-                            inert(&pf.url)
-                        ));
+                    let _permit = self.research.limiter.acquire(&host_of(&pf.url)).await;
+                    let res = tokio::time::timeout(Duration::from_secs(PAGE_SECS), async {
+                        let o = b.page().navigate(&pf.url).await?;
+                        self.ingest(b, Some(&pf.url), o.status).await
+                    })
+                    .await;
+                    match res {
+                        Ok(Ok(Ingest::Read {
+                            doc,
+                            change,
+                            paywalled,
+                        })) => {
+                            let mut s = self.summarise(&doc, query.as_deref(), k, false, paywalled);
+                            if let Some(c) = change {
+                                let _ = write!(s, "\n  CHANGED since the earlier read ({} earlier citation(s) no longer verify)", c.stale);
+                            }
+                            shown.push((pf.url.clone(), s));
+                        }
+                        Ok(Ok(Ingest::Gap { outcome, line })) => {
+                            lines.push(format!(
+                                "GAP {} — {} — {}",
+                                outcome.reason_key(),
+                                inert(&pf.url),
+                                line
+                            ));
+                        }
+                        Ok(Err(e)) => {
+                            let why: String = e.into();
+                            let _ = self
+                                .research
+                                .ledger
+                                .record(SourceEntry::new(&pf.url, Outcome::Failed(short(&why))));
+                            lines.push(format!(
+                                "GAP failed — {} — {}",
+                                inert(&pf.url),
+                                inert(&why)
+                            ));
+                        }
+                        Err(_) => {
+                            let _ = self.research.ledger.record(SourceEntry::new(
+                                &pf.url,
+                                Outcome::Failed(format!("timed out after {PAGE_SECS}s")),
+                            ));
+                            lines.push(format!(
+                                "GAP failed: timed out after {PAGE_SECS}s — {}",
+                                inert(&pf.url)
+                            ));
+                        }
                     }
                 }
-            }
-            // Leave the agent's tab as it was.
+            };
+            ostler_browser::on_page(scratch, read_all).await;
             let _ = b.close_tab(&tab).await;
-            let _ = b.switch_tab(&prev).await;
             Ok(())
         });
         outcome?;

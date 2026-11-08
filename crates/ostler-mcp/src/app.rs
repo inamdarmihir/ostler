@@ -12,20 +12,63 @@ use ostler_browser::{
 use ostler_forms::Field;
 use ostler_memory::{FieldOutcome, FieldQuery, Memory};
 use serde_json::{json, Value};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use crate::envelope::{Envelope, RetryPolicy, Status};
 use crate::render;
 use crate::tools::{self, Profile};
 
-/// Run an async block against the (lazily launched) browser as `$b`.
+/// Run an async block against the (lazily launched) browser as `$b`. `$b.page()` is the tab the call
+/// addressed (its `tab` argument) or the active tab. In a write call this also holds that page's write
+/// gate for the block, so two writes on one tab never overlap (see `CallCtx`).
 macro_rules! br {
     ($self:ident, $b:ident, $body:block) => {{
         let guard = $self.browser().await?;
         let $b: &Browser = guard.as_ref().expect("browser launched");
+        let _gate = $crate::app::WriteGate::take($b).await;
         async $body.await
     }};
+}
+
+/// What the running tool call is, for the code under `br!`.
+struct CallCtx {
+    /// The call changes the page: take the page's write gate.
+    write: bool,
+    /// The gate is already held by an outer `br!` of this call (the gate is not re-entrant).
+    held: std::cell::Cell<bool>,
+}
+
+tokio::task_local! {
+    static CALL: CallCtx;
+}
+
+/// A held page write gate; releases it (and the re-entrancy mark) on drop.
+pub(crate) struct WriteGate(Option<tokio::sync::OwnedMutexGuard<()>>);
+
+impl WriteGate {
+    pub(crate) async fn take(b: &Browser) -> Self {
+        let need = CALL
+            .try_with(|c| c.write && !c.held.replace(true))
+            .unwrap_or(false);
+        if !need {
+            return Self(None);
+        }
+        Self(Some(b.page().lock_writes().await))
+    }
+}
+
+impl Drop for WriteGate {
+    fn drop(&mut self) {
+        if self.0.take().is_some() {
+            let _ = CALL.try_with(|c| c.held.set(false));
+        }
+    }
+}
+
+/// Tools whose whole call holds the page's write gate: everything that navigates, types, clicks or sends.
+fn takes_write_gate(name: &str) -> bool {
+    is_write_tool(name) || matches!(name, "navigate" | "back" | "hover" | "scroll")
 }
 
 mod research;
@@ -404,7 +447,9 @@ struct LastFill {
 
 pub struct App {
     cfg: AppConfig,
-    browser: Mutex<Option<Browser>>,
+    /// The browser. Calls hold a read guard while they use it (many at once); launch and relaunch
+    /// take the write side. Page-level serialisation is each page's write gate.
+    browser: RwLock<Option<Browser>>,
     metrics: StdMutex<Metrics>,
     last_fill: StdMutex<Option<LastFill>>,
     /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
@@ -596,7 +641,7 @@ impl App {
     pub fn new(cfg: AppConfig) -> Self {
         Self {
             cfg,
-            browser: Mutex::new(None),
+            browser: RwLock::new(None),
             metrics: StdMutex::default(),
             last_fill: StdMutex::default(),
             notice: StdMutex::default(),
@@ -614,20 +659,20 @@ impl App {
     /// (CDP round-trips so far, browser memory in KiB). `None` until the browser has started.
     pub async fn browser_metrics(&self) -> Option<(u64, Option<u64>)> {
         self.browser
-            .lock()
+            .read()
             .await
             .as_ref()
             .map(|b| (b.cdp_calls(), b.rss_kb()))
     }
 
     pub async fn browser_pid(&self) -> Option<u32> {
-        self.browser.lock().await.as_ref().and_then(|b| b.pid())
+        self.browser.read().await.as_ref().and_then(|b| b.pid())
     }
 
     /// Evaluate JavaScript in the active tab and return its value, for evaluations that must read the page
     /// independently of what the tools report. `None` until the browser has started, or if the script fails.
     pub async fn page_eval(&self, expression: &str) -> Option<Value> {
-        let page = self.browser.lock().await.as_ref()?.page();
+        let page = self.browser.read().await.as_ref()?.page();
         page.eval(expression).await.ok()
     }
 
@@ -753,7 +798,7 @@ impl App {
 
     pub async fn shutdown(&self) {
         self.flush().await;
-        if let Some(b) = self.browser.lock().await.take() {
+        if let Some(b) = self.browser.write().await.take() {
             b.close().await;
         }
     }
@@ -768,8 +813,16 @@ impl App {
     }
 
     /// The shared browser, launched on first use (so the server starts instantly and idles for free).
-    async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, ToolError> {
-        let mut guard = self.browser.lock().await;
+    async fn browser(
+        &self,
+    ) -> Result<tokio::sync::RwLockReadGuard<'_, Option<Browser>>, ToolError> {
+        {
+            let guard = self.browser.read().await;
+            if guard.as_ref().is_some_and(Browser::is_alive) {
+                return Ok(guard);
+            }
+        }
+        let mut guard = self.browser.write().await;
         if guard.as_ref().is_some_and(|b| !b.is_alive()) {
             // Chrome died (crash, OOM kill). Reap it and start fresh rather than failing every call forever.
             if let Some(dead) = guard.take() {
@@ -787,7 +840,7 @@ impl App {
             }
             *guard = Some(b);
         }
-        Ok(guard)
+        Ok(guard.downgrade())
     }
 
     pub async fn call(&self, name: &str, args: &Value) -> ToolOutput {
@@ -804,17 +857,39 @@ impl App {
         cancel: CancellationToken,
     ) -> ToolOutput {
         let t0 = Instant::now();
+        // The tab this call addressed, if it named one (used for the challenge check below too).
+        let mut page: Option<ostler_browser::Page> = None;
         let out = match tools::allowed(self.cfg.profile, name) {
             None => ToolOutput::err(format!("unknown tool {name:?}")),
             Some(false) => ToolOutput::err(format!(
                 "tool {name:?} is disabled by the server's tool profile"
             )),
             Some(true) => {
-                let run = with_deadline(name, tool_timeout(), self.dispatch(name, args));
-                let res = tokio::select! {
-                    biased;
-                    () = cancel.cancelled() => Err(cancelled(name)),
-                    r = run => r,
+                let res = match self.call_page(name, args).await {
+                    Err(e) => Err(e),
+                    Ok(p) => {
+                        page = p.clone();
+                        let ctx = CallCtx {
+                            write: takes_write_gate(name)
+                                || (name == "read" && arg_str(args, "url").is_some()),
+                            held: std::cell::Cell::new(false),
+                        };
+                        let run = CALL.scope(
+                            ctx,
+                            with_deadline(name, tool_timeout(), self.dispatch(name, args)),
+                        );
+                        let run = async {
+                            match p {
+                                Some(p) => ostler_browser::on_page(p, run).await,
+                                None => run.await,
+                            }
+                        };
+                        tokio::select! {
+                            biased;
+                            () = cancel.cancelled() => Err(cancelled(name)),
+                            r = run => r,
+                        }
+                    }
                 };
                 match res {
                     Ok(o) => o,
@@ -857,9 +932,9 @@ impl App {
                 | "form_submit"
                 | "fill_field"
         ) {
-            if let Ok(guard) = self.browser.try_lock() {
+            if let Ok(guard) = self.browser.try_read() {
                 if let Some(b) = guard.as_ref() {
-                    if let Ok(Some(c)) = b.page().challenge().await {
+                    if let Ok(Some(c)) = page.as_ref().unwrap_or(&b.page()).challenge().await {
                         let what = if c.interstitial {
                             format!(
                                 "{} verification page is shown instead of the site",
@@ -901,7 +976,7 @@ impl App {
             }
         }
         // Things that happened on their own while we worked (a popup opened as a new tab).
-        if let Ok(guard) = self.browser.try_lock() {
+        if let Ok(guard) = self.browser.try_read() {
             if let Some(b) = guard.as_ref() {
                 let notes = b.take_notes();
                 if !notes.is_empty() {
@@ -935,6 +1010,26 @@ impl App {
             m.errors += 1;
         }
         out
+    }
+
+    /// The page a call's `tab` argument names (`None` without one: the active tab). `tabs` takes `tab`
+    /// as its own argument and is not redirected.
+    async fn call_page(
+        &self,
+        name: &str,
+        args: &Value,
+    ) -> Result<Option<ostler_browser::Page>, ToolError> {
+        let Some(tab) = arg_str(args, "tab").filter(|_| name != "tabs") else {
+            return Ok(None);
+        };
+        let guard = self.browser.read().await;
+        guard
+            .as_ref()
+            .and_then(|b| b.page_by_id(tab))
+            .map(Some)
+            .ok_or_else(|| {
+                format!("no tab {tab:?}; call tabs with action list to see the open tabs").into()
+            })
     }
 
     async fn observe(
@@ -2025,7 +2120,7 @@ impl App {
             }
             (lines, c, by, ms, m.errors)
         };
-        let (cdp, rss) = match self.browser.lock().await.as_ref() {
+        let (cdp, rss) = match self.browser.read().await.as_ref() {
             Some(b) => (Some(b.cdp_calls()), b.rss_kb()),
             None => (None, None),
         };

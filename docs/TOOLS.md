@@ -133,6 +133,10 @@ A cancelled call (`notifications/cancelled`) returns `CANCELLED` for a read and 
 (`uncertain`) for a write tool, whose effect may already have happened. `OSTLER_MAX_INFLIGHT` (default 4)
 bounds how many tool calls run at once; `ping` and `tools/list` never wait behind them.
 
+Page tools act on the active tab unless the call names one with `tab` (`t2`, from `tabs list`). The schema
+lists `tab` on `navigate`, `snapshot`, `read`, `click`, `type` and `press` to keep the tool list small, but
+every page tool accepts it. Writes to one tab take turns; calls on different tabs run in parallel.
+
 `retry_policy` is one of `safe`, `after_snapshot`, `reconcile_first`, `never`, `after_change`. `form_submit`
 codes: `VALIDATION_FAILED`, `NEXT_STEP`, `NO_OBSERVED_EFFECT`, `SERVER_ERROR`. Tools do not declare an
 `outputSchema` yet (it would add about 2 KB to every tool list).

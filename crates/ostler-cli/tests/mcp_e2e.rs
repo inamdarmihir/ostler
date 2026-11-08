@@ -95,6 +95,31 @@ impl Client {
         (r["result"]["isError"].as_bool().unwrap_or(false), text)
     }
 
+    /// Send a tool call without waiting for its answer; returns its id.
+    async fn send_tool(&mut self, name: &str, args: Value) -> u64 {
+        let id = self.next;
+        self.next += 1;
+        self.send(json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name": name, "arguments": args}}))
+            .await;
+        id
+    }
+
+    /// The next response (skipping server notifications).
+    async fn recv(&mut self) -> Value {
+        loop {
+            let line = tokio::time::timeout(Duration::from_secs(60), self.out.next_line())
+                .await
+                .expect("timeout")
+                .unwrap()
+                .expect("eof");
+            let v: Value = serde_json::from_str(&line)
+                .unwrap_or_else(|e| panic!("non-JSON on stdout: {line:?} ({e})"));
+            if v.get("id").is_some() {
+                return v;
+            }
+        }
+    }
+
     /// Call a tool and return the whole JSON-RPC response (to read `structuredContent`).
     async fn tool_result(&mut self, name: &str, args: Value) -> Value {
         let r = self
@@ -439,6 +464,128 @@ async fn rejected_form_submit_is_a_domain_result_not_a_protocol_error() {
         r["result"]["structuredContent"]["code"], "VALIDATION_FAILED",
         "{r}"
     );
+}
+
+/// Open `/basic.html` in t1 and `path` in a new tab t2 (now active).
+async fn two_tabs(c: &mut Client, srv: &FixtureServer, path: &str) {
+    c.tool(
+        "navigate",
+        json!({"url": srv.url("/basic.html"), "observe": "none"}),
+    )
+    .await;
+    let (err, t) = c
+        .tool("tabs", json!({"action": "new", "url": srv.url(path)}))
+        .await;
+    assert!(!err && t.contains("Opened tab t2"), "{t}");
+}
+
+#[tokio::test]
+async fn two_reads_overlap() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&[]).await else {
+        return;
+    };
+    two_tabs(&mut c, &srv, "/basic.html").await;
+    let t0 = Instant::now();
+    let a = c
+        .send_tool("snapshot", json!({"tab": "t1", "mode": "full"}))
+        .await;
+    // Two slow loads, one per tab: with one global browser lock these would take 4 s. (Distinct URLs:
+    // Chrome's HTTP cache would otherwise hold the second request until the first finished.)
+    let x = c
+        .send_tool(
+            "navigate",
+            json!({"url": srv.url("/slow/2?t1"), "tab": "t1", "observe": "none"}),
+        )
+        .await;
+    let y = c
+        .send_tool(
+            "navigate",
+            json!({"url": srv.url("/slow/2?t2"), "tab": "t2", "observe": "none"}),
+        )
+        .await;
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        let r = c.recv().await;
+        assert!(r.get("error").is_none(), "{r}");
+        seen.push(r["id"].as_u64().unwrap());
+    }
+    seen.sort_unstable();
+    assert_eq!(seen, vec![a, x, y]);
+    let took = t0.elapsed();
+    assert!(took < Duration::from_millis(3500), "took {took:?}");
+}
+
+#[tokio::test]
+async fn conflicting_writes_serialize() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&[]).await else {
+        return;
+    };
+    let (_, snap) = c
+        .tool(
+            "navigate",
+            json!({"url": srv.url("/basic.html"), "observe": "interactive"}),
+        )
+        .await;
+    let name = ref_of(&snap, "Full name");
+    let a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let i = c
+        .send_tool("type", json!({"ref": name, "text": a, "observe": "none"}))
+        .await;
+    let j = c
+        .send_tool("type", json!({"ref": name, "text": b, "observe": "none"}))
+        .await;
+    let mut done = Vec::new();
+    for _ in 0..2 {
+        let r = c.recv().await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        done.push(r["id"].as_u64().unwrap());
+    }
+    // The second write waited for the first: the field holds one whole value, never a mix.
+    assert_eq!(done, vec![i, j], "writes on one tab finish in order");
+    let (_, full) = c.tool("snapshot", json!({"mode": "full"})).await;
+    assert!(full.contains(b) && !full.contains(a), "{full}");
+}
+
+#[tokio::test]
+async fn refs_do_not_cross_tabs() {
+    let srv = FixtureServer::start();
+    let Some(mut c) = Client::start(&[]).await else {
+        return;
+    };
+    let (_, t1) = c
+        .tool(
+            "navigate",
+            json!({"url": srv.url("/basic.html"), "observe": "interactive"}),
+        )
+        .await;
+    let name = ref_of(&t1, "Full name");
+    let (err, _) = c
+        .tool(
+            "tabs",
+            json!({"action": "new", "url": srv.url("/basic.html")}),
+        )
+        .await;
+    assert!(!err);
+    c.tool("snapshot", json!({"mode": "interactive"})).await;
+    // t2 is active, but the call names t1: the ref is resolved in t1's page only.
+    let (err, t) = c
+        .tool(
+            "type",
+            json!({"ref": name, "text": "only-in-t1", "tab": "t1", "observe": "none"}),
+        )
+        .await;
+    assert!(!err, "{t}");
+    let (_, s1) = c
+        .tool("snapshot", json!({"mode": "full", "tab": "t1"}))
+        .await;
+    let (_, s2) = c.tool("snapshot", json!({"mode": "full"})).await;
+    assert!(s1.contains("only-in-t1"), "{s1}");
+    assert!(!s2.contains("only-in-t1"), "{s2}");
+    let (err, t) = c.tool("snapshot", json!({"tab": "t9"})).await;
+    assert!(err && t.contains("no tab"), "{t}");
 }
 
 #[tokio::test]
