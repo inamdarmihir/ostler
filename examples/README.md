@@ -32,6 +32,12 @@ Example 11 also needs `ostler a2a --allow-domain 127.0.0.1 &`. Run one example w
 | [10](10-approval-before-submit/) | Submit only with approval | `--require-confirm-submit` | Cookbook 10 | 0.2.0 |
 | [11](11-a2a-delegation/) | Hand a form over from another agent | A2A `SendMessage` | A2A guide | 0.2.0 |
 
+### Agents built from scratch
+
+| agent | what it shows | needs |
+|---|---|---|
+| [agents/deep-research](agents/deep-research/) | A deep research agent on the Anthropic SDK: a planner, parallel researcher sub-agents over one Ostler session, a verification gate that re-checks every quote and number with `cite`, and a report that may cite only verified findings. Tested offline with a scripted model; a live run needs an Anthropic API key | 0.2.0, `anthropic` |
+
 "main" means the feature is on Ostler's main branch and not yet in a release: build from source until the next release. Also here: [connecting clients](clients/) (Claude Code, Codex, Cursor, VS Code) and [agent frameworks](frameworks/) (LangChain, LlamaIndex, AutoGen).
 
 ## Best practices every example follows

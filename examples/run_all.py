@@ -16,8 +16,9 @@ SKIP_EXIT_CODE = 3
 def main() -> int:
     only = set(sys.argv[1:])
     results = []
-    for script in sorted(ROOT.glob("[0-9][0-9]-*/run.py")):
-        name = script.parent.name
+    scripts = sorted(ROOT.glob("[0-9][0-9]-*/run.py")) + sorted(ROOT.glob("agents/*/test_offline.py"))
+    for script in scripts:
+        name = str(script.parent.relative_to(ROOT))
         if only and not any(name.startswith(prefix) for prefix in only):
             continue
         started = time.monotonic()
