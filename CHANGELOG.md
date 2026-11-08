@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Readiness work toward "level 100"** (the plan is [docs/PLAN-LEVEL-100.md](docs/PLAN-LEVEL-100.md); the verified starting point is [docs/GAP-MATRIX.md](docs/GAP-MATRIX.md)). Library-level only so far; none of these is an MCP tool yet:
+  - `ostler-extract::pdf`: per-page PDF text with a `scanned` flag, input and page caps, and panic-safe parsing (`pdf-extract`, MIT).
+  - `ostler-research::archive`: an insert-only store of source versions and passages (JSONL, 0600, refuses symlinks); a changed page creates a new version and old citations keep their original text.
+  - `ostler-fixtures`: trap pages for the next tests (covered and moving buttons, a fake "Saved" banner, a slow submit, remounted nodes, ambiguous buttons, page injection), a 13-page paginated collection, two PDFs, slow and host-split routes, and `kill_chrome` for crash-recovery tests.
 - **Less data through the model** ([ADR-0019](docs/adr/0019-scripted-runs-and-result-filtering.md)): `where`/`select` filters on `extract` and `links`; `search_tools` (names, descriptions or full schemas for any tool); `{{fact:KEY}}` values so a saved fact is filled without the agent seeing it; and `run`, a sandboxed Rhai script that calls Ostler's own tools (no files or network, 60-call cap, all gates still apply). The default tool list grows by one tool (16 core, 32 in all).
 - `ostler start`: one command that finds the AI apps on the computer (Claude Desktop and Code, Cursor, VS Code, Windsurf, Codex), connects Ostler to each (same safe edit as `ostler install`: backup, other servers kept, idempotent), checks Chrome and prints example prompts.
 - Claude Desktop extension bundle (`.mcpb`, macOS) built by the release workflow via `scripts/package-mcpb.sh`: download, double-click, done.

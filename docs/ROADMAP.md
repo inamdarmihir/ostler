@@ -1,6 +1,18 @@
 # Roadmap: where Ostler stands and what is left
 
 > The plan of record from v0.3 to launch is [BUILD-PLAN.md](BUILD-PLAN.md). This page tracks the current state.
+> The engineering backlog toward a mature runtime is [PLAN-LEVEL-100.md](PLAN-LEVEL-100.md), with the verified gap table in [GAP-MATRIX.md](GAP-MATRIX.md). Its phase status is below under "Level-100 progress".
+
+## Level-100 progress
+
+| Phase | State |
+|---|---|
+| 0. Audit and fixtures | Done: gap matrix, trap fixtures, `kill_chrome`. Baseline eval run still to do. |
+| 1. Contract, scheduling, action correctness, policy | Not started |
+| 2. Durable and recoverable work | Not started |
+| 3. Real research | Started: PDF text library (3.1) and source-version archive (3.3) exist, not yet wired into tools. Steps 3.2, 3.4–3.7 not started. |
+| 4. Breadth and reuse | Not started |
+| 5. Assurance and launch | Not started |
 
 Status as of 2026-11-02. "Have" is covered by tests in this repo; "Gap" is what developers get from other
 browser MCPs (Playwright MCP, chrome-devtools-mcp, Browser Use) that Ostler does not yet do.
