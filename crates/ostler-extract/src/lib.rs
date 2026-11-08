@@ -17,6 +17,7 @@ pub mod completeness;
 pub mod fragment;
 pub mod inject;
 pub mod markdown;
+pub mod pdf;
 pub mod quote;
 
 pub use bm25::{diversify, Bm25Index, Bm25Params, Fnv1a, Hit, SparseVector, TermHasher, Tokenizer};
