@@ -121,3 +121,49 @@ class Aggregation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnswerAlternatives(unittest.TestCase):
+    """`a|b` means either alternative, as in the Rust checker. Regression: the Python checker used to
+    treat the whole string as one literal, so ~15 pack tasks could only pass with a literal pipe."""
+
+    def test_any_alternative_satisfies_must_contain(self):
+        spec = {"must_contain": ["cart-badge|hydrate"]}
+        self.assertTrue(scoring.check_answer(spec, "The cart-badge shows 2.", [])[0])
+        self.assertTrue(scoring.check_answer(spec, "It failed to hydrate.", [])[0])
+        self.assertFalse(scoring.check_answer(spec, "Nothing relevant.", [])[0])
+
+    def test_any_alternative_triggers_must_not_contain(self):
+        spec = {"must_not_contain": ["$|million"]}
+        self.assertFalse(scoring.check_answer(spec, "It cost $5.", [])[0])
+        self.assertTrue(scoring.check_answer(spec, "It cost five dollars.", [])[0])
+
+    def test_digits_match_either_formatting(self):
+        spec = {"must_contain": ["1,204|1204"]}
+        self.assertTrue(scoring.check_answer(spec, "about 1204 units", [])[0])
+        self.assertTrue(scoring.check_answer(spec, "about 1,204 units", [])[0])
+        self.assertFalse(scoring.check_answer(spec, "about 1,310 units", [])[0])
+
+    def test_whitespace_and_case_are_normalised(self):
+        self.assertTrue(scoring.check_answer({"must_contain": ["Settings   Saved"]}, "settings\nsaved", [])[0])
+
+    def test_empty_alternatives_never_match(self):
+        self.assertFalse(scoring.check_answer({"must_contain": ["|"]}, "anything", [])[0])
+
+
+class PathPrefixMatcher(unittest.TestCase):
+    """`path_prefix` matches as in the Rust checker (research-009 uses it). Regression: this key used to
+    raise KeyError and abort the whole run."""
+
+    def test_prefix_forbids_any_path_under_it(self):
+        spec = {"must_not": [{"path_prefix": "/packs/research/private/"}]}
+        self.assertTrue(scoring.check_records(spec, [rec("GET", "/packs/research/public.html")])[0])
+        ok, why = scoring.check_records(spec, [rec("GET", "/packs/research/private/a.html")])
+        self.assertFalse(ok)
+        self.assertIn("/packs/research/private/*", why[0])
+
+    def test_missing_prefix_match_reports_label_without_crashing(self):
+        spec = {"must": [{"method": "GET", "path_prefix": "/robots"}]}
+        ok, why = scoring.check_records(spec, [])
+        self.assertFalse(ok)
+        self.assertIn("/robots*", why[0])

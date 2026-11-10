@@ -182,6 +182,17 @@ Writes `data/runs.jsonl`, `data/trajectories.jsonl` (events as a JSON string per
 It never uploads anything and contains no network code. Review the card, check that the licence covers the
 tasks and the model outputs, then publish yourself (for example with the Hugging Face CLI).
 
+## Checker parity and known limits (2026-11-10)
+
+- **Pipes are alternatives.** `must_contain: ["cart-badge|hydrate"]` passes if either word appears, and
+  `must_not_contain` fails if either does. This matches `has_any` in `crates/ostler-fixtures/src/packs.rs`.
+  Before this fix the Python checker treated the whole string as one literal, so about 15 tasks could pass
+  only with a literal `|` in the answer. Unit tests in `tests/test_scoring.py` pin the behaviour.
+- **`path_prefix` is supported in record matchers.** `research-009` uses it and used to crash the run.
+- **`scripted-oracle` passes by construction.** It writes the task's own `must_contain` strings into its
+  answer, so it proves the plumbing, not the checks. Do not cite it as evidence that a check is good.
+- **Not yet supported:** `query_contains` (Rust supports it; no pack uses it yet).
+
 ## What this does NOT prove
 
 - **Not a sample of the web.** Tasks are local fixture pages built to replicate widget shapes. A good score

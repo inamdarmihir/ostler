@@ -85,6 +85,20 @@ def _path_matches(rec_path, want):
     return rec_path == want
 
 
+def _record_path_matches(record, matcher):
+    """Match a record path against a matcher's `path` (exact) or `path_prefix` (Rust-compatible keys)."""
+    rec_path = str(record.get("path", ""))
+    if matcher.get("path_prefix") is not None:
+        return rec_path.startswith(str(matcher["path_prefix"]).split("?")[0])
+    return _path_matches(rec_path, matcher["path"])
+
+
+def _matcher_label(matcher):
+    if matcher.get("path") is not None:
+        return str(matcher["path"])
+    return str(matcher.get("path_prefix", "*")) + "*"
+
+
 def check_records(spec, records):
     """spec: {"must": [...], "must_not": [...]}. Returns (passed, details list of strings)."""
     details, ok = [], True
@@ -92,22 +106,22 @@ def check_records(spec, records):
         method = (m.get("method") or "").upper()
         hit = any(
             (not method or str(r.get("method", "")).upper() == method)
-            and _path_matches(str(r.get("path", "")), m["path"])
+            and _record_path_matches(r, m)
             and body_matches(r.get("body"), m.get("body_contains"))
             for r in records
         )
         if not hit:
             ok = False
-            details.append(f"missing record: {method or '*'} {m['path']} {json.dumps(m.get('body_contains') or {}, sort_keys=True)}")
+            details.append(f"missing record: {method or '*'} {_matcher_label(m)} {json.dumps(m.get('body_contains') or {}, sort_keys=True)}")
     for m in spec.get("must_not", []) or []:
         method = (m.get("method") or "").upper()
         bad = [r for r in records
                if (not method or str(r.get("method", "")).upper() == method)
-               and _path_matches(str(r.get("path", "")), m["path"])
+               and _record_path_matches(r, m)
                and body_matches(r.get("body"), m.get("body_contains"))]
         if bad:
             ok = False
-            details.append(f"forbidden record present: {method or '*'} {m['path']} (x{len(bad)})")
+            details.append(f"forbidden record present: {method or '*'} {_matcher_label(m)} (x{len(bad)})")
     return ok, details
 
 
@@ -118,15 +132,32 @@ def _norm_url(u, base):
     return u.rstrip("/")
 
 
+def _norm_text(s):
+    """Lowercase and collapse whitespace, as the Rust checker does in `norm`."""
+    return " ".join(str(s).lower().split())
+
+
+def has_any(text, entry):
+    """True if any `|`-separated alternative in `entry` occurs in `text`.
+
+    Mirrors `has_any` in crates/ostler-fixtures/src/packs.rs. Empty alternatives never match.
+    """
+    for alt in str(entry).split("|"):
+        needle = _norm_text(alt)
+        if needle and needle in text:
+            return True
+    return False
+
+
 def check_answer(spec, final_answer, cited_urls, base=""):
     details, ok = [], True
-    text = (final_answer or "").lower()
+    text = _norm_text(final_answer or "")
     for s in spec.get("must_contain", []) or []:
-        if str(s).replace("{BASE}", base.rstrip("/")).lower() not in text:
+        if not has_any(text, str(s).replace("{BASE}", base.rstrip("/"))):
             ok = False
             details.append(f"answer lacks: {s!r}")
     for s in spec.get("must_not_contain", []) or []:
-        if str(s).replace("{BASE}", base.rstrip("/")).lower() in text:
+        if has_any(text, str(s).replace("{BASE}", base.rstrip("/"))):
             ok = False
             details.append(f"answer contains forbidden: {s!r}")
     cited = [_norm_url(u, base) for u in (cited_urls or [])]
