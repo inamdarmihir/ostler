@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed (documentation and help text)
+- The README, TOOLS and quickstart `form_fill` example is now the binary's real output (`Filled 2/3.` with a `verified:` line) instead of an older format.
+- Windows and Docker gaps in the v0.2.0 source are listed in [COMPATIBILITY](docs/COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source), with the `OSTLER_CONFIG` and `OSTLER_CHROME` workarounds; the platform matrix now names the runners the release actually uses; GETTING-STARTED and INSTALL no longer imply Windows works out of the box.
+- `ostler memory --help` no longer says memory needs Qdrant (the local encrypted file works without it); the benchmark tool-count tables note that the forms profile now lists 20 tools, not 21.
+
 ### Added
 - **Per-page locking and a `tab` argument** (PLAN-LEVEL-100 step 1.3): the single browser lock is gone. Calls share the browser; each page has its own write gate, so two writes on one tab still take turns (in arrival order) while calls on different tabs run in parallel. `navigate`, `snapshot`, `read`, `click`, `type` and `press` list an optional `tab` (e.g. `t2`) to act on that tab without switching; every page tool accepts it. `open_many` reads in a background tab and no longer switches the active tab.
 - **Concurrent requests and cancellation** (PLAN-LEVEL-100 step 1.2): the MCP server answers `ping`, `initialize` and `tools/list` while a tool call is running, runs up to `OSTLER_MAX_INFLIGHT` tool calls at once (default 4; calls still take turns on the one browser until per-page locks land), and honours `notifications/cancelled`: a cancelled read returns `CANCELLED` (`failed`), a cancelled click/type/press/form_fill/form_submit/fill_field returns `CANCELLED_EFFECT_UNKNOWN` (`uncertain`, check the page first). When stdin closes, calls in flight get up to 5 s to answer. Progress notifications are not sent yet.

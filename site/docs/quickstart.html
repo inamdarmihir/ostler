@@ -117,7 +117,7 @@ NOT VERIFIED: these words are not on &lt;page_content untrusted="true"&gt;The Ke
 Closest text on the page (similarity 0.48): &lt;page_content untrusted="true"&gt;The Kestrel Lock The Kestrel Lock is a double&lt;/page_content&gt;</code></pre></div>
 <p><code>cite</code> proves the words are on the page, not that the claim is true.</p>
 <h3 id="a-form">A form<a class="anchor" href="#a-form" aria-label="Link to this section">#</a></h3>
-<p>Real output from the bundled fixtures (<code>ostler serve --tools forms</code>), lightly reformatted. <em>State</em> is disabled until <em>Country</em> is chosen.</p>
+<p>Real output from the bundled fixtures (<code>ostler serve --tools forms</code>), with the <code>&lt;page_content&gt;</code> fences left out and one <code>&lt;-</code> note added. <em>State</em> is disabled until <em>Country</em> is chosen.</p>
 <div class="code" data-lang="output"><pre tabindex="0"><code>&gt; form_inspect
 form [e2] fingerprint=07efd5b3061187a1
   e3 text    "Recipient"      [required]
@@ -127,9 +127,8 @@ form [e2] fingerprint=07efd5b3061187a1
   e7 submit  "Ship it"
 
 &gt; form_fill {"Country": "Germany", "State": "Bavaria", "Email": "ada@example.com"}
-Filled 2/2 fields in 386ms (form e2).
-  OK e4 "Country" = "de"
-  OK e5 "State / region" = "by"        &lt;- options loaded after Country changed
+Filled 2/3.
+verified: "Country", "State / region"      &lt;- State's options loaded after Country changed
   UNMATCHED key "Email": no field on the page matches this key
 Still empty and required:
   e3 "Recipient"

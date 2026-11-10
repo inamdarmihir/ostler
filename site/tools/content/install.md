@@ -61,8 +61,8 @@ Only loopback is accepted. Ostler never opens the port for you, works in its own
 
 - **macOS:** tested locally.
 - **Linux:** tested in CI. In containers or as root you may need `OSTLER_NO_SANDBOX=1`, plus a larger `/dev/shm` (`--shm-size=1g`) for Chrome. See [Troubleshooting](troubleshooting.html).
-- **Windows (x86_64):** builds and runs its test suite in CI; ships from the next release (v0.2.1). Experimental, with no day-to-day use yet.
-- **Docker (linux/amd64, linux/arm64):** ships from the next release (v0.2.1).
+- **Windows (x86_64):** builds and runs its test suite in CI; ships from the next release (v0.2.1). Experimental, with no day-to-day use yet. Known gaps in v0.2.0 source: config falls back to a `.config` folder in the current directory (set `OSTLER_CONFIG`), Chrome is found only under `Program Files` (set `OSTLER_CHROME` for Edge or a per-user Chrome), there is no PowerShell installer and no Windows wheel.
+- **Docker (linux/amd64, linux/arm64):** ships from the next release (v0.2.1). Headless only, so `wait_for_human` cannot show a window; saved logins need a writable volume for uid 10001.
 - **Browser:** Chrome or Chromium only. If Chrome is in a non-standard place, set `OSTLER_CHROME=/path/to/chrome` or pass `--chrome-path`.
 
 ## Update

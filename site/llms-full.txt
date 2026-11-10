@@ -29,7 +29,7 @@ Ostler lets an AI assistant (Claude, Cursor, Codex) use a real web browser on yo
 
 ## What you need
 
-- A Mac or Linux computer (Windows and Docker arrive in the next release, experimental; see [INSTALL](https://github.com/inamdarmihir/ostler/blob/main/docs/INSTALL.md)).
+- A Mac or Linux computer. Windows and Docker are not released yet (planned v0.2.1, experimental, with known gaps listed in [COMPATIBILITY](https://github.com/inamdarmihir/ostler/blob/main/docs/COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source)).
 - **Google Chrome** ([download](https://www.google.com/chrome/)).
 - An AI app that supports MCP: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf or Codex.
 
@@ -203,7 +203,7 @@ Closest text on the page (similarity 0.48): <page_content untrusted="true">The K
 
 ### A form
 
-Real output from the bundled fixtures (`ostler serve --tools forms`), lightly reformatted. *State* is disabled until *Country* is chosen.
+Real output from the bundled fixtures (`ostler serve --tools forms`), with the `<page_content>` fences left out and one `<-` note added. *State* is disabled until *Country* is chosen.
 
 ```text
 > form_inspect
@@ -215,9 +215,8 @@ form [e2] fingerprint=07efd5b3061187a1
   e7 submit  "Ship it"
 
 > form_fill {"Country": "Germany", "State": "Bavaria", "Email": "ada@example.com"}
-Filled 2/2 fields in 386ms (form e2).
-  OK e4 "Country" = "de"
-  OK e5 "State / region" = "by"        <- options loaded after Country changed
+Filled 2/3.
+verified: "Country", "State / region"      <- State's options loaded after Country changed
   UNMATCHED key "Email": no field on the page matches this key
 Still empty and required:
   e3 "Recipient"
@@ -324,8 +323,8 @@ Only loopback is accepted. Ostler never opens the port for you, works in its own
 
 - **macOS:** tested locally.
 - **Linux:** tested in CI. In containers or as root you may need `OSTLER_NO_SANDBOX=1`, plus a larger `/dev/shm` (`--shm-size=1g`) for Chrome. See [Troubleshooting](https://inamdarmihir.github.io/ostler/docs/troubleshooting.html).
-- **Windows (x86_64):** builds and runs its test suite in CI; ships from the next release (v0.2.1). Experimental, with no day-to-day use yet.
-- **Docker (linux/amd64, linux/arm64):** ships from the next release (v0.2.1).
+- **Windows (x86_64):** builds and runs its test suite in CI; ships from the next release (v0.2.1). Experimental, with no day-to-day use yet. Known gaps in v0.2.0 source: config falls back to a `.config` folder in the current directory (set `OSTLER_CONFIG`), Chrome is found only under `Program Files` (set `OSTLER_CHROME` for Edge or a per-user Chrome), there is no PowerShell installer and no Windows wheel.
+- **Docker (linux/amd64, linux/arm64):** ships from the next release (v0.2.1). Headless only, so `wait_for_human` cannot show a window; saved logins need a writable volume for uid 10001.
 - **Browser:** Chrome or Chromium only. If Chrome is in a non-standard place, set `OSTLER_CHROME=/path/to/chrome` or pass `--chrome-path`.
 
 ## Update
@@ -2114,7 +2113,7 @@ Section 1 compares Ostler with a *pattern*. This section runs the **real competi
 
 | server | version | tools | tool definitions (est. tokens, sent every turn) |
 |---|---|---:|---:|
-| Ostler | 0.2.0 (this commit) | 21 | 1,513 |
+| Ostler | 0.2.0 (measured with 21 tools; the forms profile now lists 20) | 21 | 1,513 |
 | Playwright MCP | npm `@playwright/mcp` 0.0.84 (reports Playwright 1.65.0-alpha-2026-10-30), `--headless --isolated --browser chrome` | 25 | 5,265 |
 | Chrome DevTools MCP | npm `chrome-devtools-mcp` 1.12.0, `--headless --isolated --executablePath <Chrome>` | 32 | 7,416 |
 

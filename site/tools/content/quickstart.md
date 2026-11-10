@@ -74,7 +74,7 @@ Closest text on the page (similarity 0.48): <page_content untrusted="true">The K
 
 ### A form
 
-Real output from the bundled fixtures (`ostler serve --tools forms`), lightly reformatted. *State* is disabled until *Country* is chosen.
+Real output from the bundled fixtures (`ostler serve --tools forms`), with the `<page_content>` fences left out and one `<-` note added. *State* is disabled until *Country* is chosen.
 
 ```text
 > form_inspect
@@ -86,9 +86,8 @@ form [e2] fingerprint=07efd5b3061187a1
   e7 submit  "Ship it"
 
 > form_fill {"Country": "Germany", "State": "Bavaria", "Email": "ada@example.com"}
-Filled 2/2 fields in 386ms (form e2).
-  OK e4 "Country" = "de"
-  OK e5 "State / region" = "by"        <- options loaded after Country changed
+Filled 2/3.
+verified: "Country", "State / region"      <- State's options loaded after Country changed
   UNMATCHED key "Email": no field on the page matches this key
 Still empty and required:
   e3 "Recipient"
