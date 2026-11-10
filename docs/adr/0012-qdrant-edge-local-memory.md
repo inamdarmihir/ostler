@@ -1,6 +1,6 @@
 # ADR-0012: Qdrant Edge for local memory: adopt behind a feature flag, decide the default at M2
 
-Status: proposed (M0 spike, 2026-11-06). Extends [ADR-0006](0006-memory-design.md) and [ADR-0010](0010-memory-lifecycle.md); answers BUILD-PLAN section 3.1.
+Status: rejected (2026-11-10). Qdrant Edge is not used: local memory is the encrypted `LocalStore` file, and the Qdrant backend is optional. The spike below stays as the record of what was checked. Originally: proposed (M0 spike, 2026-11-06). Extends [ADR-0006](0006-memory-design.md) and [ADR-0010](0010-memory-lifecycle.md); answers BUILD-PLAN section 3.1.
 
 ## Context
 BUILD-PLAN 3.1 wants Qdrant Edge (in-process, shard files beside the config) as the default local memory, so local and server modes run the same query shapes, with a bundled Qdrant server as the fallback if Edge is not ready. Today the no-server option is an encrypted local file store with a non-semantic dev embedder. The question for M0 is a go/no-go on Edge **as the default**.

@@ -76,13 +76,6 @@ jobs:
       # QDRANT_URL must NOT be set here: it would take precedence and point every suite at one shared server.
       - name: cargo test --workspace
         run: cargo test --workspace
-      # Second Qdrant, with an API key and JWT RBAC, for per-tenant tokens. QDRANT_URL and
-      # OSTLER_QDRANT_ADMIN_KEY exist for this step's command only; the key is random and masked.
-      # The script fails the step if the suite prints SKIPPED.
-      - name: Per-tenant token suite against a JWT-RBAC Qdrant
-        run: |
-          scripts/ci-qdrant-rbac.sh "$OSTLER_QDRANT_BIN" \
-            cargo test -p ostler-memory --test tenant_token_real -- --nocapture
   # The declared minimum Rust version must actually build, with the locked dependencies.
   msrv:
     runs-on: ubuntu-latest

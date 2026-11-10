@@ -105,9 +105,6 @@ fn init_saves_privacy_choices_and_a_model_ollama_knows() {
         saved.contains("embedding_model = \"all-minilm\""),
         "{saved}"
     );
-    // New settings are known keys, so `config set` accepts them.
-    let (ok, _, _) = run(wm(&cfg).args(["config", "set", "isolation", "collection"]));
-    assert!(ok);
 }
 
 #[test]
@@ -123,7 +120,6 @@ fn doctor_explains_memory_in_plain_language_and_refused_http_says_what_to_do() {
         "key:",
         "unrecoverable",
         "embeddings: cloud",
-        "isolation:  shared",
         "transport:  http to a remote host: REFUSED",
         "--allow-insecure-qdrant",
     ] {
@@ -150,11 +146,6 @@ fn memory_errors_name_the_next_command() {
     assert!(!ok);
     assert!(err.contains("ostler init"), "{err}");
 
-    let (ok, _, err) = run(wm(&cfg).args(["memory", "token"]));
-    assert!(!ok);
-    assert!(err.contains("QDRANT_API_KEY"), "{err}");
-    assert!(err.contains("ostler init"), "{err}");
-
     let (ok, _, err) = run(wm(&cfg).args(["memory", "seal"]));
     assert!(!ok);
     assert!(err.contains("ostler init"), "{err}");
@@ -164,12 +155,6 @@ fn memory_errors_name_the_next_command() {
         .args(["memory", "--seal", "off", "seal"]));
     assert!(!ok);
     assert!(err.contains("ostler config set seal on"), "{err}");
-
-    let (ok, _, err) = run(wm(&cfg)
-        .env("QDRANT_API_KEY", "admin")
-        .args(["memory", "token", "--days", "0"]));
-    assert!(!ok);
-    assert!(err.contains("--days"), "{err}");
 
     let (ok, out, _) = run(wm(&cfg).args(["memory", "--memory", "ephemeral", "list"]));
     assert!(ok);
@@ -186,7 +171,7 @@ fn memory_help_describes_every_subcommand() {
     let cfg = dir.path().join("config.toml");
     let (ok, out, _) = run(wm(&cfg).args(["memory", "--help"]));
     assert!(ok);
-    for sub in ["list", "remember", "forget", "token", "seal", "wipe"] {
+    for sub in ["list", "remember", "forget", "seal", "wipe"] {
         let line = out
             .lines()
             .find(|l| l.trim_start().starts_with(&format!("{sub} ")))

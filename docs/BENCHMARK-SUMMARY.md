@@ -10,7 +10,6 @@ Fixtures only, one Apple M2 (8 cores), Chrome 156, localhost. Full tables, metho
 | 8 parallel sessions, 8 cores | measured | 354-393 tasks/min, p95 < 1 s, 100% success |
 | memory per session (physical footprint) | measured | **412 MiB** `--lean` / 658 MiB default |
 | cold start | measured | ~0.6 s |
-| Qdrant retrieval, 200k points / 10k tenants | measured (hash vectors, 20 points per tenant) | 0.4 ms p50 |
 | 20-field form, tool calls | measured (scripted agent) | **3** vs 22 one-call-per-field |
 | 20-field form, LLM cost / end-to-end time | **modelled** (illustrative price, 3 s per turn, 1.5k base context) | $0.021 vs $0.105 / 13 s vs 70 s |
 | browser compute | modelled from measured CPU | ~$0.006 per 1,000 tasks |

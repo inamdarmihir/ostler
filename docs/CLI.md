@@ -12,7 +12,7 @@ ostler <COMMAND>
   init       Guided setup: Qdrant URL/key, tenant, privacy choices (sealing, local embeddings, retention); then verify
   config     show | path | set <key> <value> | unset <key>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
-  doctor     Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, isolation, transport
+  doctor     Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, transport
   inspect    Open a URL and print the typed form model as JSON
   memory     list | skills | prune --days N | remember <key> <value> | forget <key> | seal | key export/import | token | wipe --yes
   fixtures   Serve the demo form pages (default port 8787)
@@ -40,10 +40,8 @@ ostler <COMMAND>
 | `--qdrant-url`, `--qdrant-api-key` | none | Qdrant endpoint and key |
 | `--embedding-model`, `--embedding-dim` | MiniLM, 384 | embedding model and its dimension |
 | `--embedding-url` | `http://127.0.0.1:11434` | where the Ollama server lives (`--embeddings ollama`) |
-| `--qdrant-on-disk` | off | vectors on disk |
 | `--seal` | `auto` | encrypt memory on this machine before it reaches Qdrant (`on`, `off`) |
 | `--embeddings` | `cloud` | `cloud` (field text goes to Qdrant Cloud Inference), `ollama` (embed locally, only vectors leave), `dev-hash` (local, not semantic) |
-| `--isolation` | `shared` | `collection`: one set of collections per tenant, pairs with `ostler memory token` |
 | `--allow-insecure-qdrant` | off | allow plain http to a non-loopback Qdrant |
 | `--retain-days` | 180 | forget learned skills and episodes not verified for this many days on start (0 = keep; saved facts never expire) |
 | `--tenant` | `default` | memory namespace |

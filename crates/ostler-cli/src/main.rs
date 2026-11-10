@@ -10,8 +10,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ostler_browser::{Browser, LaunchOptions, Policy};
 use ostler_mcp::{App, AppConfig, Profile};
 use ostler_memory::{
-    tenant_prefix, HashEmbedder, InMemoryStore, Memory, OllamaEmbedder, QdrantConfig, QdrantStore,
-    SealedStore, Store, VectorSource,
+    HashEmbedder, InMemoryStore, Memory, OllamaEmbedder, QdrantConfig, QdrantStore, SealedStore,
+    Store, VectorSource,
 };
 
 #[derive(Parser)]
@@ -29,7 +29,7 @@ struct Cli {
 enum Cmd {
     /// Run the MCP server on stdio (what Claude Code, Codex, Cursor launch).
     Serve(ServeArgs),
-    /// Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, isolation, transport.
+    /// Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, transport.
     /// Every failing check prints the command that fixes it.
     Doctor(DoctorArgs),
     /// Register (or remove) Ostler in an MCP client's config file: backs the file up, keeps your other servers.
@@ -762,10 +762,6 @@ fn memory_report(m: &MemoryArgs) {
         }
         Embeddings::DevHash => println!("  embeddings: local dev-hash. Nothing leaves this machine for embedding, but matching is not semantic (development only)."),
     }
-    match m.isolation {
-        Isolation::Shared => println!("  isolation:  shared collections; tenants are separated by a filter. Anyone holding the Qdrant key can read every tenant.\n              For per-tenant keys: `--isolation collection` plus `ostler memory token`."),
-        Isolation::Collection => println!("  isolation:  one set of collections per tenant. Give clients a scoped key from `ostler memory token` instead of the admin key."),
-    }
     if url.trim().starts_with("https://") {
         println!("  transport:  https (encrypted)");
     } else if config::is_remote_http(url) {
@@ -796,7 +792,7 @@ fn explain(msg: &str) -> String {
     {
         "Qdrant is not reachable. Check the URL with `ostler config show`, or start a local one: docker run -p 6333:6333 qdrant/qdrant"
     } else if msg.contains("401") || msg.contains("403") {
-        "Qdrant rejected the API key. Re-run `ostler init`, or `ostler config set qdrant_api_key <key>`. With --isolation collection, use the scoped token from `ostler memory token` for the same --tenant"
+        "Qdrant rejected the API key. Re-run `ostler init`, or `ostler config set qdrant_api_key <key>`."
     } else if msg.contains("-dim vectors") {
         "this collection was created with a different embedding model; use the same `--embedding-model`, or a different tenant/cluster"
     } else {
@@ -955,21 +951,6 @@ enum MemoryCmd {
         #[arg(long, default_value_t = 90)]
         days: u64,
     },
-    /// Print a Qdrant access token limited to one tenant's collections, to give a client instead of the admin key.
-    ///
-    /// Needs the admin key in QDRANT_API_KEY, `--isolation collection`, and Qdrant running with
-    /// `service.jwt_rbac: true`. The token is printed on stdout; the explanation goes to stderr.
-    Token {
-        /// Tenant the token is for. Defaults to --tenant.
-        #[arg(long)]
-        for_tenant: Option<String>,
-        /// Days until the token expires.
-        #[arg(long, default_value_t = 30)]
-        days: u64,
-        /// Search and scroll only; no writes.
-        #[arg(long)]
-        read_only: bool,
-    },
     /// Encrypt facts saved before sealing was on (one-time migration; run it with the same --tenant).
     ///
     /// Saved facts are kept and re-saved sealed. Learned skills and episodes from before are dropped
@@ -1031,14 +1012,6 @@ enum Embeddings {
 }
 
 #[derive(Clone, Copy, ValueEnum, PartialEq, Eq)]
-enum Isolation {
-    /// All tenants share three collections, separated by a filter in every query (default).
-    Shared,
-    /// Each tenant gets its own collections, so a scoped token (`ostler memory token`) is enforced by Qdrant.
-    Collection,
-}
-
-#[derive(Clone, Copy, ValueEnum, PartialEq, Eq)]
 enum SealMode {
     /// Seal when memory is stored in Qdrant (default).
     Auto,
@@ -1091,9 +1064,6 @@ struct MemoryArgs {
         env = "OSTLER_EMBEDDING_DIM"
     )]
     embedding_dim: usize,
-    /// Keep Qdrant vectors on disk (memory-mapped): much less RAM per user, slightly slower search.
-    #[arg(long, global = true, env = "OSTLER_QDRANT_ON_DISK")]
-    qdrant_on_disk: bool,
     /// Where the embedding server lives (--embeddings ollama).
     #[arg(
         long,
@@ -1112,15 +1082,6 @@ struct MemoryArgs {
         env = "OSTLER_SEAL"
     )]
     seal: SealMode,
-    /// How tenants are kept apart in Qdrant. `collection` pairs with scoped tokens: see `ostler memory token`.
-    #[arg(
-        long,
-        global = true,
-        value_enum,
-        default_value = "shared",
-        env = "OSTLER_ISOLATION"
-    )]
-    isolation: Isolation,
     /// Allow plain http:// to a non-loopback Qdrant. Refused by default: the API key and facts would be sent unencrypted.
     #[arg(long, global = true, env = "OSTLER_ALLOW_INSECURE_QDRANT")]
     allow_insecure_qdrant: bool,
@@ -1335,13 +1296,7 @@ fn qdrant_store(a: &MemoryArgs) -> Result<QdrantStore> {
         api_key: a.qdrant_api_key.clone(),
         vectors,
         timeout: Duration::from_secs(4),
-        on_disk: a.qdrant_on_disk,
         allow_insecure: a.allow_insecure_qdrant,
-        collection_prefix: if a.isolation == Isolation::Collection {
-            tenant_prefix(&a.tenant)
-        } else {
-            String::new()
-        },
     })?;
     Ok(store)
 }
@@ -1579,47 +1534,6 @@ async fn main() -> Result<()> {
             b.close().await;
         }
         Cmd::Memory {
-            cmd:
-                MemoryCmd::Token {
-                    for_tenant,
-                    days,
-                    read_only,
-                },
-            mem,
-        } => {
-            let admin = mem
-                .qdrant_api_key
-                .clone()
-                .context("minting a token needs the Qdrant admin (full-access) key: set QDRANT_API_KEY=<admin key>, or save it with `ostler init`")?;
-            anyhow::ensure!(
-                days > 0,
-                "--days must be at least 1 (a token that expires now is useless)"
-            );
-            if mem.isolation != Isolation::Collection {
-                eprintln!("note: --isolation is not `collection`, so this token will not match the shared collections. Run with --isolation collection (or `ostler config set isolation collection`) here and in the client.");
-            }
-            let tenant = for_tenant.unwrap_or_else(|| mem.tenant.clone());
-            if days == 0 || days > 3650 {
-                bail!("--days must be between 1 and 3650");
-            }
-            let exp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_secs()
-                + days * 86_400;
-            if admin.matches('.').count() == 2 && admin.starts_with("eyJ") {
-                bail!("QDRANT_API_KEY looks like a token, not the admin key. Tokens are signed with the admin key, so a token minted from one would be rejected. Use the cluster's admin API key");
-            }
-            let token = ostler_memory::mint_tenant_token(&admin, &tenant, exp, read_only)?;
-            eprintln!(
-                "Token for tenant {tenant:?} ({}), valid {days} days. It only opens collections starting with {:?}.\n\
-                 Use it as QDRANT_API_KEY together with --isolation collection --tenant {tenant}. Qdrant must run with service.jwt_rbac: true.\n\
-                 The admin collections must exist first: run any `ostler memory list` once with the admin key and the same --tenant/--isolation.",
-                if read_only { "read-only" } else { "read-write" },
-                tenant_prefix(&tenant)
-            );
-            println!("{token}");
-        }
-        Cmd::Memory {
             cmd: MemoryCmd::Seal,
             mem,
         } => {
@@ -1756,7 +1670,7 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-                MemoryCmd::Token { .. } | MemoryCmd::Seal | MemoryCmd::Key { .. } => {
+                MemoryCmd::Seal | MemoryCmd::Key { .. } => {
                     unreachable!("handled above")
                 }
                 MemoryCmd::Prune { days } => {

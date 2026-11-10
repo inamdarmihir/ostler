@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Removed (simplification)
+- Source memory (`save_sources`, `recall_sources`, the `source` kind), its sparse BM25 vectors, weighted RRF and MMR (`sparse.rs`, `fusion.rs`, `source.rs`). Nothing in the product called them.
+- Per-tenant JWT tokens (`ostler memory token`, `token.rs`, the RBAC CI step) and `--isolation collection`. Tenants share collections and are separated by the `tenant` filter, as before.
+- `--qdrant-on-disk`, the tenant payload index, and server-side formula ranking. Ranking is now one code path for every store.
+- The `ostler-bench memory` Qdrant scale benchmark.
+- A local memory file that holds source chunks (written by a development build) will refuse to open with a clear error: delete it, or re-save the facts.
+
 ### Fixed (documentation and help text)
 - The README, TOOLS and quickstart `form_fill` example is now the binary's real output (`Filled 2/3.` with a `verified:` line) instead of an older format.
 - Windows and Docker gaps in the v0.2.0 source are listed in [COMPATIBILITY](docs/COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source), with the `OSTLER_CONFIG` and `OSTLER_CHROME` workarounds; the platform matrix now names the runners the release actually uses; GETTING-STARTED and INSTALL no longer imply Windows works out of the box.

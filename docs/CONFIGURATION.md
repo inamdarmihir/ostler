@@ -59,10 +59,8 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `embedding_dim` | `OSTLER_EMBEDDING_DIM` | vector size of the model (default 384) |
 | `embedding_url` | `OSTLER_EMBEDDING_URL` | Ollama server (default `http://127.0.0.1:11434`) |
 | `seal` | `OSTLER_SEAL` | `auto` (default: seal when memory is in Qdrant), `on`, `off` |
-| `isolation` | `OSTLER_ISOLATION` | `shared` (default) or `collection` (one set of collections per tenant) |
 | `allow_insecure_qdrant` | `OSTLER_ALLOW_INSECURE_QDRANT` | allow plain `http://` to a non-loopback Qdrant (refused by default) |
 | `retain_days` | `OSTLER_RETAIN_DAYS` | on start, forget learned skills and episodes not verified for this many days (default 180; 0 = keep forever) |
-| `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `key_store` | `OSTLER_KEY_STORE` | where the sealing key lives: `file` (default) or `keychain` |

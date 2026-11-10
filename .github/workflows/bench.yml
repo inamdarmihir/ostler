@@ -12,20 +12,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: browser-actions/setup-chrome@v2
         id: chrome
-      - name: Download Qdrant
-        run: |
-          mkdir -p "$RUNNER_TEMP/qdrant" && cd "$RUNNER_TEMP/qdrant"
-          curl -sSfL -o q.tgz https://github.com/qdrant/qdrant/releases/latest/download/qdrant-x86_64-unknown-linux-gnu.tar.gz
-          tar xzf q.tgz
-          echo "OSTLER_QDRANT_BIN=$RUNNER_TEMP/qdrant/qdrant" >> "$GITHUB_ENV"
-          echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
       - run: cargo build --release -p ostler-bench -p ostler
       - run: |
           mkdir -p out
           ./target/release/ostler-bench --json out/forms.json forms --reps 3
           ./target/release/ostler-bench --json out/footprint.json footprint
           ./target/release/ostler-bench --json out/concurrency.json concurrency --sessions 1,2,4 --lean
-          ./target/release/ostler-bench --json out/memory.json memory --sizes 1000x20,10000x20
           nproc; free -m; google-chrome --version || true
       - uses: actions/upload-artifact@v7
         with: { name: bench-linux, path: out }

@@ -70,7 +70,6 @@ fn config_set_rejects_bad_values_with_the_allowed_ones() {
     let cfg = dir.path().join("config.toml");
     for (k, v, want) in [
         ("seal", "banana", "auto, on, off"),
-        ("isolation", "everyone", "shared, collection"),
         ("embeddings", "openai", "cloud, ollama, dev-hash"),
         ("retain_days", "soon", "whole number"),
         ("retain_days", "3.5", "whole number"),
@@ -674,9 +673,7 @@ fn raw_store(url: &str) -> std::sync::Arc<dyn ostler_memory::Store> {
             api_key: None,
             vectors: VectorSource::Client(std::sync::Arc::new(HashEmbedder::new(384))),
             timeout: Duration::from_secs(10),
-            on_disk: false,
             allow_insecure: false,
-            collection_prefix: String::new(),
         })
         .unwrap(),
     )

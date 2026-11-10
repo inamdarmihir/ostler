@@ -78,19 +78,9 @@ Each session is its own Chrome + MCP app. Task mix: 6 form scenarios (navigate +
 
 Reading: throughput scales near-linearly to 8 sessions on 8 cores with flat latency and no failures. **Compute is ~$0.006 per 1,000 tasks; the LLM bill for the same tasks is ~$17-24 per 1,000 (section 1). Compute is roughly 0.03% of the cost of a task.**
 
-## 4. Memory (Qdrant) at scale
+## 4. Memory (Qdrant) at scale: removed
 
-Real Qdrant server, multi-tenant (`tenant` keyword payload index with `is_tenant`), 20 facts per tenant, 256-dim client-side vectors, no sealing (the harness does not wrap the store in `SealedStore`) (a 384-dim model is ~1.5x the vector bytes). Sequential queries, localhost HTTP. `sem` = `Memory::suggest` semantic path (2 requests). `key` = exact fact lookup (1 filtered scroll, no vector math).
-
-| tenants x facts | points | load s | sem p50 | sem p95 | sem p99 | key p50 | key p95 | QPS (16 clients) | Qdrant RSS MiB |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1,000 x 20 | 20,000 | 0.6 | 0.4 ms | 0.4 ms | 0.5 ms | 0.2 ms | 0.2 ms | 2,898 | 293 |
-| 10,000 x 20 | 200,000 | 8.9 | 0.4 ms | 0.4 ms | 0.5 ms | 0.2 ms | 0.3 ms | 2,792 | 1,634 |
-| 10,000 x 20, on-disk vectors | 200,000 | 8.4 | 0.4 ms | 0.7 ms | 0.8 ms | 0.2 ms | 0.5 ms | 2,432 | 1,298 |
-
-- **Latency is flat from 20k to 200k points**: filtered retrieval cost follows the tenant's own 20 points, not the collection size. That is the point of the tenant index.
-- **Memory is the thing to watch.** Qdrant's RSS after load-and-query was ~8 KB per point untuned at 200k (about 6.5 KB with on-disk vectors). That is a loaded-and-queried figure that includes write-path allocations, not an isolated steady-state number. Do not extrapolate it to millions of users; measure on your own restarted node. Levers: on-disk vectors (`--qdrant-on-disk`), quantization, fewer vectors per user (exact-key and `autocomplete` lookups use payload filters and need no vector).
-- Over a real network add the round-trip to the cluster; Cloud Inference adds model time on embedding calls. **Neither is measured here.**
+The Qdrant scale benchmark (`ostler-bench memory`, 200k points) measured a configuration that is no longer needed: per-tenant tuning, on-disk vectors and a tenant index. It was removed on 2026-11-10 along with the features it covered. The earlier numbers are in git history (commit `6c13926` and earlier). The product's memory is one tenant per query over a small number of points, so the measure that matters is the end-to-end form fill, which sections 1 to 3 cover.
 
 ## 5. Ostler vs Playwright MCP vs Chrome DevTools MCP (same fixtures, scripted agent)
 
@@ -201,7 +191,6 @@ cargo build --release -p ostler-bench -p ostler
 ./target/release/ostler-bench --json out/forms.json forms --reps 3
 ./target/release/ostler-bench --json out/footprint.json footprint
 ./target/release/ostler-bench --json out/concurrency.json concurrency --sessions 1,2,4,8 --lean
-OSTLER_QDRANT_BIN=/path/to/qdrant ./target/release/ostler-bench --json out/memory.json memory --sizes 1000x20,10000x20
 scripts/bench-compare.sh          # section 5: builds, npm-installs the pinned competitors in a temp dir, runs, writes bench-results/compare.{json,md}
 # Cost knobs: --price-in --price-out --llm-turn-secs --base-context   (forms)
 #             --vcpu-hour-usd --gib-hour-usd                          (concurrency)

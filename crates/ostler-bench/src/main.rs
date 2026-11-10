@@ -1,13 +1,12 @@
 //! Benchmarks for the questions an engineer or investor asks first:
 //! how many tool calls / tokens / dollars per form, how fast, how much memory per session,
-//! what does memory cost at scale, and how many sessions fit on a machine.
+//! and how many sessions fit on a machine.
 //!
 //! Everything here is measured on the machine it runs on and printed with its assumptions.
 
 mod cost;
 mod falsesuccess;
 mod forms;
-mod memory;
 mod packs;
 #[cfg(test)]
 mod packs_tests;
@@ -36,17 +35,6 @@ enum Cmd {
         reps: usize,
         #[command(flatten)]
         cost: cost::CostArgs,
-    },
-    /// Qdrant memory at scale: filtered search latency, footprint.
-    Memory {
-        /// Comma list of TENANTSxFACTS, e.g. 1000x20,10000x20
-        #[arg(long, default_value = "1000x20,10000x20")]
-        sizes: String,
-        #[arg(long, default_value_t = 300)]
-        queries: usize,
-        /// Create collections with on-disk vectors + HNSW.
-        #[arg(long)]
-        on_disk: bool,
     },
     /// Realistic-forms suite: 30 fixtures, judged by what the server received. Exits non-zero on any wrong-fill.
     Suite {
@@ -110,11 +98,6 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let result = match cli.cmd {
         Cmd::Forms { reps, cost } => forms::run(reps, cost).await?,
-        Cmd::Memory {
-            sizes,
-            queries,
-            on_disk,
-        } => memory::run(&sizes, queries, on_disk).await?,
         Cmd::Suite { only } => suite::run(only).await?,
         Cmd::Real { only } => real::run(only).await?,
         Cmd::ServeFixtures { port } => {

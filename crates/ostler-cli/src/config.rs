@@ -19,10 +19,8 @@ pub const KEYS: &[(&str, &str)] = &[
     ("embedding_dim", "OSTLER_EMBEDDING_DIM"),
     ("seal", "OSTLER_SEAL"),
     ("key_store", "OSTLER_KEY_STORE"),
-    ("isolation", "OSTLER_ISOLATION"),
     ("allow_insecure_qdrant", "OSTLER_ALLOW_INSECURE_QDRANT"),
     ("retain_days", "OSTLER_RETAIN_DAYS"),
-    ("qdrant_on_disk", "OSTLER_QDRANT_ON_DISK"),
     ("learn", "OSTLER_LEARN"),
     ("lean", "OSTLER_LEAN"),
     ("verbose", "OSTLER_VERBOSE"),
@@ -935,7 +933,6 @@ pub fn validate(key: &str, value: &str) -> Result<String> {
     };
     match key {
         "seal" => choice(&["auto", "on", "off"]),
-        "isolation" => choice(&["shared", "collection"]),
         "embeddings" => choice(&["cloud", "ollama", "dev-hash"]),
         "memory" => choice(&["auto", "qdrant", "local", "ephemeral", "off"]),
         "key_store" => choice(&["file", "keychain"]),
@@ -951,7 +948,7 @@ pub fn validate(key: &str, value: &str) -> Result<String> {
                 "embedding_dim must be a positive whole number such as 384 (got {value:?})"
             ),
         },
-        "allow_insecure_qdrant" | "qdrant_on_disk" | "learn" | "lean" | "verbose" => boolean(),
+        "allow_insecure_qdrant" | "learn" | "lean" | "verbose" => boolean(),
         "qdrant_url" | "embedding_url" => {
             anyhow::ensure!(
                 value.starts_with("http://") || value.starts_with("https://"),

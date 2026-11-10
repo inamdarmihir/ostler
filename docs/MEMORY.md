@@ -30,22 +30,18 @@ Playbooks work like skills that improve with use. Ostler doesn't need a model to
 
 ### Privacy and security model of memory
 
-**Qdrant version:** use 1.14 or newer (CI runs v1.20.0). Ranked suggestions use a server-side scoring formula that Qdrant added in 1.14. On an older server Ostler detects the version when it connects and ranks the same candidates itself instead of failing; a test checks that the fallback ranks the same as the server formula on Qdrant 1.19, but it has not been run against a real pre-1.14 server, so treat 1.14+ as the supported floor.
+**Qdrant version:** CI tests against v1.20.0. Ostler ranks suggestions itself over the candidates Qdrant returns, so no server-side formula is needed; older servers are not tested.
 
 Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qdrant, payloads are **sealed on your machine by default** (`--seal auto`). This summary matches [SECURITY.md](../SECURITY.md), which has the full threat model.
 
 - **What someone who can read your Qdrant (operator, leaked key, backup) cannot read:** fact values, descriptions, playbooks and episodes are encrypted on your machine (AES-256-GCM); site names, field labels, keys and point ids are keyed hashes; episodes are redacted of emails and numbers; plain `http://` to a remote Qdrant is refused (`--allow-insecure-qdrant` overrides it for a VPN or tunnel).
 - **What they can still see:** the **vector**. With `--embeddings cloud` (the default) the field text is still sent to Qdrant Cloud Inference to be embedded, and vectors of labels reveal roughly what they say. `--embeddings ollama` keeps text on your machine so only vectors leave. The **tenant name**, **win/loss counters**, timing and point counts are also visible.
 - **The key:** by default a file (`memory.key` beside the config file, owner-only), or the `OSTLER_MEMORY_KEY` variable, or optionally the OS credential store (`key_store = keychain`). **If you lose it, sealed memory is unrecoverable**; the only way forward is `ostler memory wipe --yes`. Back it up (`ostler memory key export --yes-print`).
-- **Cross-user exposure:** by default every tenant shares three collections separated by a filter, so a leaked admin key exposes every tenant. `--isolation collection` gives each tenant its own collections and `ostler memory token` mints a JWT that Qdrant itself limits to them (needs Qdrant with `service.jwt_rbac: true` and an admin who creates the collections).
+- **Cross-user exposure:** every tenant shares the same collections, separated by a `tenant` filter that Ostler sends with every query. Anyone holding the Qdrant API key can read every tenant's records (they are sealed, but the tenant name is visible). Give each machine or user its own key.
 - **Secrets:** the memory API refuses password/token/card-like keys and values; playbooks store structure, never values. Detection is heuristic, so a secret stored under an innocuous key will not be caught.
 - **Before sealing:** memory saved earlier stays readable until you run `ostler memory seal` (facts are re-saved sealed; learned skills and episodes from before are dropped and relearned).
 - **Retention:** on start `serve` forgets learned skills and error episodes not verified for `--retain-days` (default 180, 0 keeps them). Facts you saved never expire. No telemetry.
 
-`ostler doctor` prints this state for your setup (sealing, key location, embeddings, isolation, transport). The sealing, local-embedding, token, retention and transport features are on `main`, not in a tagged release yet. Nothing here has been audited by a third party.
+`ostler doctor` prints this state for your setup (sealing, key location, embeddings, transport). The sealing, local-embedding, retention and transport features are on `main`, not in a tagged release yet. Nothing here has been audited by a third party.
 
 Details: [ARCHITECTURE](ARCHITECTURE.md), [ADRs](adr/).
-
-### Source memory (library only; not yet reachable over MCP)
-
-A fourth kind, `source`, stores chunks of pages an agent has read, for "what did I already read about X". Chunks are sealed like every other kind (AES-GCM payloads, HMAC-keyed ids). Each point carries a dense vector and a sparse BM25 vector whose term ids are HMAC-derived (truncated to 32 bits), so the server never sees plaintext terms; the cost is rare hash collisions and no cross-tenant term statistics. Search uses one hybrid Query API call with weighted RRF on Qdrant 1.17 or newer and client-side fusion plus MMR on older servers. Retention is short by default (`Memory::with_source_retain_days`), and `forget`/wipe covers the kind. It is tested against Qdrant 1.20.0. The configuration key and the MCP tools are not wired yet.
