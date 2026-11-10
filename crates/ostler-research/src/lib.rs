@@ -2,12 +2,14 @@
 //!
 //! * [`search`]: search providers (SearXNG, Brave) behind one trait.
 //! * [`robots`]: RFC 9309 robots.txt parsing, matching and caching.
+//! * [`archive`]: immutable, insert-only archive of fetched source versions and passages.
 //! * [`budget`]: crawl budgets and per-host politeness limits.
 //! * [`ledger`]: the source ledger (what was read, what could not be, and why).
 //! * [`fetch_plan`]: a pure planner for fetching many URLs under a budget.
 //!
 //! Nothing here bypasses bot walls, paywalls or robots rules; those outcomes are recorded as gaps.
 
+pub mod archive;
 pub mod budget;
 pub mod fetch_plan;
 pub mod ledger;

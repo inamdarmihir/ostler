@@ -43,10 +43,10 @@ Rust **1.89** (`rust-version` in the workspace `Cargo.toml`; the `msrv` CI job r
 | platform | build | tests | note |
 |---|---|---|---|
 | Linux x86_64 (Ubuntu runner) | CI | CI runs `cargo test --workspace` with Chrome and a pinned Qdrant; `weekly.yml` reruns the Chrome suites against stable Chrome | the supported test platform |
-| macOS (arm64) | release build (`macos-14`) | developed and benchmarked locally; not run in CI tests | numbers in BENCHMARKS are from macOS |
-| macOS (x86_64) | release build (`macos-13`) | none | build only |
+| macOS (arm64) | release build (`macos-15`) | developed and benchmarked locally; not run in CI tests | numbers in BENCHMARKS are from macOS |
+| macOS (x86_64) | release build (`macos-15-intel`) | none | build only |
 | Linux arm64 | release build (`ubuntu-22.04-arm`) | none | build only |
-| Windows (x86_64) | built in CI | CI build and test suite | experimental |
+| Windows (x86_64) | CI and release build | CI builds, runs `ostler doctor` and the test suite; not yet released (v0.2.1) | experimental; known gaps below |
 
 | dependency | tested | policy |
 |---|---|---|
@@ -56,3 +56,13 @@ Rust **1.89** (`rust-version` in the workspace `Cargo.toml`; the `msrv` CI job r
 | Ollama | manual | `--embeddings ollama` only needs the embeddings endpoint |
 | MCP clients | Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex config writers are tested by `ostler install` tests; behaviour inside each client is not | see [CLIENTS.md](CLIENTS.md) |
 | A2A | protocol v1.0 (JSON-RPC over HTTP, SSE); official Python SDK checked manually once | v0.3 wire format, gRPC, REST bindings not supported |
+
+### Known Windows and Docker gaps (v0.2.0 source)
+
+Read these before relying on either platform; they are listed here because they are true of the code, not because they are planned away.
+
+- **Windows config location.** `ostler` looks for `XDG_CONFIG_HOME`, then `HOME`; Windows sets neither, so the config and memory key fall back to a `.config` folder in the current directory. Set `OSTLER_CONFIG` to a fixed path (for example `%USERPROFILE%\.ostler\config.toml`) until this is fixed. `ostler install` itself uses `%APPDATA%` correctly.
+- **Windows Chrome discovery** checks only `C:\Program Files\Google\Chrome` and the `(x86)` twin. A per-user Chrome, Edge or Brave is not found automatically: set `OSTLER_CHROME` to the browser's `.exe`.
+- **Windows file permissions.** The owner-only checks on the memory key and traces are unix-only; Windows relies on your profile's folder ACLs.
+- **Windows install.** There is no PowerShell installer, winget or scoop package, and no Windows Python wheel; use the `.tar.gz` from the release (v0.2.1) or build from source.
+- **Docker.** The image is not published yet. It is headless only, so `wait_for_human` cannot show you a window; saved logins need a volume the `ostler` user (uid 10001) can write; reaching a server on your host needs `host.docker.internal`, and attaching to your own Chrome from a container is untested.

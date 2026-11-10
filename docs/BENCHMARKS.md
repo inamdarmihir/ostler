@@ -100,7 +100,7 @@ Section 1 compares Ostler with a *pattern*. This section runs the **real competi
 
 | server | version | tools | tool definitions (est. tokens, sent every turn) |
 |---|---|---:|---:|
-| Ostler | 0.2.0 (this commit) | 21 | 1,513 |
+| Ostler | 0.2.0 (measured with 21 tools; the forms profile now lists 20) | 21 | 1,513 |
 | Playwright MCP | npm `@playwright/mcp` 0.0.84 (reports Playwright 1.65.0-alpha-2026-10-30), `--headless --isolated --browser chrome` | 25 | 5,265 |
 | Chrome DevTools MCP | npm `chrome-devtools-mcp` 1.12.0, `--headless --isolated --executablePath <Chrome>` | 32 | 7,416 |
 

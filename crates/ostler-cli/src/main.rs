@@ -89,7 +89,7 @@ enum Cmd {
         #[arg(long, env = "OSTLER_CHROME")]
         chrome_path: Option<PathBuf>,
     },
-    /// Inspect or edit saved memory (profile facts, learned skills). Needs Qdrant: run `ostler init` first.
+    /// Inspect or edit saved memory (profile facts, learned skills). Works on the local encrypted file by default; use `ostler init` to point it at Qdrant.
     #[command(
         after_help = "Typical use:\n  ostler memory remember email you@example.com   save a fact the agent can fill into forms\n  ostler memory list                              show saved facts\n  ostler memory skills                            show what Ostler learned per site\n  ostler memory --memory ephemeral list           try it without Qdrant (lost on exit)\n\nThe shared options work before or after the subcommand (`ostler memory --tenant alice list` and\n`ostler memory list --tenant alice`). They also work as environment variables and as keys in `ostler config`."
     )]
@@ -1541,7 +1541,7 @@ async fn main() -> Result<()> {
                     headed_for_note
                 )
             );
-            ostler_mcp::serve_stdio(app).await?;
+            ostler_mcp::serve_stdio(std::sync::Arc::new(app)).await?;
         }
         Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(d) => doctor(d).await?,

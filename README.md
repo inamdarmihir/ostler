@@ -42,7 +42,7 @@ pip install ostler-mcp      # or: uvx --from ostler-mcp ostler serve
 ostler doctor     # Chrome launches? Qdrant reachable (optional)? Prints the fix when not
 ```
 
-**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image arrive in v0.2.1 and are experimental.
+**v0.2.0 is released.** Prebuilt binaries, the install script, PyPI (`pip install ostler-mcp`, or `uvx --from ostler-mcp ostler serve`) and Open VSX work today. crates.io, npm, the VS Code Marketplace and Homebrew are not published yet ([status](docs/INSTALL.md)). Cargo from source always works. macOS and Linux are tested; Windows (x86_64) and a Docker image arrive in v0.2.1 and are experimental, with [known gaps](docs/COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source). The PyPI wheels are macOS and Linux only for now.
 
 ## Works with Claude Code, Codex, Cursor
 
@@ -86,7 +86,7 @@ Underneath, as tested libraries (unit, property and real-Chrome / real-Qdrant te
 | `ostler-browser` | readability-style `read`, table, list and pagination extraction, and a `diagnostics` console/network collector. |
 | `ostler-fixtures`, `ostler-bench` | five **domain packs** (research, gov-forms, jobs, dev-qa, commerce; 34 tasks) and a **false-success** scorer: claimed success while the outcome failed. |
 
-**Not exposed as MCP tools yet:** `task`, `diagnostics`, the `expect` parameter, and the memory `source` kind (so read pages are not kept across sessions). Pages are read one at a time, there is no PDF text layer and no WARC archive; Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
+**Not exposed as MCP tools yet:** `task`, `diagnostics`, the `expect` parameter, and the memory `source` kind (so read pages are not kept across sessions). Pages are read one at a time. A PDF text library (`ostler-extract::pdf`) and a source-version archive (`ostler-research::archive`) exist but are not yet wired into `read` or `open_many`, so PDFs are still not read by the tools and sources are not kept across sessions. There is no WARC archive. Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
 
 First scripted result across the packs (a deterministic script, not a model; [bench-results/packs-all-scripted.md](bench-results/packs-all-scripted.md)): 30 tasks ran, 29 true successes, **1 false success** (dev-qa-005: the script trusted a page's "saved" banner while the save had failed), 4 skipped because they need tools not wired yet. That trap is the point of the metric. Run it with `ostler-bench packs --scripted --pack all`.
 
@@ -94,13 +94,12 @@ First scripted result across the packs (a deterministic script, not a model; [be
 
 Instead of one click and one snapshot per field, the agent asks for the form's typed fields (`form_inspect`), sends `{label: value}` for the whole form (`form_fill`), and submits (`form_submit`). Dependent dropdowns, multi-step wizards, masks, comboboxes, shadow DOM and same-origin iframes are handled by the engine. Every value is **read back from the live page** and compared by field type, and a rejected submit returns the page's own messages. `look` returns a screenshot with numbered click targets.
 
-Real output from the bundled fixtures (`ostler serve --tools forms`), lightly reformatted:
+Real output from the bundled fixtures (`ostler serve --tools forms`), with the `<page_content>` fences left out and one `<-` note added:
 
 ```text
 > form_fill {"Country": "Germany", "State": "Bavaria", "Email": "ada@example.com"}
-Filled 2/2 fields in 386ms (form e2).
-  OK e4 "Country" = "de"
-  OK e5 "State / region" = "by"        <- options loaded after Country changed
+Filled 2/3.
+verified: "Country", "State / region"      <- State's options loaded after Country changed
   UNMATCHED key "Email": no field on the page matches this key
 Still empty and required:
   e3 "Recipient"
@@ -132,7 +131,7 @@ Tool definitions sent every turn:
 
 | server | tools | schema tokens (est) |
 |---|---:|---:|
-| Ostler | 21 | 1,513 |
+| Ostler (21 tools when measured; the forms profile now lists 20) | 21 | 1,513 |
 | Playwright MCP | 25 | 5,265 |
 | Chrome DevTools MCP | 32 | 7,416 |
 

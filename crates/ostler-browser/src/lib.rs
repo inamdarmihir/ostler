@@ -166,6 +166,17 @@ impl TabSetup {
     }
 }
 
+tokio::task_local! {
+    /// The tab a tool call addressed (`tab` argument). Inside [`on_page`], [`Browser::page`] returns this
+    /// page instead of the active tab, so concurrent calls on different tabs never pick up each other's.
+    static CALL_PAGE: Page;
+}
+
+/// Run `f` with [`Browser::page`] resolving to `page` (for this task only).
+pub async fn on_page<F: std::future::Future>(page: Page, f: F) -> F::Output {
+    CALL_PAGE.scope(page, f).await
+}
+
 /// A running browser. All tabs live in one browser context, so cookies and storage are shared between them.
 pub struct Browser {
     chrome: Chrome,
@@ -386,10 +397,29 @@ impl Browser {
         Ok(())
     }
 
-    /// The active tab.
+    /// The page this call acts on: the tab chosen with [`on_page`], else the active tab.
     pub fn page(&self) -> Page {
+        if let Ok(p) = CALL_PAGE.try_with(Page::clone) {
+            return p;
+        }
         let t = self.tabs.lock().unwrap();
         t.list[t.active].page.clone()
+    }
+
+    /// The page of tab `id` (e.g. `t2`), if it is open.
+    pub fn page_by_id(&self, id: &str) -> Option<Page> {
+        let t = self.tabs.lock().unwrap();
+        t.list.iter().find(|x| x.id == id).map(|x| x.page.clone())
+    }
+
+    /// Open a tab without making it active (a scratch tab for background reads). Returns its id and page.
+    pub async fn new_background_tab(&self) -> page::Result<(String, Page)> {
+        let page = self
+            .setup
+            .page_for(self.setup.new_session(&self.conn).await?)
+            .await?;
+        let id = self.tabs.lock().unwrap().push(page.clone());
+        Ok((id, page))
     }
 
     pub fn active_tab(&self) -> String {

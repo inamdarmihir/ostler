@@ -68,21 +68,26 @@ fn observe() -> Value {
     json!({"type":"string","enum":["delta","full","none"],"description":"snapshot returned after the action (default delta)"})
 }
 
+/// Optional on page tools: act on that tab (`t2`) without switching to it.
+fn tab() -> Value {
+    json!({"type":"string"})
+}
+
 fn defs() -> Vec<Def> {
     use Group::{Core, Forms, Memory, Research};
     vec![
         Def { name: "navigate", desc: "Open a URL. Returns page state with interactive elements.", group: Core, required: &["url"],
-            props: json!({"url":{"type":"string"},"observe":{"type":"string","enum":["interactive","full","none"],"description":"default interactive"}}) },
+            props: json!({"tab":tab(),"url":{"type":"string"},"observe":{"type":"string","enum":["interactive","full","none"],"description":"default interactive"}}) },
         Def { name: "snapshot", desc: "Read the page as text with element refs (e1, e2…). Use delta to see only changes. Pass the ref of a heading to read just that section.", group: Core, required: &[],
-            props: json!({"mode":{"type":"string","enum":["full","delta","interactive"]},"ref":{"type":"string","description":"limit to subtree"},"max_chars":{"type":"integer"}}) },
+            props: json!({"tab":tab(),"mode":{"type":"string","enum":["full","delta","interactive"]},"ref":{"type":"string","description":"limit to subtree"},"max_chars":{"type":"integer"}}) },
         Def { name: "read", desc: "Read a page for research (opens url if given). With query: just the best passages. Without: the start. Only pages you read can be cited. Flags paywalls, bot walls, changed pages, text aimed at AI.", group: Core, required: &[],
-            props: json!({"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"}}) },
+            props: json!({"tab":tab(),"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"}}) },
         Def { name: "click", desc: "Click an element by ref.", group: Core, required: &["ref"],
-            props: json!({"ref":{"type":"string"},"observe":observe()}) },
+            props: json!({"tab":tab(),"ref":{"type":"string"},"observe":observe()}) },
         Def { name: "type", desc: "Type into an element by ref, replacing its content.", group: Core, required: &["ref","text"],
-            props: json!({"ref":{"type":"string"},"text":{"type":"string"},"submit":{"type":"boolean","description":"press Enter after"},"observe":observe()}) },
+            props: json!({"tab":tab(),"ref":{"type":"string"},"text":{"type":"string"},"submit":{"type":"boolean","description":"press Enter after"},"observe":observe()}) },
         Def { name: "press", desc: "Press a key, e.g. Enter, Tab, Escape, Control+a.", group: Core, required: &["key"],
-            props: json!({"key":{"type":"string"},"observe":observe()}) },
+            props: json!({"tab":tab(),"key":{"type":"string"},"observe":observe()}) },
         Def { name: "hover", desc: "Move the pointer over an element by ref (opens menus and tooltips).", group: Core, required: &["ref"],
             props: json!({"ref":{"type":"string"},"observe":observe()}) },
         Def { name: "scroll", desc: "Scroll an element into view (ref) or the page (direction up|down|top|bottom, optional amount in px). Reports position as scrolled/max.", group: Core, required: &[],
