@@ -3,3 +3,6 @@ target/
 .env
 out/
 docker/bin/
+
+# Python bytecode from running the eval and bench-compare scripts
+__pycache__/
