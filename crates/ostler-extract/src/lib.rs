@@ -2,6 +2,7 @@
 //!
 //! * [`chunk`]: split page text or markdown into stable, offset-addressed chunks.
 //! * [`bm25`]: in-memory BM25 index, diversification, MMR rerank and sparse vectors.
+//! * [`pdf`]: born-digital PDF text extraction, page by page, with size and page caps.
 //! * [`quote`]: check that a quote really appears in stored page text.
 //! * [`fragment`]: build `#:~:text=` URL text fragments for verified quotes.
 //! * [`inject`]: heuristic prompt-injection flags (flags only, not a defence).

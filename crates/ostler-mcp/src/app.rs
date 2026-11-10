@@ -1971,8 +1971,13 @@ impl App {
         }
         let form = arg_str(a, "form").map(String::from);
         let ctl = arg_str(a, "control").map(String::from);
+        // `again` lets a deliberate repeat through the double-submit guard; without it, an identical
+        // submit inside the guard window is refused.
+        let again = a.get("again").and_then(Value::as_bool).unwrap_or(false);
         let out = br!(self, b, {
-            b.page().submit(form.as_deref(), ctl.as_deref()).await
+            b.page()
+                .submit_with(form.as_deref(), ctl.as_deref(), again)
+                .await
         })?;
         self.learn_from_submit(&out);
         Ok(submit_output(

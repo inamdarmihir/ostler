@@ -1,6 +1,6 @@
 # Roadmap: where Ostler stands and what is left
 
-> The plan of record from v0.3 to launch is [BUILD-PLAN.md](BUILD-PLAN.md). This page tracks the current state.
+> The plan of record from v0.3 to launch is [BUILD-PLAN.md](BUILD-PLAN.md). The agentic workflow proposal (missions, handoff, skills, the Anthropic browser toolset executor) is [AGENTIC-PLAN.md](AGENTIC-PLAN.md). This page tracks the current state.
 > The engineering backlog toward a mature runtime is [PLAN-LEVEL-100.md](PLAN-LEVEL-100.md), with the verified gap table in [GAP-MATRIX.md](GAP-MATRIX.md). Its phase status is below under "Level-100 progress".
 
 ## Level-100 progress

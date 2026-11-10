@@ -19,8 +19,11 @@ use ostler_extract::{
 use ostler_research::ledger::SourceEntry;
 use ostler_research::search::normalise_url;
 
-/// Pages kept; the oldest is evicted first (a citation to an evicted page says so).
+/// Pages kept live; the oldest is evicted first. An evicted page, and the earlier text of a page that
+/// changed, move to the archive so citations taken from them still verify.
 pub const MAX_DOCS: usize = 60;
+/// Texts kept in the archive (keyed by URL and content hash); the oldest is dropped first.
+pub const MAX_ARCHIVED_DOCS: usize = 200;
 /// Characters of markdown kept per page.
 pub const STORE_CHARS: usize = 150_000;
 /// Citations kept.
@@ -258,12 +261,17 @@ pub struct Citation {
     pub end: usize,
     /// `url#:~:text=...` for a person to check the claim in their own browser (best effort).
     pub link: Option<String>,
-    /// Hash of the page text the quote was found in.
+    /// Hash of the page text the quote was found in. Never rewritten: it names the recorded version.
     pub hash: String,
+    /// When that version was fetched. Never rewritten.
     pub fetched_at: u64,
     /// The quote overlaps text flagged as a possible prompt injection.
     pub injected: bool,
-    /// The page changed after this was verified and the quote no longer appears.
+    /// The page has been read again with different text since this quote was taken. `hash`, `start`,
+    /// `end`, `link` and `fetched_at` still describe the earlier version.
+    pub superseded: bool,
+    /// The quote no longer appears in the page's latest text. Independent of `superseded`: a superseded
+    /// citation whose quote is still on the page is not stale.
     pub stale: bool,
 }
 
@@ -289,8 +297,39 @@ struct Inner {
     docs: HashMap<String, Arc<Doc>>,
     /// Primary keys, oldest first.
     order: VecDeque<String>,
+    /// Texts no longer live: evicted pages and the earlier text of changed pages. Keyed by primary key
+    /// and content hash, so a superseded text is never overwritten by a later one.
+    archive: HashMap<(String, String), Arc<Doc>>,
+    /// Archive keys, oldest first.
+    archive_order: VecDeque<(String, String)>,
     cites: Vec<Citation>,
     next_n: usize,
+}
+
+/// Keep `doc` in the archive, dropping the oldest archived text when over [`MAX_ARCHIVED_DOCS`].
+fn archive_doc(g: &mut Inner, doc: Arc<Doc>) {
+    let k = (key(&doc.url), doc.hash.clone());
+    if g.archive.insert(k.clone(), doc).is_some() {
+        g.archive_order.retain(|x| *x != k);
+    }
+    g.archive_order.push_back(k);
+    while g.archive_order.len() > MAX_ARCHIVED_DOCS {
+        if let Some(old) = g.archive_order.pop_front() {
+            g.archive.remove(&old);
+        }
+    }
+}
+
+/// The newest archived text for `url` (under its final or requested address), optionally of one hash.
+fn archived(g: &Inner, url: &str, hash: Option<&str>) -> Option<Arc<Doc>> {
+    let k = key(url);
+    g.archive_order
+        .iter()
+        .rev()
+        .filter(|(_, h)| hash.is_none_or(|want| h == want))
+        .filter_map(|kk| g.archive.get(kk))
+        .find(|d| key(&d.url) == k || key(&d.requested) == k)
+        .cloned()
 }
 
 /// The session's read pages and verified citations.
@@ -305,45 +344,46 @@ impl Evidence {
     }
 
     /// Store a page (replacing an earlier read of the same URL). Returns the stored page and, when an
-    /// earlier read had different text, how many of its citations no longer verify.
+    /// earlier read had different text, how many citations to the earlier text still hold.
+    ///
+    /// Citations are never rewritten here. A citation keeps the hash, positions and fetch time of the
+    /// version it was taken from; when that differs from the new text it is `superseded`. Its `stale`
+    /// flag says whether its quote is still on the page. The earlier text is archived, so the citation
+    /// can still be checked against it after eviction.
     pub fn insert(&self, doc: Doc) -> (Arc<Doc>, Option<Reverified>) {
         let doc = Arc::new(doc);
         let primary = key(&doc.url);
         let mut g = self.lock();
-        let mut change = None;
+        let mut previous_fetched_at = None;
         if let Some(old) = g.docs.get(&primary).cloned() {
-            if old.hash != doc.hash {
-                change = Some(Reverified {
-                    previous_fetched_at: old.fetched_at,
-                    ..Default::default()
-                });
-            }
             g.order.retain(|k| *k != primary);
+            if old.hash != doc.hash {
+                previous_fetched_at = Some(old.fetched_at);
+                archive_doc(&mut g, old);
+            }
         }
-        // Citations to this page are re-checked against the new text whether or not the hash moved:
-        // that is cheap, and it clears a stale mark when the old words came back.
         let mut stale_n = 0;
         let mut kept_n = 0;
         for c in g.cites.iter_mut().filter(|c| key(&c.url) == primary) {
-            match verify_quote(&doc.plain, &c.quote) {
-                QuoteVerdict::Verified { start, end } => {
-                    c.start = start;
-                    c.end = end;
-                    c.hash = doc.hash.clone();
-                    c.fetched_at = doc.fetched_at;
-                    c.stale = false;
+            let holds = matches!(
+                verify_quote(&doc.plain, &c.quote),
+                QuoteVerdict::Verified { .. }
+            );
+            c.superseded = c.hash != doc.hash;
+            c.stale = !holds;
+            if c.superseded {
+                if holds {
                     kept_n += 1;
-                }
-                _ => {
-                    c.stale = true;
+                } else {
                     stale_n += 1;
                 }
             }
         }
-        if let Some(ch) = change.as_mut() {
-            ch.stale = stale_n;
-            ch.still_valid = kept_n;
-        }
+        let change = previous_fetched_at.map(|previous_fetched_at| Reverified {
+            previous_fetched_at,
+            stale: stale_n,
+            still_valid: kept_n,
+        });
         g.order.push_back(primary.clone());
         g.docs.insert(primary.clone(), doc.clone());
         let alias = key(&doc.requested);
@@ -357,14 +397,29 @@ impl Evidence {
                     if other != old {
                         g.docs.remove(&other);
                     }
+                    archive_doc(&mut g, d);
                 }
             }
         }
         (doc, change)
     }
 
+    /// The live page for `url`. Evicted pages are not returned; see [`Evidence::recorded`].
     pub fn get(&self, url: &str) -> Option<Arc<Doc>> {
         self.lock().docs.get(&key(url)).cloned()
+    }
+
+    /// The text a citation was recorded against: the live page when its hash still matches, otherwise
+    /// the archived text with that hash. `None` when that text was never kept or has been dropped.
+    // Not called outside tests yet: this is the hook for re-checking a citation against its own version.
+    #[allow(dead_code)]
+    pub fn recorded(&self, url: &str, hash: &str) -> Option<Arc<Doc>> {
+        let g = self.lock();
+        g.docs
+            .get(&key(url))
+            .filter(|d| d.hash == hash)
+            .cloned()
+            .or_else(|| archived(&g, url, Some(hash)))
     }
 
     /// Pages read, oldest first.
@@ -382,7 +437,15 @@ impl Evidence {
 
     /// Verify `quote` against the stored text of `url` and record it when it is found.
     pub fn cite(&self, url: &str, quote: &str) -> Cite {
-        let Some(doc) = self.get(url) else {
+        // A page evicted from the live map is still verifiable against the text that was read.
+        let doc = {
+            let g = self.lock();
+            g.docs
+                .get(&key(url))
+                .cloned()
+                .or_else(|| archived(&g, url, None))
+        };
+        let Some(doc) = doc else {
             return Cite::NotRead;
         };
         // Both sides lose markup first, so a quote copied from a rendered passage (`**1887**`,
@@ -401,8 +464,13 @@ impl Evidence {
                 .ok();
                 let mut g = self.lock();
                 let primary = key(&doc.url);
+                // Reuse a citation only for the same version and span; a new version gets a new number.
                 if let Some(c) = g.cites.iter().find(|c| {
-                    key(&c.url) == primary && c.start == start && c.end == end && !c.stale
+                    key(&c.url) == primary
+                        && c.hash == doc.hash
+                        && c.start == start
+                        && c.end == end
+                        && !c.stale
                 }) {
                     return Cite::Verified {
                         citation: c.clone(),
@@ -420,6 +488,7 @@ impl Evidence {
                     hash: doc.hash.clone(),
                     fetched_at: doc.fetched_at,
                     injected,
+                    superseded: false,
                     stale: false,
                 };
                 g.cites.push(citation.clone());
@@ -556,6 +625,97 @@ mod tests {
             "Status board\n\nThe lock handled 1,310 vessels last year (revised).",
         ));
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn a_changed_page_leaves_the_old_citation_as_recorded_and_marks_it_superseded() {
+        let e = Evidence::default();
+        let old_md =
+            "Status board\n\nThe lock handled 1,204 vessels last year and stayed open all winter.";
+        let first = doc("http://x.test/v", old_md);
+        let old_fetched = first.fetched_at;
+        let old_hash = first.hash.clone();
+        e.insert(first);
+        let Cite::Verified { citation: old, .. } =
+            e.cite("http://x.test/v", "handled 1,204 vessels last year")
+        else {
+            panic!()
+        };
+        // The same quote is still on the page, but the page text has changed around it.
+        let mut second = doc(
+            "http://x.test/v",
+            "Status board\n\nThe lock handled 1,204 vessels last year. Revised: it closed in winter.",
+        );
+        second.fetched_at = old_fetched + 100;
+        let (_, change) = e.insert(second);
+        let change = change.expect("text changed");
+        assert_eq!((change.stale, change.still_valid), (0, 1));
+
+        let kept = e.citations().into_iter().find(|c| c.n == old.n).unwrap();
+        assert_eq!(kept.hash, old_hash);
+        assert_eq!(kept.fetched_at, old_fetched);
+        assert_eq!((kept.start, kept.end), (old.start, old.end));
+        assert_eq!(kept.quote, old.quote);
+        assert!(
+            kept.superseded,
+            "a changed page must mark earlier citations"
+        );
+        assert!(!kept.stale, "the quote is still on the page");
+        // The earlier text is still there to check the old citation against.
+        let text = e
+            .recorded(&kept.url, &kept.hash)
+            .expect("archived earlier text");
+        assert!(text.plain.contains("stayed open all winter"));
+        assert!(matches!(
+            verify_quote(&text.plain, &kept.quote),
+            QuoteVerdict::Verified { .. }
+        ));
+        // A new quote from the new text is a new citation on the current version.
+        let Cite::Verified {
+            citation: fresh,
+            repeat,
+        } = e.cite("http://x.test/v", "Revised: it closed in winter")
+        else {
+            panic!()
+        };
+        assert!(!repeat && fresh.n != old.n && fresh.hash != old_hash && !fresh.superseded);
+    }
+
+    #[test]
+    fn a_citation_outlives_its_page_being_evicted_from_the_live_map() {
+        let e = Evidence::default();
+        e.insert(doc("http://x.test/lock", LOCK));
+        let q = "opened in 1887 and was designed by Marta Ilves";
+        let Cite::Verified { citation, .. } = e.cite("http://x.test/lock", q) else {
+            panic!()
+        };
+        for i in 0..MAX_DOCS {
+            e.insert(doc(&format!("http://x.test/other{i}"), LOCK));
+        }
+        assert!(
+            e.get("http://x.test/lock").is_none(),
+            "page should be evicted"
+        );
+        let kept = e
+            .citations()
+            .into_iter()
+            .find(|c| c.n == citation.n)
+            .expect("citation kept");
+        assert_eq!(kept.quote, citation.quote);
+        assert_eq!(kept.hash, citation.hash);
+        assert_eq!((kept.start, kept.end), (citation.start, citation.end));
+        let text = e
+            .recorded(&kept.url, &kept.hash)
+            .expect("evicted text is archived");
+        assert!(matches!(
+            verify_quote(&text.plain, &kept.quote),
+            QuoteVerdict::Verified { .. }
+        ));
+        // Citing the evicted page again still verifies, and reuses the same citation.
+        assert!(matches!(
+            e.cite("http://x.test/lock", q),
+            Cite::Verified { repeat: true, .. }
+        ));
     }
 
     #[test]

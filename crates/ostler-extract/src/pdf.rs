@@ -1,308 +1,282 @@
-//! PDF text extraction for document ingestion.
+//! Born-digital PDF text extraction: pure logic over bytes, no I/O.
 //!
-//! [`extract`] turns PDF bytes into per-page text. It never panics: the parser
-//! runs inside [`std::panic::catch_unwind`] and any panic becomes an entry in
-//! [`PdfDoc::errors`]. Input is capped at [`MAX_INPUT_BYTES`] and the page
-//! count at [`MAX_PAGES`]; both caps are reported in `errors` when they bite.
+//! [`extract_pdf`] reads the text layer of a PDF page by page using `lopdf`
+//! (MIT). It enforces a byte cap and a page cap before doing any real work,
+//! and it never panics on malformed input: parser panics are caught and
+//! reported as errors.
 //!
-//! `scanned` is true when the document has no usable text layer: zero pages,
-//! or fewer than [`MIN_CHARS_PER_PAGE`] characters per page on average. Such a
-//! document is probably image-only and needs OCR, which this crate does not do.
+//! A page whose extracted text has fewer than [`SCANNED_MIN_CHARS`]
+//! non-whitespace characters is listed in [`PdfDoc::scanned_pages`]. Such a
+//! page most likely has no text layer (a scan or an image), so it needs OCR
+//! or another route. A page whose text could not be extracted at all goes in
+//! [`PdfDoc::failures`] instead and is not counted as scanned.
 
+use std::any::Any;
+use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use pdf_extract::{output_doc_page, Document, PlainTextOutput};
+/// Input larger than this is rejected before parsing.
+pub const MAX_PDF_BYTES: usize = 20 * 1024 * 1024;
 
-/// Largest input accepted, in bytes (20 MiB).
-pub const MAX_INPUT_BYTES: usize = 20 * 1024 * 1024;
-/// Most pages read from one document.
-pub const MAX_PAGES: usize = 500;
-/// Average characters per page below which a document counts as scanned.
-pub const MIN_CHARS_PER_PAGE: f64 = 40.0;
+/// Documents with more pages than this are rejected.
+pub const MAX_PDF_PAGES: u32 = 300;
 
-/// Text of one page. `n` is the 1-based page number.
+/// A page with fewer non-whitespace characters than this is marked scanned.
+pub const SCANNED_MIN_CHARS: usize = 20;
+
+/// Text of one successfully extracted page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PdfPage {
-    pub n: u32,
+    /// 1-based page number as the document numbers it.
+    pub number: u32,
+    /// Extracted text, trimmed at both ends. May be empty.
     pub text: String,
 }
 
-/// Result of extracting one PDF.
+/// Result of extracting a PDF.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PdfDoc {
+    /// Every page whose text was extracted, in page order.
     pub pages: Vec<PdfPage>,
-    /// True when the document has little or no text layer (see module docs).
-    pub scanned: bool,
-    /// Human-readable problems: parse failures, panics, per-page failures and
-    /// caps that truncated the document. Empty when extraction was clean.
-    pub errors: Vec<String>,
+    /// Total number of pages in the document.
+    pub page_count: u32,
+    /// Pages with too little text to be born-digital (see [`SCANNED_MIN_CHARS`]).
+    pub scanned_pages: Vec<u32>,
+    /// Pages whose text extraction failed, with the reason.
+    pub failures: Vec<(u32, String)>,
 }
 
-/// Extract per-page text from PDF `bytes`. Never panics.
-pub fn extract(bytes: &[u8]) -> PdfDoc {
-    let mut errors = Vec::new();
+/// Why a PDF could not be extracted at all. Per-page problems are reported
+/// in [`PdfDoc::failures`] instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PdfError {
+    /// Input is larger than [`MAX_PDF_BYTES`].
+    TooLarge { bytes: usize, limit: usize },
+    /// Document has more pages than [`MAX_PDF_PAGES`].
+    TooManyPages { pages: u32, limit: u32 },
+    /// The bytes are not a PDF that could be parsed, or the parser panicked.
+    Malformed(String),
+}
 
-    let pages = if bytes.len() > MAX_INPUT_BYTES {
-        errors.push(format!(
-            "input truncated: {} bytes exceeds the {} byte cap; not parsed",
-            bytes.len(),
-            MAX_INPUT_BYTES
-        ));
-        Vec::new()
-    } else {
-        let mut parse_errors = Vec::new();
-        let outcome = catch_unwind(AssertUnwindSafe(|| parse(bytes, &mut parse_errors)));
-        errors.append(&mut parse_errors);
-        match outcome {
-            Ok(Ok(pages)) => pages,
-            Ok(Err(message)) => {
-                errors.push(message);
-                Vec::new()
+impl fmt::Display for PdfError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PdfError::TooLarge { bytes, limit } => {
+                write!(f, "PDF is {bytes} bytes, over the {limit} byte limit")
             }
-            Err(payload) => {
-                errors.push(format!("pdf parser panicked: {}", panic_message(&payload)));
-                Vec::new()
+            PdfError::TooManyPages { pages, limit } => {
+                write!(f, "PDF has {pages} pages, over the {limit} page limit")
             }
+            PdfError::Malformed(why) => write!(f, "cannot read PDF: {why}"),
         }
-    };
+    }
+}
 
-    let scanned = is_scanned(&pages);
-    PdfDoc {
+impl std::error::Error for PdfError {}
+
+/// Extract the text layer of a born-digital PDF.
+///
+/// Returns [`PdfError`] for oversized input, too many pages, or bytes that do
+/// not parse. Never panics on malformed input.
+pub fn extract_pdf(bytes: &[u8]) -> Result<PdfDoc, PdfError> {
+    if bytes.len() > MAX_PDF_BYTES {
+        return Err(PdfError::TooLarge {
+            bytes: bytes.len(),
+            limit: MAX_PDF_BYTES,
+        });
+    }
+
+    let doc = guarded(|| lopdf::Document::load_mem(bytes).map_err(|e| e.to_string()))
+        .map_err(PdfError::Malformed)?;
+
+    let page_map = doc.get_pages();
+    let page_count = u32::try_from(page_map.len()).unwrap_or(u32::MAX);
+    if page_count > MAX_PDF_PAGES {
+        return Err(PdfError::TooManyPages {
+            pages: page_count,
+            limit: MAX_PDF_PAGES,
+        });
+    }
+
+    let mut pages = Vec::with_capacity(page_map.len());
+    let mut scanned_pages = Vec::new();
+    let mut failures = Vec::new();
+
+    for &number in page_map.keys() {
+        match guarded(|| doc.extract_text(&[number]).map_err(|e| e.to_string())) {
+            Ok(raw) => {
+                let text = raw.trim().to_string();
+                if !has_text_layer(&text) {
+                    scanned_pages.push(number);
+                }
+                pages.push(PdfPage { number, text });
+            }
+            Err(why) => failures.push((number, why)),
+        }
+    }
+
+    Ok(PdfDoc {
         pages,
-        scanned,
-        errors,
+        page_count,
+        scanned_pages,
+        failures,
+    })
+}
+
+/// True when the text has enough non-whitespace characters to count as a
+/// born-digital text layer.
+fn has_text_layer(text: &str) -> bool {
+    non_whitespace_chars(text) >= SCANNED_MIN_CHARS
+}
+
+fn non_whitespace_chars(text: &str) -> usize {
+    text.chars().filter(|c| !c.is_whitespace()).count()
+}
+
+/// Run a parser step and turn a panic into an error string. This is a
+/// backstop: `lopdf` should return errors, but a panic on hostile input must
+/// not take down the caller.
+fn guarded<T>(step: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    match catch_unwind(AssertUnwindSafe(step)) {
+        Ok(result) => result,
+        Err(payload) => Err(format!("parser panicked: {}", panic_message(&*payload))),
     }
 }
 
-/// Parse the document and extract each page. Per-page failures are pushed to
-/// `errors` and the page is kept with empty text so page numbers stay true.
-fn parse(bytes: &[u8], errors: &mut Vec<String>) -> Result<Vec<PdfPage>, String> {
-    let mut doc = Document::load_mem(bytes).map_err(|e| format!("pdf parse failed: {e}"))?;
-    if doc.is_encrypted() {
-        doc.decrypt("").map_err(|e| {
-            format!("pdf is encrypted and could not be opened without a password: {e}")
-        })?;
-    }
-
-    let page_numbers: Vec<u32> = doc.get_pages().keys().copied().collect();
-    if page_numbers.len() > MAX_PAGES {
-        errors.push(format!(
-            "document truncated: {} pages, read the first {MAX_PAGES}",
-            page_numbers.len()
-        ));
-    }
-
-    let mut pages = Vec::with_capacity(page_numbers.len().min(MAX_PAGES));
-    for n in page_numbers.into_iter().take(MAX_PAGES) {
-        let mut text = String::new();
-        let result = {
-            let mut output = PlainTextOutput::new(&mut text);
-            output_doc_page(&doc, &mut output, n)
-        };
-        if let Err(e) = result {
-            errors.push(format!("page {n}: text extraction failed: {e}"));
-            text.clear();
-        }
-        pages.push(PdfPage { n, text });
-    }
-    Ok(pages)
-}
-
-fn is_scanned(pages: &[PdfPage]) -> bool {
-    if pages.is_empty() {
-        return true;
-    }
-    let total: usize = pages.iter().map(|p| p.text.chars().count()).sum();
-    (total as f64 / pages.len() as f64) < MIN_CHARS_PER_PAGE
-}
-
-fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+fn panic_message(payload: &(dyn Any + Send)) -> &str {
     if let Some(s) = payload.downcast_ref::<&str>() {
-        (*s).to_string()
+        s
     } else if let Some(s) = payload.downcast_ref::<String>() {
-        s.clone()
+        s.as_str()
     } else {
-        "unknown panic".to_string()
+        "unknown panic"
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pdf_extract::{Dictionary, Object, Stream};
 
-    fn name(s: &str) -> Object {
-        Object::Name(s.as_bytes().to_vec())
-    }
-
-    /// Build a PDF with one page per entry. Each page shows its text in
-    /// Helvetica; an empty string gives a blank page (like an image-only scan
-    /// with no text layer).
+    /// Build a minimal, valid, uncompressed PDF with one Helvetica line of
+    /// text per page. Text must not contain parentheses or backslashes.
     fn build_pdf(page_texts: &[&str]) -> Vec<u8> {
-        let mut doc = Document::with_version("1.5");
-        let pages_id = doc.new_object_id();
-        let font_id = doc.add_object(Dictionary::from_iter(vec![
-            ("Type", name("Font")),
-            ("Subtype", name("Type1")),
-            ("BaseFont", name("Helvetica")),
-        ]));
-        let fonts = Dictionary::from_iter(vec![("F1", Object::Reference(font_id))]);
-        let resources = Dictionary::from_iter(vec![("Font", Object::Dictionary(fonts))]);
-
-        let mut kids = Vec::new();
-        for text in page_texts {
-            let content = format!("BT /F1 12 Tf 72 720 Td ({text}) Tj ET");
-            let content_id = doc.add_object(Stream::new(Dictionary::new(), content.into_bytes()));
-            let page_id = doc.add_object(Dictionary::from_iter(vec![
-                ("Type", name("Page")),
-                ("Parent", Object::Reference(pages_id)),
-                ("Contents", Object::Reference(content_id)),
-                ("Resources", Object::Dictionary(resources.clone())),
-                (
-                    "MediaBox",
-                    Object::Array(vec![
-                        Object::Integer(0),
-                        Object::Integer(0),
-                        Object::Integer(612),
-                        Object::Integer(792),
-                    ]),
-                ),
-            ]));
-            kids.push(Object::Reference(page_id));
+        let n = page_texts.len();
+        // Object 1 is the catalog, 2 the page tree, 3 the font. Page i is
+        // object 4 + 2i and its content stream is object 5 + 2i.
+        let mut objects: Vec<String> = vec![
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            format!(
+                "<< /Type /Pages /Kids [{}] /Count {} >>",
+                (0..n)
+                    .map(|i| format!("{} 0 R", 4 + 2 * i))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                n
+            ),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        ];
+        for (i, text) in page_texts.iter().enumerate() {
+            objects.push(format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] \
+                 /Resources << /Font << /F1 3 0 R >> >> /Contents {} 0 R >>",
+                5 + 2 * i
+            ));
+            let stream = format!("BT /F1 24 Tf 72 720 Td ({text}) Tj ET");
+            objects.push(format!(
+                "<< /Length {} >>\nstream\n{stream}\nendstream",
+                stream.len()
+            ));
         }
 
-        let count = kids.len() as i64;
-        doc.objects.insert(
-            pages_id,
-            Object::Dictionary(Dictionary::from_iter(vec![
-                ("Type", name("Pages")),
-                ("Kids", Object::Array(kids)),
-                ("Count", Object::Integer(count)),
-            ])),
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::with_capacity(objects.len());
+        for (i, body) in objects.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref_at = out.len();
+        let size = objects.len() + 1;
+        out.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+        for off in &offsets {
+            out.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(
+            format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n")
+                .as_bytes(),
         );
-        let catalog_id = doc.add_object(Dictionary::from_iter(vec![
-            ("Type", name("Catalog")),
-            ("Pages", Object::Reference(pages_id)),
-        ]));
-        doc.trailer.set("Root", Object::Reference(catalog_id));
-
-        let mut out = Vec::new();
-        doc.save_to(&mut out).expect("serialise test pdf");
         out
     }
 
     #[test]
-    fn pdf_quote_resolves_to_page_n() {
-        let long_a = "Alpha section covers the quarterly revenue figures in detail";
-        let long_b = "Beta section lists the regional breakdown and the outlook";
-        let bytes = build_pdf(&[long_a, long_b]);
-
-        let doc = extract(&bytes);
-
-        assert!(doc.errors.is_empty(), "unexpected errors: {:?}", doc.errors);
+    fn extracts_text_from_page_one() {
+        let pdf = build_pdf(&["Hello from page one of the fixture document", "Hi"]);
+        let doc = extract_pdf(&pdf).expect("valid fixture must extract");
+        assert_eq!(doc.page_count, 2);
         assert_eq!(doc.pages.len(), 2);
-        assert_eq!(doc.pages[0].n, 1);
-        assert_eq!(doc.pages[1].n, 2);
-        assert!(
-            doc.pages[0].text.contains(long_a),
-            "page 1 text: {:?}",
-            doc.pages[0].text
+        assert_eq!(doc.pages[0].number, 1);
+        assert_eq!(
+            doc.pages[0].text,
+            "Hello from page one of the fixture document"
         );
-        assert!(
-            doc.pages[1].text.contains(long_b),
-            "page 2 text: {:?}",
-            doc.pages[1].text
-        );
-        assert!(!doc.pages[1].text.contains(long_a));
-        assert!(!doc.scanned);
+        assert_eq!(doc.pages[1].number, 2);
+        assert_eq!(doc.scanned_pages, vec![2]);
+        assert!(doc.failures.is_empty());
     }
 
     #[test]
-    fn scanned_pdf_sets_scanned_flag() {
-        let bytes = build_pdf(&["", ""]);
-
-        let doc = extract(&bytes);
-
-        assert_eq!(doc.pages.len(), 2);
-        assert!(doc.pages.iter().all(|p| p.text.trim().is_empty()));
-        assert!(doc.scanned);
-    }
-
-    #[test]
-    fn zero_page_pdf_is_scanned() {
-        let bytes = build_pdf(&[]);
-
-        let doc = extract(&bytes);
-
-        assert!(doc.pages.is_empty());
-        assert!(doc.scanned);
-    }
-
-    #[test]
-    fn garbage_bytes_yield_error_without_panic() {
-        let garbage: Vec<u8> = (0..4096u32)
-            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
-            .collect();
-
-        let doc = extract(&garbage);
-
-        assert!(doc.pages.is_empty());
-        assert!(doc.scanned);
-        assert!(!doc.errors.is_empty());
+    fn garbage_bytes_return_error_without_panic() {
+        let err = extract_pdf(b"this is not a pdf at all, just words").unwrap_err();
+        assert!(matches!(err, PdfError::Malformed(_)), "got {err:?}");
     }
 
     #[test]
     fn truncated_pdf_does_not_panic() {
-        let bytes = build_pdf(&["Some text that is long enough to be a real page of prose here"]);
-        let cut = &bytes[..bytes.len() / 2];
-
-        let doc = extract(cut);
-
-        assert!(doc.pages.len() <= 1);
-    }
-
-    #[test]
-    fn one_byte_input_does_not_panic() {
-        for b in [0u8, b'%', b'P', 0xff] {
-            let doc = extract(&[b]);
-            assert!(doc.pages.is_empty());
-            assert!(!doc.errors.is_empty());
+        let pdf = build_pdf(&["Truncated fixture page with enough text to matter"]);
+        for cut in [0, 9, pdf.len() / 3, pdf.len() / 2, pdf.len() - 1] {
+            // Either outcome is fine; the call must simply return.
+            let _ = extract_pdf(&pdf[..cut]);
         }
     }
 
     #[test]
-    fn empty_input_does_not_panic() {
-        let doc = extract(&[]);
-        assert!(doc.pages.is_empty());
-        assert!(doc.scanned);
-        assert!(!doc.errors.is_empty());
-    }
-
-    #[test]
-    fn page_count_is_capped_and_reported() {
-        let texts: Vec<String> = (0..MAX_PAGES + 1)
-            .map(|i| format!("Page number {i} body text"))
-            .collect();
-        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-        let bytes = build_pdf(&refs);
-
-        let doc = extract(&bytes);
-
-        assert_eq!(doc.pages.len(), MAX_PAGES);
-        assert!(
-            doc.errors.iter().any(|e| e.contains("truncated")),
-            "errors: {:?}",
-            doc.errors
+    fn input_over_byte_cap_is_rejected() {
+        let big = vec![b'%'; MAX_PDF_BYTES + 1];
+        assert_eq!(
+            extract_pdf(&big).unwrap_err(),
+            PdfError::TooLarge {
+                bytes: MAX_PDF_BYTES + 1,
+                limit: MAX_PDF_BYTES,
+            }
         );
     }
 
     #[test]
-    fn oversized_input_is_refused_and_reported() {
-        let bytes = vec![b'%'; MAX_INPUT_BYTES + 1];
+    fn document_over_page_cap_is_rejected() {
+        let texts: Vec<String> = (1..=MAX_PDF_PAGES + 1)
+            .map(|n| format!("Filler page {n} with some words on it"))
+            .collect();
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        let pdf = build_pdf(&refs);
+        assert_eq!(
+            extract_pdf(&pdf).unwrap_err(),
+            PdfError::TooManyPages {
+                pages: MAX_PDF_PAGES + 1,
+                limit: MAX_PDF_PAGES,
+            }
+        );
+    }
 
-        let doc = extract(&bytes);
-
-        assert!(doc.pages.is_empty());
-        assert!(doc.errors.iter().any(|e| e.contains("truncated")));
+    #[test]
+    fn scanned_threshold_counts_non_whitespace() {
+        assert!(has_text_layer(&"a".repeat(SCANNED_MIN_CHARS)));
+        assert!(!has_text_layer(&"a".repeat(SCANNED_MIN_CHARS - 1)));
+        assert!(!has_text_layer(&format!(
+            "{}{}",
+            "a".repeat(SCANNED_MIN_CHARS - 1),
+            "  \n\t "
+        )));
+        assert!(!has_text_layer(&"a ".repeat(SCANNED_MIN_CHARS - 1)));
+        assert!(has_text_layer(&"a ".repeat(SCANNED_MIN_CHARS)));
+        assert!(!has_text_layer("   \n  "));
     }
 }

@@ -2314,3 +2314,45 @@ async fn a_normal_page_navigates_without_a_cut_short_warning() {
     assert!(nav.warnings.is_empty(), "{:?}", nav.warnings);
     b.close().await;
 }
+
+/// Regression for F1: the MCP `form_submit` tool must honour the double-submit guard. A repeat of the same
+/// form inside the guard window is refused unless the caller passes `again` (`repeat == true`).
+#[tokio::test]
+async fn an_identical_repeat_submit_is_refused_unless_repeat_is_requested() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page()
+        .fill_form(
+            req(json!({"Full name": "Ada Lovelace", "email": "ada@example.com", "message": "Hi"})),
+            None,
+        )
+        .await
+        .unwrap();
+    let first = b.page().submit_with(None, None, false).await.unwrap();
+    assert_eq!(first.status, SubmitStatus::Submitted, "{first:#?}");
+
+    // Back on the same form, within the window: the guard must refuse without sending anything.
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    b.page()
+        .fill_form(
+            req(json!({"Full name": "Ada Lovelace", "email": "ada@example.com", "message": "Hi"})),
+            None,
+        )
+        .await
+        .unwrap();
+    let before = srv.submissions().len();
+    let err = b.page().submit_with(None, None, false).await.unwrap_err();
+    assert!(err.to_string().contains("submitted"), "{err}");
+    assert_eq!(
+        srv.submissions().len(),
+        before,
+        "the refused submit must not reach the server"
+    );
+
+    // A deliberate repeat goes through.
+    let again = b.page().submit_with(None, None, true).await.unwrap();
+    assert_eq!(again.status, SubmitStatus::Submitted, "{again:#?}");
+    b.close().await;
+}
