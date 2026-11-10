@@ -54,7 +54,7 @@ impl WriteGate {
         if !need {
             return Self(None);
         }
-        Self(Some(b.page().lock_writes().await))
+        Self(Some(b.page().lock_writes_then(crate::release_turn).await))
     }
 }
 
@@ -874,6 +874,9 @@ impl App {
                                 || (name == "read" && arg_str(args, "url").is_some()),
                             held: std::cell::Cell::new(false),
                         };
+                        if !ctx.write {
+                            crate::release_turn();
+                        }
                         let run = CALL.scope(
                             ctx,
                             with_deadline(name, tool_timeout(), self.dispatch(name, args)),

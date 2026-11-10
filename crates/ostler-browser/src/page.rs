@@ -416,6 +416,23 @@ impl Page {
         self.write_gate.clone().lock_owned().await
     }
 
+    /// Like `lock_writes`, but calls `on_queued` once this caller is in the gate's queue (the queue is
+    /// first-come first-served), so a caller can let the next request queue only after this one has.
+    pub async fn lock_writes_then(
+        &self,
+        on_queued: impl FnOnce(),
+    ) -> tokio::sync::OwnedMutexGuard<()> {
+        use std::future::Future;
+        use std::task::Poll;
+        let mut fut = Box::pin(self.write_gate.clone().lock_owned());
+        let first = std::future::poll_fn(|cx| Poll::Ready(fut.as_mut().poll(cx))).await;
+        on_queued();
+        match first {
+            Poll::Ready(g) => g,
+            Poll::Pending => fut.await,
+        }
+    }
+
     pub fn target_id(&self) -> &str {
         &self.session.target_id
     }

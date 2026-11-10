@@ -44,6 +44,26 @@ pub async fn handle(app: &App, msg: &Value) -> Option<Value> {
     handle_with(app, msg, CancellationToken::new()).await
 }
 
+/// Where a `tools/call` stands in the request order. A call may not start until the one before it has
+/// queued on its page's write gate (or finished without needing it), so two writes to one tab reach the
+/// gate, which is first-come first-served, in the order the client sent them.
+struct Turn {
+    next: std::cell::RefCell<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+tokio::task_local! {
+    static TURN: Turn;
+}
+
+/// Let the next request go ahead. A no-op outside a request or after the first call.
+pub(crate) fn release_turn() {
+    let _ = TURN.try_with(|t| {
+        if let Some(s) = t.next.borrow_mut().take() {
+            let _ = s.send(());
+        }
+    });
+}
+
 /// `handle`, with a token that cancels a `tools/call` in flight.
 async fn handle_with(app: &App, msg: &Value, cancel: CancellationToken) -> Option<Value> {
     let method = msg.get("method").and_then(Value::as_str)?;
@@ -199,6 +219,7 @@ where
     });
     let inflight: Arc<StdMutex<HashMap<String, CancellationToken>>> = Arc::default();
     let permits = Arc::new(tokio::sync::Semaphore::new(max_inflight()));
+    let mut prev_turn: Option<tokio::sync::oneshot::Receiver<()>> = None;
     let mut tasks = tokio::task::JoinSet::new();
     let mut lines = input.lines();
     let mut stop = Box::pin(stop);
@@ -249,18 +270,33 @@ where
                     inflight.lock().unwrap().insert(key.clone(), cancel.clone());
                     let (app, tx, inflight, permits) =
                         (app.clone(), tx.clone(), inflight.clone(), permits.clone());
+                    let (turn_tx, turn_rx) = tokio::sync::oneshot::channel();
+                    let prev = prev_turn.replace(turn_rx);
+                    let turn = Turn {
+                        next: std::cell::RefCell::new(Some(turn_tx)),
+                    };
                     tasks.spawn(async move {
-                        let resp = tokio::select! {
-                            biased;
-                            () = cancel.cancelled() => {
-                                // Cancelled while queued: it never ran.
-                                handle_with(&app, &m, cancel.clone()).await
-                            }
-                            p = permits.acquire_owned() => {
-                                let _p = p;
-                                handle_with(&app, &m, cancel.clone()).await
-                            }
-                        };
+                        let resp = TURN
+                            .scope(turn, async {
+                                tokio::select! {
+                                    biased;
+                                    () = cancel.cancelled() => {
+                                        // Cancelled while queued: it never ran.
+                                        handle_with(&app, &m, cancel.clone()).await
+                                    }
+                                    p = async {
+                                        // A dropped sender (the earlier call ended) counts as its turn done.
+                                        if let Some(r) = prev {
+                                            let _ = r.await;
+                                        }
+                                        permits.acquire_owned().await
+                                    } => {
+                                        let _p = p;
+                                        handle_with(&app, &m, cancel.clone()).await
+                                    }
+                                }
+                            })
+                            .await;
                         inflight.lock().unwrap().remove(&key);
                         if let Some(r) = resp {
                             let _ = tx.send(r);
