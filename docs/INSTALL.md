@@ -17,7 +17,7 @@ You need **Chrome or Chromium** (Ostler drives a real browser). Pick one way to 
 | npm / `npx` | `npx -y ostler doctor` | Node 18+; downloads the binary on first run; not published to npm yet |
 | crates.io | `cargo install ostler` or `cargo binstall ostler` | Rust (or cargo-binstall for the prebuilt); not published to crates.io yet |
 | Docker (linux/amd64, linux/arm64), **next release (v0.2.1)** | `docker run -i --rm ghcr.io/inamdarmihir/ostler` | Docker; the image bundles Chromium and runs as a non-root user |
-| Windows, **next release (v0.2.1)** | download `ostler-v<version>-x86_64-pc-windows-msvc.tar.gz` from the release, or `pip install ostler-mcp` | Google Chrome or Edge-compatible Chromium installed; experimental, see [COMPATIBILITY](COMPATIBILITY.md) |
+| Windows, **next release (v0.2.1)** | download `ostler-v<version>-x86_64-pc-windows-msvc.tar.gz` from the release, or `pip install ostler-mcp` | Google Chrome or Edge-compatible Chromium installed; experimental; set `OSTLER_CONFIG` and `OSTLER_CHROME` first, see the [known gaps](COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source); `pip` has no Windows wheel yet |
 
 > **Status (v0.2.0 is released):** live today are the GitHub release binaries, the install script, the `.mcpb` bundles (macOS), PyPI (`ostler-mcp`) and Open VSX. **Not yet:** crates.io, npm, the VS Code Marketplace, and Homebrew (the tap token needs fixing). Windows and the Docker image arrive in the next release (v0.2.1) and are experimental. Release process: [docs/RELEASING.md](RELEASING.md).
 
