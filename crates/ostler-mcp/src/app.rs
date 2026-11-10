@@ -12,18 +12,63 @@ use ostler_browser::{
 use ostler_forms::Field;
 use ostler_memory::{FieldOutcome, FieldQuery, Memory};
 use serde_json::{json, Value};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
+use crate::envelope::{Envelope, RetryPolicy, Status};
 use crate::render;
 use crate::tools::{self, Profile};
 
-/// Run an async block against the (lazily launched) browser as `$b`.
+/// Run an async block against the (lazily launched) browser as `$b`. `$b.page()` is the tab the call
+/// addressed (its `tab` argument) or the active tab. In a write call this also holds that page's write
+/// gate for the block, so two writes on one tab never overlap (see `CallCtx`).
 macro_rules! br {
     ($self:ident, $b:ident, $body:block) => {{
         let guard = $self.browser().await?;
         let $b: &Browser = guard.as_ref().expect("browser launched");
+        let _gate = $crate::app::WriteGate::take($b).await;
         async $body.await
     }};
+}
+
+/// What the running tool call is, for the code under `br!`.
+struct CallCtx {
+    /// The call changes the page: take the page's write gate.
+    write: bool,
+    /// The gate is already held by an outer `br!` of this call (the gate is not re-entrant).
+    held: std::cell::Cell<bool>,
+}
+
+tokio::task_local! {
+    static CALL: CallCtx;
+}
+
+/// A held page write gate; releases it (and the re-entrancy mark) on drop.
+pub(crate) struct WriteGate(Option<tokio::sync::OwnedMutexGuard<()>>);
+
+impl WriteGate {
+    pub(crate) async fn take(b: &Browser) -> Self {
+        let need = CALL
+            .try_with(|c| c.write && !c.held.replace(true))
+            .unwrap_or(false);
+        if !need {
+            return Self(None);
+        }
+        Self(Some(b.page().lock_writes_then(crate::release_turn).await))
+    }
+}
+
+impl Drop for WriteGate {
+    fn drop(&mut self) {
+        if self.0.take().is_some() {
+            let _ = CALL.try_with(|c| c.held.set(false));
+        }
+    }
+}
+
+/// Tools whose whole call holds the page's write gate: everything that navigates, types, clicks or sends.
+fn takes_write_gate(name: &str) -> bool {
+    is_write_tool(name) || matches!(name, "navigate" | "back" | "hover" | "scroll")
 }
 
 mod research;
@@ -70,6 +115,8 @@ pub struct FormTaskResult {
     pub summary: String,
     /// The same information as JSON for a program.
     pub data: Value,
+    /// The structured outcome (the same envelope the MCP tools return).
+    pub outcome: Envelope,
 }
 
 impl FormTaskResult {
@@ -78,6 +125,7 @@ impl FormTaskResult {
             verdict: TaskVerdict::Completed,
             summary,
             data,
+            outcome: Envelope::new(Status::Completed, None, RetryPolicy::Safe),
         }
     }
     fn input_required(summary: String, data: Value) -> Self {
@@ -85,6 +133,7 @@ impl FormTaskResult {
             verdict: TaskVerdict::InputRequired,
             summary,
             data,
+            outcome: Envelope::new(Status::NeedsInput, None, RetryPolicy::AfterChange),
         }
     }
     fn failed(summary: String) -> Self {
@@ -92,7 +141,12 @@ impl FormTaskResult {
             verdict: TaskVerdict::Failed,
             summary,
             data: Value::Null,
+            outcome: Envelope::new(Status::Failed, None, RetryPolicy::Never),
         }
+    }
+    fn with_outcome(mut self, outcome: Envelope) -> Self {
+        self.outcome = outcome;
+        self
     }
 }
 
@@ -117,6 +171,10 @@ enum ErrKind {
     Blocked,
     NotActionable,
     Navigation,
+    /// The caller cancelled a read: nothing changed.
+    Cancelled,
+    /// The caller cancelled a write: it may already have reached the page.
+    CancelledWrite,
 }
 
 impl ToolError {
@@ -125,6 +183,32 @@ impl ToolError {
             kind: Some(kind),
             msg: msg.into(),
         }
+    }
+
+    /// The structured outcome of this failure (see `envelope.rs`). Unclassified failures are `failed`
+    /// with no code and no retry: the caller cannot tell whether repeating is safe, so it must not assume.
+    pub(crate) fn envelope(&self) -> Envelope {
+        let (status, code, retry) = match self.kind {
+            Some(ErrKind::StaleRef) => (Status::Failed, "STALE_REF", RetryPolicy::AfterSnapshot),
+            Some(ErrKind::Uncertain) => (
+                Status::Uncertain,
+                "ACTION_UNCERTAIN",
+                RetryPolicy::ReconcileFirst,
+            ),
+            Some(ErrKind::Blocked) => (Status::Blocked, "BLOCKED", RetryPolicy::Never),
+            Some(ErrKind::NotActionable) => {
+                (Status::Rejected, "NOT_ACTIONABLE", RetryPolicy::AfterChange)
+            }
+            Some(ErrKind::Navigation) => (Status::Failed, "NAVIGATION_FAILED", RetryPolicy::Safe),
+            Some(ErrKind::Cancelled) => (Status::Failed, "CANCELLED", RetryPolicy::Safe),
+            Some(ErrKind::CancelledWrite) => (
+                Status::Uncertain,
+                "CANCELLED_EFFECT_UNKNOWN",
+                RetryPolicy::ReconcileFirst,
+            ),
+            None => return Envelope::new(Status::Failed, None, RetryPolicy::Never),
+        };
+        Envelope::new(status, Some(code), retry)
     }
 
     /// The message with its code and retry rule, if the cause is known.
@@ -140,6 +224,11 @@ impl ToolError {
                 ("NOT_ACTIONABLE", "never until the page state changes")
             }
             Some(ErrKind::Navigation) => ("NAVIGATION_FAILED", "safe"),
+            Some(ErrKind::Cancelled) => ("CANCELLED", "safe"),
+            Some(ErrKind::CancelledWrite) => (
+                "CANCELLED_EFFECT_UNKNOWN",
+                "unsafe: it may have completed; check the page first",
+            ),
             None => return self.msg,
         };
         format!("ERROR {code} (retry: {retry}): {}", self.msg)
@@ -198,7 +287,7 @@ fn tool_timeout() -> Option<Duration> {
 }
 
 /// Run a tool future under the deadline. The waiting tools take their own timeout argument and are exempt.
-async fn with_deadline<T>(
+pub(crate) async fn with_deadline<T>(
     name: &str,
     limit: Option<Duration>,
     fut: impl std::future::Future<Output = Result<T, ToolError>>,
@@ -220,24 +309,74 @@ async fn with_deadline<T>(
     }
 }
 
+/// The error for a call the client cancelled.
+fn cancelled(name: &str) -> ToolError {
+    if is_write_tool(name) {
+        ToolError::typed(
+            ErrKind::CancelledWrite,
+            format!("{name} was cancelled; it may already have reached the page. Check the page (snapshot) before repeating it."),
+        )
+    } else {
+        ToolError::typed(ErrKind::Cancelled, format!("{name} was cancelled."))
+    }
+}
+
 pub struct ToolOutput {
     pub content: Vec<Content>,
     pub is_error: bool,
+    /// The structured outcome. `App::call` fills in a default (`completed`, or `failed` for an error)
+    /// when the tool did not set one, so every result over the wire carries it.
+    pub envelope: Option<Envelope>,
+}
+
+/// The result of a form submit: the text plus the envelope its `SubmitStatus` maps to.
+pub(crate) fn submit_output(text: String, status: SubmitStatus) -> ToolOutput {
+    ToolOutput::text(text).with_envelope(Envelope::for_submit(status))
+}
+
+/// Tools that change the page or send data. Repeating one that completed repeats its effect.
+pub(crate) fn is_write_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "click" | "type" | "press" | "form_submit" | "fill_field" | "form_fill"
+    )
 }
 
 impl ToolOutput {
-    fn text(s: impl Into<String>) -> Self {
+    pub(crate) fn text(s: impl Into<String>) -> Self {
         Self {
             content: vec![Content::Text(s.into())],
             is_error: false,
+            envelope: None,
         }
     }
     fn err(s: impl Into<String>) -> Self {
         Self {
             content: vec![Content::Text(s.into())],
             is_error: true,
+            envelope: None,
         }
     }
+    pub(crate) fn with_envelope(mut self, env: Envelope) -> Self {
+        self.envelope = Some(env);
+        self
+    }
+
+    /// A failed call: the tagged message plus the envelope its error kind maps to.
+    pub(crate) fn from_error(e: ToolError) -> Self {
+        let env = e.envelope();
+        Self::err(e.tagged()).with_envelope(env)
+    }
+
+    /// `isError` over the wire: true only for execution failures. A rejected, blocked, uncertain or
+    /// needs-input outcome is a domain result the caller acts on, described by `structuredContent`.
+    pub fn is_protocol_error(&self) -> bool {
+        match &self.envelope {
+            Some(env) => env.is_protocol_error(),
+            None => self.is_error,
+        }
+    }
+
     pub fn text_content(&self) -> String {
         self.content
             .iter()
@@ -263,7 +402,11 @@ impl ToolOutput {
                 }),
             })
             .collect();
-        json!({"content": content, "isError": self.is_error})
+        let mut out = json!({"content": content, "isError": self.is_protocol_error()});
+        if let Some(env) = &self.envelope {
+            out["structuredContent"] = env.to_value();
+        }
+        out
     }
     pub fn bytes(&self) -> usize {
         self.content
@@ -304,13 +447,18 @@ struct LastFill {
 
 pub struct App {
     cfg: AppConfig,
-    browser: Mutex<Option<Browser>>,
+    /// The browser. Calls hold a read guard while they use it (many at once); launch and relaunch
+    /// take the write side. Page-level serialisation is each page's write gate.
+    browser: RwLock<Option<Browser>>,
     metrics: StdMutex<Metrics>,
     last_fill: StdMutex<Option<LastFill>>,
     /// One-shot message prepended to the next tool result (e.g. "browser was restarted").
     notice: StdMutex<Option<String>>,
     revealed: std::sync::atomic::AtomicBool,
     research_revealed: std::sync::atomic::AtomicBool,
+    /// The client negotiated protocol 2025-06-18 or later, so it understands `structuredContent` and
+    /// `outputSchema`. True until `initialize` says otherwise.
+    structured: std::sync::atomic::AtomicBool,
     list_changed: std::sync::atomic::AtomicBool,
     /// Pages read, citations verified, sources and gaps: what the agent may state as found.
     research: research::Research,
@@ -493,12 +641,13 @@ impl App {
     pub fn new(cfg: AppConfig) -> Self {
         Self {
             cfg,
-            browser: Mutex::new(None),
+            browser: RwLock::new(None),
             metrics: StdMutex::default(),
             last_fill: StdMutex::default(),
             notice: StdMutex::default(),
             revealed: Default::default(),
             research_revealed: Default::default(),
+            structured: std::sync::atomic::AtomicBool::new(true),
             list_changed: Default::default(),
             research: Default::default(),
             context: StdMutex::default(),
@@ -510,20 +659,20 @@ impl App {
     /// (CDP round-trips so far, browser memory in KiB). `None` until the browser has started.
     pub async fn browser_metrics(&self) -> Option<(u64, Option<u64>)> {
         self.browser
-            .lock()
+            .read()
             .await
             .as_ref()
             .map(|b| (b.cdp_calls(), b.rss_kb()))
     }
 
     pub async fn browser_pid(&self) -> Option<u32> {
-        self.browser.lock().await.as_ref().and_then(|b| b.pid())
+        self.browser.read().await.as_ref().and_then(|b| b.pid())
     }
 
     /// Evaluate JavaScript in the active tab and return its value, for evaluations that must read the page
     /// independently of what the tools report. `None` until the browser has started, or if the script fails.
     pub async fn page_eval(&self, expression: &str) -> Option<Value> {
-        let page = self.browser.lock().await.as_ref()?.page();
+        let page = self.browser.read().await.as_ref()?.page();
         page.eval(expression).await.ok()
     }
 
@@ -536,6 +685,20 @@ impl App {
 
     pub fn profile(&self) -> Profile {
         self.cfg.profile
+    }
+
+    /// Record the protocol version chosen at `initialize`. Versions before 2025-06-18 do not get
+    /// `structuredContent`.
+    pub fn set_protocol(&self, version: &str) {
+        self.structured.store(
+            version >= "2025-06-18",
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// Whether results carry `structuredContent` for this client.
+    pub fn structured(&self) -> bool {
+        self.structured.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// The tools to list right now (`auto` grows once a page with form fields has been seen, and again
@@ -635,7 +798,7 @@ impl App {
 
     pub async fn shutdown(&self) {
         self.flush().await;
-        if let Some(b) = self.browser.lock().await.take() {
+        if let Some(b) = self.browser.write().await.take() {
             b.close().await;
         }
     }
@@ -650,8 +813,16 @@ impl App {
     }
 
     /// The shared browser, launched on first use (so the server starts instantly and idles for free).
-    async fn browser(&self) -> Result<tokio::sync::MutexGuard<'_, Option<Browser>>, ToolError> {
-        let mut guard = self.browser.lock().await;
+    async fn browser(
+        &self,
+    ) -> Result<tokio::sync::RwLockReadGuard<'_, Option<Browser>>, ToolError> {
+        {
+            let guard = self.browser.read().await;
+            if guard.as_ref().is_some_and(Browser::is_alive) {
+                return Ok(guard);
+            }
+        }
+        let mut guard = self.browser.write().await;
         if guard.as_ref().is_some_and(|b| !b.is_alive()) {
             // Chrome died (crash, OOM kill). Reap it and start fresh rather than failing every call forever.
             if let Some(dead) = guard.take() {
@@ -669,24 +840,76 @@ impl App {
             }
             *guard = Some(b);
         }
-        Ok(guard)
+        Ok(guard.downgrade())
     }
 
     pub async fn call(&self, name: &str, args: &Value) -> ToolOutput {
+        self.call_cancellable(name, args, CancellationToken::new())
+            .await
+    }
+
+    /// `call`, abandoned when `cancel` fires (MCP `notifications/cancelled`). A cancelled write reports
+    /// `CANCELLED_EFFECT_UNKNOWN` (it may already have reached the page); a cancelled read, `CANCELLED`.
+    pub async fn call_cancellable(
+        &self,
+        name: &str,
+        args: &Value,
+        cancel: CancellationToken,
+    ) -> ToolOutput {
         let t0 = Instant::now();
+        // The tab this call addressed, if it named one (used for the challenge check below too).
+        let mut page: Option<ostler_browser::Page> = None;
         let out = match tools::allowed(self.cfg.profile, name) {
             None => ToolOutput::err(format!("unknown tool {name:?}")),
             Some(false) => ToolOutput::err(format!(
                 "tool {name:?} is disabled by the server's tool profile"
             )),
             Some(true) => {
-                match with_deadline(name, tool_timeout(), self.dispatch(name, args)).await {
+                let res = match self.call_page(name, args).await {
+                    Err(e) => Err(e),
+                    Ok(p) => {
+                        page = p.clone();
+                        let ctx = CallCtx {
+                            write: takes_write_gate(name)
+                                || (name == "read" && arg_str(args, "url").is_some()),
+                            held: std::cell::Cell::new(false),
+                        };
+                        if !ctx.write {
+                            crate::release_turn();
+                        }
+                        let run = CALL.scope(
+                            ctx,
+                            with_deadline(name, tool_timeout(), self.dispatch(name, args)),
+                        );
+                        let run = async {
+                            match p {
+                                Some(p) => ostler_browser::on_page(p, run).await,
+                                None => run.await,
+                            }
+                        };
+                        tokio::select! {
+                            biased;
+                            () = cancel.cancelled() => Err(cancelled(name)),
+                            r = run => r,
+                        }
+                    }
+                };
+                match res {
                     Ok(o) => o,
-                    Err(e) => ToolOutput::err(e.tagged()),
+                    Err(e) => ToolOutput::from_error(e),
                 }
             }
         };
         let mut out = out;
+        if out.envelope.is_none() {
+            out.envelope = Some(if out.is_error {
+                Envelope::new(Status::Failed, None, RetryPolicy::Never)
+            } else if is_write_tool(name) {
+                Envelope::new(Status::Completed, None, RetryPolicy::Never)
+            } else {
+                Envelope::new(Status::Completed, None, RetryPolicy::Safe)
+            });
+        }
         // `where` / `select` trim list results here, so rows the agent does not need never reach it.
         if !out.is_error && matches!(name, "extract" | "links") {
             if let Some(f) = crate::filter::Filter::from_args(args) {
@@ -712,9 +935,9 @@ impl App {
                 | "form_submit"
                 | "fill_field"
         ) {
-            if let Ok(guard) = self.browser.try_lock() {
+            if let Ok(guard) = self.browser.try_read() {
                 if let Some(b) = guard.as_ref() {
-                    if let Ok(Some(c)) = b.page().challenge().await {
+                    if let Ok(Some(c)) = page.as_ref().unwrap_or(&b.page()).challenge().await {
                         let what = if c.interstitial {
                             format!(
                                 "{} verification page is shown instead of the site",
@@ -756,7 +979,7 @@ impl App {
             }
         }
         // Things that happened on their own while we worked (a popup opened as a new tab).
-        if let Ok(guard) = self.browser.try_lock() {
+        if let Ok(guard) = self.browser.try_read() {
             if let Some(b) = guard.as_ref() {
                 let notes = b.take_notes();
                 if !notes.is_empty() {
@@ -790,6 +1013,26 @@ impl App {
             m.errors += 1;
         }
         out
+    }
+
+    /// The page a call's `tab` argument names (`None` without one: the active tab). `tabs` takes `tab`
+    /// as its own argument and is not redirected.
+    async fn call_page(
+        &self,
+        name: &str,
+        args: &Value,
+    ) -> Result<Option<ostler_browser::Page>, ToolError> {
+        let Some(tab) = arg_str(args, "tab").filter(|_| name != "tabs") else {
+            return Ok(None);
+        };
+        let guard = self.browser.read().await;
+        guard
+            .as_ref()
+            .and_then(|b| b.page_by_id(tab))
+            .map(Some)
+            .ok_or_else(|| {
+                format!("no tab {tab:?}; call tabs with action list to see the open tabs").into()
+            })
     }
 
     async fn observe(
@@ -1104,6 +1347,7 @@ impl App {
                             Content::Image { png },
                         ],
                         is_error: false,
+                        envelope: None,
                     })
                 })
             }
@@ -1115,6 +1359,7 @@ impl App {
                     Ok(ToolOutput {
                         content: vec![Content::Image { png }],
                         is_error: false,
+                        envelope: None,
                     })
                 })
             }
@@ -1707,13 +1952,15 @@ impl App {
             "pageErrors": out.page_errors,
             "excerpt": out.excerpt,
         });
+        let outcome = Envelope::for_submit(out.status);
         Ok(match out.status {
             SubmitStatus::Submitted => FormTaskResult::completed(text, data),
             SubmitStatus::Advanced | SubmitStatus::ValidationFailed => {
                 FormTaskResult::input_required(text, data)
             }
             SubmitStatus::Unchanged | SubmitStatus::ServerError => FormTaskResult::failed(text),
-        })
+        }
+        .with_outcome(outcome))
     }
 
     async fn form_submit(&self, a: &Value) -> Result<ToolOutput, ToolError> {
@@ -1736,11 +1983,10 @@ impl App {
                 .await
         })?;
         self.learn_from_submit(&out);
-        Ok(ToolOutput::text(wrap_detail(&render::submit_shots(
-            &out,
-            self.cfg.verbose,
-            true,
-        ))))
+        Ok(submit_output(
+            wrap_detail(&render::submit_shots(&out, self.cfg.verbose, true)),
+            out.status,
+        ))
     }
 
     /// Turn what just happened into memory, off the critical path.
@@ -1882,7 +2128,7 @@ impl App {
             }
             (lines, c, by, ms, m.errors)
         };
-        let (cdp, rss) = match self.browser.lock().await.as_ref() {
+        let (cdp, rss) = match self.browser.read().await.as_ref() {
             Some(b) => (Some(b.cdp_calls()), b.rss_kb()),
             None => (None, None),
         };
@@ -2140,5 +2386,72 @@ mod tag_error_tests {
             "something else"
         );
         assert_eq!(ToolError::from("plain").tagged(), "plain");
+    }
+
+    #[test]
+    fn each_typed_failure_has_a_domain_status_and_retry_rule() {
+        use crate::envelope::{RetryPolicy, Status};
+        let cases: Vec<(BrowserError, Status, Option<&str>, RetryPolicy)> = vec![
+            (
+                BrowserError::StaleRef("e1".into()),
+                Status::Failed,
+                Some("STALE_REF"),
+                RetryPolicy::AfterSnapshot,
+            ),
+            (
+                BrowserError::Uncertain("x".into()),
+                Status::Uncertain,
+                Some("ACTION_UNCERTAIN"),
+                RetryPolicy::ReconcileFirst,
+            ),
+            (
+                BrowserError::Policy("x".into()),
+                Status::Blocked,
+                Some("BLOCKED"),
+                RetryPolicy::Never,
+            ),
+            (
+                BrowserError::NotActionable("x".into()),
+                Status::Rejected,
+                Some("NOT_ACTIONABLE"),
+                RetryPolicy::AfterChange,
+            ),
+            (
+                BrowserError::Navigation("x".into()),
+                Status::Failed,
+                Some("NAVIGATION_FAILED"),
+                RetryPolicy::Safe,
+            ),
+            (
+                BrowserError::Other("x".into()),
+                Status::Failed,
+                None,
+                RetryPolicy::Never,
+            ),
+        ];
+        for (err, status, code, retry) in cases {
+            let env = ToolError::from(err).envelope();
+            assert_eq!(
+                (env.status, env.code, env.retry_policy),
+                (status, code, retry)
+            );
+        }
+    }
+
+    #[test]
+    fn failed_calls_carry_structured_content_and_successes_do_not() {
+        let failed = ToolOutput {
+            content: vec![Content::Text("x".into())],
+            is_error: true,
+            envelope: Some(ToolError::from(BrowserError::Navigation("x".into())).envelope()),
+        };
+        let v = failed.to_json();
+        assert_eq!(v["isError"], true);
+        assert_eq!(v["structuredContent"]["status"], "failed");
+        assert_eq!(v["structuredContent"]["code"], "NAVIGATION_FAILED");
+        assert!(ToolOutput::text("ok")
+            .to_json()
+            .get("structuredContent")
+            .is_none());
     }
 }

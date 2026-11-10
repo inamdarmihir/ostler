@@ -1541,7 +1541,7 @@ async fn main() -> Result<()> {
                     headed_for_note
                 )
             );
-            ostler_mcp::serve_stdio(app).await?;
+            ostler_mcp::serve_stdio(std::sync::Arc::new(app)).await?;
         }
         Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(d) => doctor(d).await?,

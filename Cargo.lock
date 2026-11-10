@@ -1564,6 +1564,7 @@ dependencies = [
 name = "ostler-fixtures"
 version = "0.2.0"
 dependencies = [
+ "libc",
  "serde_json",
  "tiny_http",
  "url",
@@ -1594,6 +1595,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "url",
 ]
