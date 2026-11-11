@@ -1,3 +1,4 @@
+mod agents;
 mod config;
 mod install;
 
@@ -37,6 +38,12 @@ enum Cmd {
     /// Example: `ostler install --client claude-code`. `--list` shows every client and its config path,
     /// `--dry-run` previews, `--uninstall` removes. Flags after `--` go to `ostler serve`.
     Install(InstallArgs),
+    /// Add Ostler subagents (researcher, browser, form-filler) to Claude Code or Codex.
+    ///
+    /// A subagent keeps page text out of your main conversation, and in Claude Code gets its own Ostler and
+    /// browser, so several can run in parallel. Example: `ostler agents --client claude-code`. `--scope project`
+    /// writes into this folder instead of your home. Files you changed are never overwritten without `--force`.
+    Agents(AgentsArgs),
     /// Easiest start: find the AI apps on this computer (Claude, Cursor, Codex, ...), connect Ostler to them, check Chrome.
     ///
     /// No config files needed. Safe to run again. `ostler install --list` shows what it would touch.
@@ -137,6 +144,38 @@ struct InstallArgs {
     /// Extra `ostler serve` flags, after `--` (e.g. `-- --lean --tools forms`).
     #[arg(last = true)]
     serve_args: Vec<String>,
+}
+
+#[derive(Args)]
+struct AgentsArgs {
+    /// Which client's subagent folder to write.
+    #[arg(long, value_enum)]
+    client: agents::AgentClient,
+    /// `user` (every project, default) or `project` (this folder only).
+    #[arg(long, value_enum, default_value = "user")]
+    scope: agents::Scope,
+    /// Replace files that differ from the shipped version.
+    #[arg(long)]
+    force: bool,
+    /// Print what would change; write nothing.
+    #[arg(long)]
+    dry_run: bool,
+    /// Remove the shipped files (a file you edited is kept).
+    #[arg(long)]
+    uninstall: bool,
+}
+
+fn agents_cmd(a: AgentsArgs) -> Result<()> {
+    let home = install::Paths::from_env()?.home;
+    let cwd = std::env::current_dir().context("cannot read the current folder")?;
+    let dir = agents::target_dir(a.client, a.scope, &home, &cwd);
+    let results = if a.uninstall {
+        agents::uninstall(a.client, &dir, a.dry_run)?
+    } else {
+        agents::install(a.client, &dir, a.force, a.dry_run)?
+    };
+    agents::report(a.client, &dir, &results, a.dry_run);
+    Ok(())
 }
 
 fn install_cmd(a: InstallArgs) -> Result<()> {
@@ -1501,6 +1540,7 @@ async fn main() -> Result<()> {
         Cmd::A2a(a) => run_a2a(a).await?,
         Cmd::Doctor(d) => doctor(d).await?,
         Cmd::Install(a) => install_cmd(a)?,
+        Cmd::Agents(a) => agents_cmd(a)?,
         Cmd::Start { cautious } => start_cmd(cautious)?,
         Cmd::Login {
             url,

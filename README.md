@@ -52,6 +52,8 @@ ostler setup codex            # prints the block for ~/.codex/config.toml
 ostler setup cursor           # prints JSON for ~/.cursor/mcp.json
 ```
 
+For Claude Code and Codex, `ostler agents --client claude-code` (or `codex`) adds researcher, browser and form-filler subagents, so page text stays out of your main conversation ([docs/SUBAGENTS.md](docs/SUBAGENTS.md)).
+
 Also `ostler setup vscode` and `ostler setup json` (generic `mcpServers`). Only Claude Code is applied automatically; other clients' files are never modified. See [docs/CLIENTS.md](docs/CLIENTS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 **Building your own agent in Python?** [LangChain, LlamaIndex and AutoGen](https://inamdarmihir.github.io/ostler/docs/frameworks.html) load the same tools over MCP. The snippets were run against Ostler 0.2.0 with no language model in the loop. Keep one Ostler session open for the whole task, or `cite` will not see what `read` fetched.

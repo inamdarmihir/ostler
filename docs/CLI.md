@@ -12,9 +12,10 @@ ostler <COMMAND>
   init       Guided setup: Qdrant URL/key, tenant, privacy choices (sealing, local embeddings, retention); then verify
   config     show | path | set <key> <value> | unset <key>
   setup      Print or apply the config for claude | codex | cursor | vscode | json
+  agents     Add Ostler subagents (researcher, browser, form-filler) to Claude Code or Codex
   doctor     Check that Chrome launches, and report memory: Qdrant reachable, sealing, key, embeddings, transport
   inspect    Open a URL and print the typed form model as JSON
-  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | seal | key export/import | token | wipe --yes
+  memory     list | skills | prune --days N | remember <key> <value> | forget <key> | seal | key export/import | wipe --yes
   fixtures   Serve the demo form pages (default port 8787)
 ```
 

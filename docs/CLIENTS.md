@@ -20,6 +20,8 @@ cargo install --git https://github.com/inamdarmihir/ostler ostler   # from sourc
 
 See the [README](../README.md#install) for the status of each and [RELEASING](RELEASING.md) for how they get published.
 
+Want the browsing and research to run in a **subagent** (Claude Code, Codex) so page text stays out of your main conversation? Run `ostler agents --client claude-code` or `--client codex`; see [SUBAGENTS](SUBAGENTS.md).
+
 ## Easiest: `ostler install`
 
 ```sh

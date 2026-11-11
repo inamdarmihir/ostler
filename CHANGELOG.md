@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- **Subagents** for Claude Code and Codex: `ostler agents --client claude-code|codex [--scope user|project]` installs `ostler-researcher`, `ostler-browser` and `ostler-form-filler`. In Claude Code each gets its own Ostler and browser (parallel subagents no longer share a profile). See [SUBAGENTS](docs/SUBAGENTS.md). Not yet run inside a live client session.
+
 ### Removed (simplification)
 - Source memory (`save_sources`, `recall_sources`, the `source` kind), its sparse BM25 vectors, weighted RRF and MMR (`sparse.rs`, `fusion.rs`, `source.rs`). Nothing in the product called them.
 - Per-tenant JWT tokens (`ostler memory token`, `token.rs`, the RBAC CI step) and `--isolation collection`. Tenants share collections and are separated by the `tenant` filter, as before.
