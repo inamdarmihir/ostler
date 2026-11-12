@@ -202,3 +202,32 @@ async fn a_key_naming_a_collapsed_field_says_it_is_hidden_not_missing() {
     );
     b.close().await;
 }
+
+/// `iframe_hosted_form` failed once on a slow Windows runner with "no form fields found": the fill read the
+/// page before the same-origin iframe had loaded. The iframe here is served 1.5s late, so the first look
+/// always finds nothing; the fill must wait for the frame and then find its fields.
+#[tokio::test]
+async fn a_form_in_a_slow_iframe_is_waited_for_not_reported_missing() {
+    let Some((srv, b)) = setup().await else {
+        return;
+    };
+    b.page().navigate(&srv.url("/basic.html")).await.unwrap();
+    let inner = srv.url("/suite_iframe_inner.html?delay_ms=1500");
+    b.page()
+        .eval(&format!(
+            "document.body.innerHTML = '<h1>Contact sales</h1><iframe id=\"fr\" src=\"{inner}\" \
+             style=\"width:100%;height:340px\"></iframe>'; true"
+        ))
+        .await
+        .unwrap();
+    let rep = b
+        .page()
+        .fill_form(
+            req(json!({"Company":"Analytical Engines","Team size":"11-50","Work email":"ada@analytical.example"})),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(rep.ok(), "{rep:#?}");
+    b.close().await;
+}

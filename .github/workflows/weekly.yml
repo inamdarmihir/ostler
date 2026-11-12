@@ -31,7 +31,7 @@ jobs:
       - run: echo "OSTLER_CHROME=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
       # Qdrant-backed suites are covered by ci.yml, so they are excluded here: run only the browser-driving crates.
       - name: Chrome end-to-end tests
-        run: cargo test -p ostler-browser -p ostler-a2a -p ostler-cli
+        run: cargo test -p ostler-browser -p ostler-a2a -p ostler
   docs:
     name: docs links and freshness
     runs-on: ubuntu-latest
