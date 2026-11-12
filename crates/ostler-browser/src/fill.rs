@@ -431,7 +431,37 @@ fn verr(e: ValueError) -> BrowserError {
     BrowserError::Other(e.to_string())
 }
 
+/// True while any same-origin iframe on the page has not finished loading its document. An iframe whose
+/// `src` is set but still shows the initial `about:blank` counts as loading; cross-origin frames are skipped,
+/// since the runtime cannot read their fields anyway.
+const IFRAMES_LOADING_JS: &str = "[...document.querySelectorAll('iframe')].some(f => { try { \
+    const d = f.contentDocument; if (!d) return false; \
+    const src = f.getAttribute('src'); \
+    return d.readyState !== 'complete' || (!!src && src !== 'about:blank' && d.URL === 'about:blank'); \
+    } catch { return false; } })";
+
 impl Page {
+    /// Wait up to 5s for same-origin iframes to finish loading. Returns true if any was loading when called,
+    /// so the caller knows a second look at the page may find fields that were not there before.
+    async fn wait_for_loading_iframes(&self) -> bool {
+        let loading = || async {
+            self.eval(IFRAMES_LOADING_JS)
+                .await
+                .ok()
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        };
+        if !loading().await {
+            return false;
+        }
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while Instant::now() < deadline && loading().await {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        self.settle(1500, 150).await;
+        true
+    }
+
     /// Fill a form from `{key: value}` input (and memory suggestions), verifying each field.
     pub async fn fill_form(
         &self,
@@ -454,11 +484,19 @@ impl Page {
         let mut prior_errors: BTreeMap<String, String> = BTreeMap::new();
         let mut rivals: Vec<String> = vec![];
         let mut first_round = true;
+        let mut waited_for_frames = false;
 
         for _ in 0..max_rounds {
             let ir = self.forms().await?;
             host = host_of(&ir.url);
             let Some(form) = find_form(&ir.forms, form_ref.as_deref(), &pending) else {
+                // An embedded form whose iframe is still loading has no fields yet: wait for it, then look again.
+                if !waited_for_frames && results.is_empty() {
+                    waited_for_frames = true;
+                    if self.wait_for_loading_iframes().await {
+                        continue;
+                    }
+                }
                 if form_ref.is_none() && results.is_empty() {
                     return Err(BrowserError::Other(
                         "no form fields found on this page".into(),

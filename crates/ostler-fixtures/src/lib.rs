@@ -600,6 +600,15 @@ fn serve(server: Server, shared: Shared, stop2: Arc<AtomicBool>) {
                             let name = p.trim_start_matches('/').trim_end_matches(".html");
                             match PAGES.iter().find(|(n, _)| *n == name) {
                                 Some((_, body)) => {
+                                    // `?delay_ms=<n>` (capped at 10s) serves any page late, e.g. an iframe
+                                    // that is still loading when the agent first looks.
+                                    if let Some(ms) = url
+                                        .query_pairs()
+                                        .find(|(k, _)| k == "delay_ms")
+                                        .and_then(|(_, v)| v.parse::<u64>().ok())
+                                    {
+                                        thread::sleep(Duration::from_millis(ms.min(10_000)));
+                                    }
                                     let _ =
                                         req.respond(Response::from_string(*body).with_header(html));
                                 }
