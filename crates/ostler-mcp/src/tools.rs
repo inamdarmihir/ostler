@@ -193,6 +193,24 @@ pub fn search(query: &str, detail: &str) -> String {
     out.trim_end().to_string()
 }
 
+/// Whether the tool acts on a page (the active tab unless a `tab` is given), as opposed to memory, notes,
+/// search or the tab list itself.
+pub fn needs_page(name: &str) -> bool {
+    !matches!(
+        name,
+        "tabs"
+            | "context"
+            | "search_tools"
+            | "stats"
+            | "evidence"
+            | "cite"
+            | "search"
+            | "open_many"
+            | "run"
+            | "wait_for_human"
+    ) && !name.starts_with("memory_")
+}
+
 /// Whether `name` may be called under `profile`. `None` for an unknown tool. `auto` allows everything
 /// (listing is what it defers), so a client that never refreshes its tool list still works.
 pub fn allowed(profile: Profile, name: &str) -> Option<bool> {

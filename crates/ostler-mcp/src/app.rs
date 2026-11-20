@@ -470,6 +470,9 @@ pub struct App {
     keep_sources: std::sync::atomic::AtomicBool,
     /// Per tab (target id): the last diagnostics entry already shown, so each call returns only what is new.
     diag_marks: StdMutex<BTreeMap<String, u64>>,
+    /// Several agents may share this server: a page call with no `tab` is refused once more than one tab
+    /// is open, because "the active tab" is whichever agent navigated last.
+    swarm: std::sync::atomic::AtomicBool,
     started: Instant,
 }
 
@@ -659,6 +662,7 @@ impl App {
             pending: StdMutex::default(),
             keep_sources: Default::default(),
             diag_marks: StdMutex::default(),
+            swarm: Default::default(),
             started: Instant::now(),
         }
     }
@@ -667,6 +671,11 @@ impl App {
     pub fn set_keep_sources(&self, on: bool) {
         self.keep_sources
             .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Shared-server mode for subagents and agent swarms: see the `swarm` field.
+    pub fn set_swarm(&self, on: bool) {
+        self.swarm.store(on, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Source memory is on and there is a memory to keep it in.
@@ -1044,6 +1053,18 @@ impl App {
         args: &Value,
     ) -> Result<Option<ostler_browser::Page>, ToolError> {
         let Some(tab) = arg_str(args, "tab").filter(|_| name != "tabs") else {
+            if self.swarm.load(std::sync::atomic::Ordering::Relaxed) && tools::needs_page(name) {
+                if let Some(b) = self.browser.read().await.as_ref() {
+                    let open = b.tabs().await;
+                    if open.len() > 1 {
+                        return Err(format!(
+                            "AMBIGUOUS_TAB: {} tabs are open and this server is shared (--swarm), so \"the active tab\" may belong to another agent. Pass `tab` (from `tabs` new or list) on every page call.",
+                            open.len()
+                        )
+                        .into());
+                    }
+                }
+            }
             return Ok(None);
         };
         let guard = self.browser.read().await;

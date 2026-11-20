@@ -50,7 +50,7 @@ Everything marked **planned** at the end is built as a library but is not an MCP
 
 `click`, `type`, `press` and `wait_for` drive the flow. `wait_for` waits for text to appear or disappear or for a selector, so the agent asserts on what the page shows instead of sleeping. `look` and `screenshot` give a visual record. Allow only your own origin: `ostler serve --allow-domain localhost`.
 
-**Be aware:** there is no console-error or failed-request report over MCP yet (`diagnostics` is [planned](#planned-not-yet-mcp-tools)).
+**Be aware:** console errors and failed requests come from the `diagnostics` tool, not from `snapshot` (see [recipe 14](#14-check-that-your-change-works-coding-agents)).
 
 ## 4. Get past a cookie wall or modal
 
@@ -152,16 +152,40 @@ What this gives you that a page-to-markdown API does not:
 
 `open_many` reads up to 10 URLs at once in a scratch tab (your tab is untouched), obeying robots.txt and per-host spacing, and returns the best passages from each. `search` needs a provider: set `OSTLER_SEARXNG_URL` (a SearXNG instance) or `OSTLER_SEARCH_PROVIDER=brave` with `OSTLER_BRAVE_API_KEY`, then restart the server. `extract` returns tables as rows and lists with a `PARTIAL: 5 of 13` verdict when the page says there is more.
 
-**Be aware:** `cite` proves the words are on the page, not that the claim is true. Pages are read one at a time, there is no PDF text layer, and sources are not kept across sessions. A search provider has been tested against mock servers only.
+**Be aware:** `cite` proves the words are on the page, not that the claim is true. Pages are read one at a time, there is no PDF text layer, and sources are kept across sessions only if you start the server with `--keep-sources` (recipe 15). A search provider has been tested against mock servers only.
 
-## Planned, not yet MCP tools
+## 14. Check that your change works (coding agents)
 
-These exist as libraries in the workspace (`ostler-workflow`, the memory `source` kind, the diagnostics collector) and are covered by tests and a fixture pack, but **no MCP tool exposes them yet**. Do not write prompts that depend on them.
+After editing an app, load it and ask the browser what broke, not just what it shows:
+
+```text
+navigate {"url": "http://localhost:3000"}
+diagnostics {}          # console errors, uncaught exceptions, failed and 4xx/5xx requests since the last call
+click ... / form_fill ...   # exercise the change
+diagnostics {}          # only what the click caused
+```
+
+A page can show "Saved" while the request behind it returned 500 (the `dev-qa-005` fixture is exactly that). `diagnostics` reports it, fenced as untrusted page content; routine noise such as a missing favicon appears too, so read the lines, do not count them. `all: true` adds info-level logs, `from_start: true` ignores the last-call mark. Measured on the bundled fixtures: [bench-results/dev-qa-diagnostics-ablation.md](../bench-results/dev-qa-diagnostics-ablation.md).
+
+## 15. Subagents and agent swarms
+
+Two ways a swarm meets Ostler, and what to do in each. Check which one your client does; this has not been verified for every client.
+
+**One Ostler shared by several agents** (some clients give subagents the parent's MCP connection). "The active tab" is then whichever agent navigated last, so a bare `read` can return another agent's page (this is tested: `crates/ostler-mcp/tests/swarm_e2e.rs`). Start the server with `--swarm`: once more than one tab is open, page tools without a `tab` argument are refused with `AMBIGUOUS_TAB` instead of answered from the wrong page. Each agent opens its own tab (`tabs new`), keeps the id, and passes `tab` on every page call. Notes (`context`), memory, `cite` and `evidence` are not page calls and stay available; note that `cite` and `evidence` are session-wide, so one agent can cite a page another read in the same server.
+
+**One Ostler per agent** (each subagent starts its own server): every process launches its own Chrome. Four agents reading one small page each measured 813 MiB as four processes against 388 MiB as one shared browser with four tabs ([bench-results/swarm-footprint.md](../bench-results/swarm-footprint.md); a small static-page measurement, one machine, and not comparable in absolute terms with the older footprint benchmark, which measures differently).
+
+**Share what was read.** With `--keep-sources` and a memory all the agents use (Qdrant for several processes; the local file is designed for it, with a lock and atomic writes, but concurrent writers of source chunks are not tested), one agent reads the docs and the others answer from `read {stored: true, query}` and `cite`, under the `VERIFIED AGAINST A STORED COPY` verdict. In the test, four agents served this way never started a browser at all.
+
+Not measured: tokens, cost or wall time of a swarm with a real model, and whether models pass `tab` reliably. That needs the model-in-the-loop run.
+
+## Not yet MCP tools
+
+These exist as libraries in the workspace (`ostler-workflow`, the PDF text and source-archive libraries) and are covered by tests and a fixture pack, but **no MCP tool exposes them yet**.
 
 | recipe | needs | status |
 |---|---|---|
 | Assert a postcondition after a click ("the page now shows step 2") | `expect` | library only |
-| See console errors and failed requests | `diagnostics` | per-tab capture built, no tool |
-| Remember what you read across sessions | source memory | library only |
+| Read a PDF | PDF text library | library only |
 
 Tracking: [BUILD-PLAN.md](BUILD-PLAN.md).

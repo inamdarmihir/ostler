@@ -25,6 +25,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("qdrant_on_disk", "OSTLER_QDRANT_ON_DISK"),
     ("learn", "OSTLER_LEARN"),
     ("keep_sources", "OSTLER_KEEP_SOURCES"),
+    ("swarm", "OSTLER_SWARM"),
     ("lean", "OSTLER_LEAN"),
     ("verbose", "OSTLER_VERBOSE"),
     ("a2a_bind", "OSTLER_A2A_BIND"),
@@ -956,6 +957,7 @@ pub fn validate(key: &str, value: &str) -> Result<String> {
         | "qdrant_on_disk"
         | "learn"
         | "keep_sources"
+        | "swarm"
         | "lean"
         | "verbose" => boolean(),
         "qdrant_url" | "embedding_url" => {

@@ -1182,6 +1182,10 @@ struct ServeArgs {
     /// Off by default. Needs a memory (Qdrant or `--memory local`); chunks expire after 30 days.
     #[arg(long, env = "OSTLER_KEEP_SOURCES")]
     keep_sources: bool,
+    /// Several agents (subagents, a swarm) share this server: once more than one tab is open, page tools
+    /// without a `tab` argument are refused (AMBIGUOUS_TAB) instead of acting on whichever tab is active.
+    #[arg(long, env = "OSTLER_SWARM")]
+    swarm: bool,
     /// On start, forget learned skills and error episodes not verified for this many days (0 = keep forever).
     /// Saved facts are never expired.
     #[arg(long, default_value_t = 180, env = "OSTLER_RETAIN_DAYS")]
@@ -1505,6 +1509,7 @@ async fn main() -> Result<()> {
             let allow_domains_for_note = a.allow_domains.clone();
             let headed_for_note = a.headed;
             let keep_sources = a.keep_sources;
+            let swarm = a.swarm;
             let app = App::new(AppConfig {
                 launch: LaunchOptions {
                     chrome_path: a.chrome_path,
@@ -1527,6 +1532,7 @@ async fn main() -> Result<()> {
                 require_confirm_submit: a.require_confirm_submit,
                 verbose: a.verbose,
             });
+            app.set_swarm(swarm);
             if keep_sources {
                 if app.has_memory() {
                     app.set_keep_sources(true);
