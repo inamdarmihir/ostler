@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Fixed (documentation and help text)
-- `research-002` carried a stale `needs-tool:read` tag although `read` exists; it is now skipped for its real reason (`no-script`).
+- `research-002` carried a stale `needs-tool:read` tag although `read` exists. It is now scripted (via `extract`), so the scripted pack runs 31 of 34 tasks.
 - The README, TOOLS and quickstart `form_fill` example is now the binary's real output (`Filled 2/3.` with a `verified:` line) instead of an older format.
 - Windows and Docker gaps in the v0.2.0 source are listed in [COMPATIBILITY](docs/COMPATIBILITY.md#known-windows-and-docker-gaps-v020-source), with the `OSTLER_CONFIG` and `OSTLER_CHROME` workarounds; the platform matrix now names the runners the release actually uses; GETTING-STARTED and INSTALL no longer imply Windows works out of the box.
 - `ostler memory --help` no longer says memory needs Qdrant (the local encrypted file works without it); the benchmark tool-count tables note that the forms profile now lists 20 tools, not 21.

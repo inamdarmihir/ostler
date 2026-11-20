@@ -25,6 +25,7 @@ pub struct Done {
 /// Task ids with a script.
 pub const SCRIPTED: &[&str] = &[
     "research-001",
+    "research-002",
     "research-003",
     "research-004",
     "research-005",
@@ -225,6 +226,7 @@ pub async fn run(app: &App, srv: &FixtureServer, task: &PackTask, upload: &Path)
     let id = task.id.as_str();
     let done = match id {
         "research-001" => research_001(&mut a).await,
+        "research-002" => research_002(&mut a).await,
         "research-003" => research_003(&mut a).await,
         "research-004" => research_004(&mut a).await,
         "research-005" => gated(&mut a, "/packs/research/paywall.html", "Subscribe to keep reading", "The article is behind a paywall (subscribers only), so I could not read the restoration cost and will not guess it.").await,
@@ -296,6 +298,30 @@ async fn research_001(a: &mut Agent<'_>) -> Done {
         ),
         _ => failure(a, "I could not read the year and designer.".into(), "parse"),
     }
+}
+
+async fn research_002(a: &mut Agent<'_>) -> Done {
+    a.go("/packs/research/table.html").await;
+    let (t, _) = a.tool("extract", json!({"kind": "tables"})).await;
+    // Rows look like `| North | Coastal | 41 | 44 | 47 | 52 |`; the last column is 2024 H2.
+    let rows: Vec<(String, u32)> = t
+        .lines()
+        .filter(|l| l.starts_with("| ") && !l.starts_with("| Region"))
+        .filter_map(|l| {
+            let cells: Vec<&str> = l.trim_matches('|').split('|').map(str::trim).collect();
+            Some((cells.get(1)?.to_string(), cells.last()?.parse().ok()?))
+        })
+        .collect();
+    let Some((best, top)) = rows.iter().max_by_key(|(_, v)| *v) else {
+        return failure(a, "I could not read the table.".into(), "parse");
+    };
+    let total: u32 = rows.iter().map(|(_, v)| v).sum();
+    success(
+        a,
+        format!("{best} had the highest output in 2024 H2 ({top} kt); the four sub-regions total {total} kt."),
+        vec![a.srv.url("/packs/research/table.html")],
+        "",
+    )
 }
 
 async fn research_003(a: &mut Agent<'_>) -> Done {

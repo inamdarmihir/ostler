@@ -90,7 +90,7 @@ Underneath, as tested libraries (unit, property and real-Chrome / real-Qdrant te
 
 **Not exposed as MCP tools yet:** `task`, `diagnostics` and the `expect` parameter. Pages are read one at a time. A PDF text library (`ostler-extract::pdf`) and a source-version archive (`ostler-research::archive`) exist but are not yet wired into `read` or `open_many`, so PDFs are still not read by the tools. There is no WARC archive. Qdrant Edge and local embeddings are decided against as defaults for now ([ADR-0012](docs/adr/0012-qdrant-edge-local-memory.md), [ADR-0013](docs/adr/0013-fastembed-local-embeddings.md)).
 
-First scripted result across the packs (a deterministic script, not a model; [bench-results/packs-all-scripted.md](bench-results/packs-all-scripted.md)): 30 tasks ran, 29 true successes, **1 false success** (dev-qa-005: the script trusted a page's "saved" banner while the save had failed), 4 skipped because they need tools not wired yet. That trap is the point of the metric. Run it with `ostler-bench packs --scripted --pack all`.
+First scripted result across the packs (a deterministic script, not a model; [bench-results/packs-all-scripted.md](bench-results/packs-all-scripted.md)): 31 tasks ran, 30 true successes, **1 false success** (dev-qa-005: the script trusted a page's "saved" banner while the save had failed), 3 skipped because they need the `diagnostics` tool, which is not wired yet. That trap is the point of the metric. Run it with `ostler-bench packs --scripted --pack all`.
 
 ### Forms
 

@@ -163,6 +163,6 @@ async fn scripted_agent_is_safe_and_false_success_is_the_known_trap() {
         .iter()
         .filter(|r| matches!(r.status, Status::Ran { .. }))
         .count();
-    assert_eq!(ran, 30);
+    assert_eq!(ran, 31);
     assert_eq!(results.len(), 34);
 }

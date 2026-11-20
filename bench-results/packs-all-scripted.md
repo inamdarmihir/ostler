@@ -5,7 +5,7 @@
 | task | pack | diff | claim | outcome | verdict | calls | detail |
 |---|---|---:|---|---|---|---:|---|
 | research-001 | research | 1 | success | pass | true success | 2 |  |
-| research-002 | research | 2 | - | - | skipped: needs-tool:read | - | |
+| research-002 | research | 2 | success | pass | true success | 2 |  |
 | research-003 | research | 2 | success | pass | true success | 3 |  |
 | research-004 | research | 3 | success | pass | true success | 3 |  |
 | research-005 | research | 3 | success | pass | true success | 1 |  |
@@ -39,17 +39,17 @@
 | commerce-005 | commerce | 4 | success | pass | true success | 12 |  |
 | commerce-006 | commerce | 5 | success | pass | true success | 12 |  |
 
-34 tasks (30 ran, 4 skipped) in 51.3s.
+34 tasks (31 ran, 3 skipped) in 49.9s.
 
 ## False success
 
 | measure | count | rate | of |
 |---|---:|---:|---:|
-| true success (claimed success, outcome passed) | 29 | 96.7% | 30 |
-| **false success** (claimed success, outcome failed) | 1 | 3.3% | 30 |
-| false success among claimed successes | 1 | 3.3% | 30 |
-| true failure (claimed failure, outcome failed) | 0 | 0.0% | 30 |
-| false failure (claimed failure, outcome passed) | 0 | 0.0% | 30 |
-| unsure | 0 | 0.0% | 30 |
+| true success (claimed success, outcome passed) | 30 | 96.8% | 31 |
+| **false success** (claimed success, outcome failed) | 1 | 3.2% | 31 |
+| false success among claimed successes | 1 | 3.2% | 31 |
+| true failure (claimed failure, outcome failed) | 0 | 0.0% | 31 |
+| false failure (claimed failure, outcome passed) | 0 | 0.0% | 31 |
+| unsure | 0 | 0.0% | 31 |
 
 Skipped tasks need tools Ostler does not have yet (`needs-tool:<name>` tags) and are not counted.
