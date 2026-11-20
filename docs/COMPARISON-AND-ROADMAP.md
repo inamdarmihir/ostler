@@ -33,6 +33,19 @@ Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript
 
 Method: vendor pages and third-party roundups found by web search on 2026-11-20. Funding figures are as reported by those pages, not verified. A company is marked **YC** only where a ycombinator.com company or launch page was found. Vendor benchmarks (stealth, speed, cost) are the vendors' own and favour them; none is reproduced here. We have **not** run a head-to-head against any of these.
 
+### Primary user: the coding agent (Claude Code, Codex, Cursor and similar)
+
+Ostler is for the agent that is *building and checking software*, not for a business automating web workflows. That reframes the field above. The hosted-infrastructure layer (stealth, scale, per-hour browsers) is not the competition: a coding agent runs one local browser against `localhost` or a docs site. The real alternatives are the other **local MCP browsers**: Playwright MCP, Chrome DevTools MCP and agent-browser, plus doing without a browser at all.
+
+What a coding agent needs from a browser, in the order it needs it:
+
+1. **Did my change work?** Look at the running app, click through it, and read the console and network (`diagnostics`, `look`, `snapshot`). A page that looks fine while its API call returned 500 is the failure that matters.
+2. **Read the docs and cite them.** Look up an API in the vendor's docs and be able to show where the claim came from (`read`, `cite`, `evidence`), including docs behind a login in the user's own browser.
+3. **Remember what was learned about this project's sites** across sessions: which doc pages answered what, how the dev server behaves (source memory in Qdrant, `--keep-sources`).
+4. **Stay cheap and safe in the agent's context:** a small tool schema, terse output, page text fenced as untrusted, a domain allowlist, no surprise submits.
+
+Form filling, A2A, and the commerce/jobs/gov packs serve a different customer. They stay, but they are not where the next work goes. The packs that matter for this goal are `dev-qa` and `research`.
+
 ### Who is in the market, by layer
 
 | layer | players | what they sell | YC (per ycombinator.com) |

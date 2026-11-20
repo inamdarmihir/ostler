@@ -18,7 +18,7 @@
     "difficulty": 2,
     "instruction": "Open {BASE}/packs/dev-qa/app.html and list every console error and uncaught exception the page produces on load, quoting the message text.",
     "start": "/packs/dev-qa/app.html",
-    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "tags": ["diagnostics"],
     "outcome": {"kind": "answer", "must_contain": ["cart-badge|hydrate", "TypeError|totals|Uncaught"]},
     "expect_gaps": [],
     "risk": "read"
@@ -30,7 +30,7 @@
     "difficulty": 2,
     "instruction": "Open {BASE}/packs/dev-qa/app.html and list every network request that fails (HTTP error or missing resource), with its URL path and status code.",
     "start": "/packs/dev-qa/app.html",
-    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "tags": ["diagnostics"],
     "outcome": {"kind": "answer", "must_contain": ["api/orders", "500", "analytics.js", "404"]},
     "expect_gaps": [],
     "risk": "read"
@@ -66,7 +66,7 @@
     "difficulty": 5,
     "instruction": "Open {BASE}/packs/dev-qa/app.html and report all four planted problems on page load: the console error, the uncaught exception, the failing API request (with status) and the missing script (with status). Give the message or URL path for each.",
     "start": "/packs/dev-qa/app.html",
-    "tags": ["diagnostics", "needs-tool:diagnostics"],
+    "tags": ["diagnostics"],
     "outcome": {"kind": "answer", "must_contain": ["cart-badge|hydrate", "TypeError|totals|Uncaught", "api/orders", "500", "analytics.js", "404"]},
     "expect_gaps": [],
     "risk": "read"

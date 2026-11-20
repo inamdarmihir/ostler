@@ -7,13 +7,14 @@ Every MCP tool Ostler exposes, and example prompts. Back to the [README](../READ
 | group | tools |
 |---|---|
 | browse | `navigate` `snapshot` `read` `click` `type` `press` `scroll` `hover` `wait_for` `wait_for_human` `look` `screenshot` `back` |
+| check | `diagnostics` (console errors, uncaught exceptions and failed or 4xx/5xx requests on this tab since the last call; `all`, `from_start`, `limit`) |
 | tabs | `tabs` (list, new, switch, close; popups arrive as tabs) · `context` (notes shared by every tab) |
 | forms | `form_inspect` `form_fill` `form_submit` `fill_field` |
 | research | `cite` `evidence` `search` `open_many` `extract` `links` (with `read`; see [Research tools](#research-tools)) |
 | memory | `memory_remember` `memory_recall` `memory_list` `memory_forget` |
 | other | `stats` |
 
-`--tools auto|core|forms|research|all` controls how many the agent sees. The default, `auto`, lists the 16 core tools (5.3 KB) and adds the research tools (23 in total, after the first `read` or `search`) and the forms and memory tools (once a page shows form fields): the server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. `--tools research` pins core plus research (23 tools, 8.2 KB); the full set (32 tools) is 10.8 KB of schema, roughly 2.7k tokens on every turn; a test keeps it under 11 KB. Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
+`--tools auto|core|forms|research|all` controls how many the agent sees. The default, `auto`, lists the 17 core tools (5.8 KB) and adds the research tools (24 in total, after the first `read` or `search`) and the forms and memory tools (once a page shows form fields): the server sends `tools/list_changed`, the result names the new tools, and every tool stays callable even if a client never refreshes its list. `--tools research` pins core plus research (23 tools, 8.2 KB); the full set (33 tools) is 11.2 KB of schema, roughly 2.8k tokens on every turn; a test keeps it under 11.3 KB (it was 11 KB before `diagnostics`, the one tool added for the coding-agent loop). Tool output is terse by default (verified fields are named once, no timings or fingerprints); `--verbose` brings the debug detail back.
 
 ## Research tools
 

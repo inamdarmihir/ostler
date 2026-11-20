@@ -179,6 +179,102 @@ impl App {
     }
 }
 
+impl App {
+    /// `diagnostics`: what the page's console, its uncaught exceptions and its network produced on this
+    /// tab since the previous call. This is the check a coding agent runs after a change: the page can
+    /// look fine (an optimistic toast, a cached view) while the request behind it failed.
+    pub(super) async fn diagnostics_tool(&self, a: &Value) -> Result<ToolOutput, ToolError> {
+        use ostler_browser::{Cursor, DiagKind};
+        let all = a.get("all").and_then(Value::as_bool).unwrap_or(false);
+        let from_start = a
+            .get("from_start")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let limit = a
+            .get("limit")
+            .and_then(Value::as_u64)
+            .unwrap_or(50)
+            .clamp(1, 200) as usize;
+        br!(self, b, {
+            let page = b.page();
+            let tab = page.target_id().to_string();
+            let since = if from_start {
+                0
+            } else {
+                self.diag_marks
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&tab).copied())
+                    .unwrap_or(0)
+            };
+            let d = page.diagnostics(Cursor(since), 200).await?;
+            if let Ok(mut m) = self.diag_marks.lock() {
+                m.insert(tab, d.next_cursor.0);
+            }
+            let seen = d.entries.len();
+            let important = |e: &&ostler_browser::DiagEntry| {
+                all || matches!(e.level.as_str(), "error" | "warning")
+                    || !matches!(e.kind, DiagKind::Console | DiagKind::Log)
+            };
+            let shown: Vec<_> = d.entries.iter().filter(important).collect();
+            if shown.is_empty() {
+                let mut t = format!(
+                    "No new console errors, exceptions or failed requests ({seen} entr{} since the last call",
+                    if seen == 1 { "y" } else { "ies" }
+                );
+                t.push_str(if all {
+                    ")."
+                } else {
+                    ", none of them errors; all:true shows them)."
+                });
+                if d.dropped > 0 {
+                    let _ = write!(t, " {} older entries were dropped unread.", d.dropped);
+                }
+                return Ok(ToolOutput::text(t));
+            }
+            let mut body = String::new();
+            for e in shown.iter().take(limit) {
+                let what = match e.kind {
+                    DiagKind::Console => "console",
+                    DiagKind::Exception => "uncaught exception",
+                    DiagKind::Log => "browser log",
+                    DiagKind::HttpError => "http",
+                    DiagKind::RequestFailed => "request failed",
+                    DiagKind::Blocked => "blocked by policy",
+                };
+                let _ = write!(body, "[{what} {}", e.level);
+                if let Some(s) = e.status {
+                    let _ = write!(body, " {s}");
+                }
+                body.push(']');
+                if let Some(u) = &e.url {
+                    let _ = write!(body, " {u}");
+                }
+                if !e.text.is_empty() {
+                    let _ = write!(body, " {}", e.text);
+                }
+                body.push('\n');
+            }
+            let mut t = format!(
+                "{} new problem(s) on this tab{}{}:\n",
+                shown.len(),
+                if shown.len() > limit {
+                    format!(" (first {limit})")
+                } else {
+                    String::new()
+                },
+                if d.dropped > 0 {
+                    format!("; {} older entries were dropped unread", d.dropped)
+                } else {
+                    String::new()
+                },
+            );
+            t.push_str(&wrap(&body));
+            Ok(ToolOutput::text(t))
+        })
+    }
+}
+
 /// Session state of the research tools.
 pub(super) struct Research {
     pub(super) evidence: Evidence,

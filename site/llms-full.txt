@@ -831,7 +831,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/cookbook.html
 
 Recipes for what you can do with Ostler **today**. Each one names the tools involved, a prompt to give your agent, the flags that make it safe, and what Ostler will and will not tell you. Back to the [README](https://github.com/inamdarmihir/ostler/blob/main/README.md); tool details are in [TOOLS.md](https://github.com/inamdarmihir/ostler/blob/main/docs/TOOLS.md).
 
-Ostler is a general browser first: the 16 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
+Ostler is a general browser first: the 17 core tools (navigate, read, click, type, tabs, screenshots) cover recipes 1 to 6 with no form or research tools. Two layers add verification on top: research with citations that are checked (recipe 13) and a form engine that reads every value back (recipes 7 to 11).
 
 Everything marked **planned** at the end is built as a library but is not an MCP tool yet. It is listed so you know what not to expect.
 
@@ -946,7 +946,7 @@ Another agent sends a task over A2A v1.0 and gets `input-required` back when a f
 
 ## 12. Keep a run cheap
 
-- `--tools auto` (default) shows 16 core tools (about 5.3 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
+- `--tools auto` (default) shows 17 core tools (about 5.8 KB), reveals `cite`, `evidence`, `search`, `open_many`, `extract` and `links` after the first `read`, and the form and memory tools once a page has fields. `--tools core` keeps the schema smallest; `--tools research` pins the research set.
 - `read` with a `query` returns only the best-matching passages, so a long page costs a few hundred tokens instead of the whole page.
 - Use `snapshot` with `delta` and heading refs rather than re-reading whole pages.
 - Call `stats` to see calls, time and estimated tokens for the session.
@@ -1961,7 +1961,7 @@ Source: https://inamdarmihir.github.io/ostler/docs/architecture.html
 | `ostler-browser` | `Page` (navigate, snapshot, click, type, key, upload, screenshot, wait), the fill/verify/submit engine, domain policy, the in-page runtime. |
 | `ostler-forms` | Pure logic, no I/O: form IR types, matching agent keys to fields, option/date/time normalisation, sensitive-field detection, form fingerprints. |
 | `ostler-memory` | `Store` trait with `QdrantStore` (Cloud Inference or client vectors from a local embedder: Ollama or the non-semantic hash), `InMemoryStore` and `SealedStore` (client-side encryption wrapper); `Memory` API for one tenant; per-tenant Qdrant access tokens (`token.rs`). |
-| `ostler-mcp` | JSON-RPC loop, 32 tools in 5 profiles (16 core, 20 forms, 23 research, 32 all; `auto` grows from core), lazy browser, per-tool metrics, background memory writes. `evidence.rs` holds the research session: pages read (markdown for passages, plain words for verification), verified citations, re-verification when a page changes; `app/research.rs` wires `read`, `cite`, `evidence`, `search`, `open_many`, `extract` and `links` to `ostler-browser`, `ostler-extract` and `ostler-research`. |
+| `ostler-mcp` | JSON-RPC loop, 33 tools in 5 profiles (17 core, 21 forms, 24 research, 33 all; `auto` grows from core), lazy browser, per-tool metrics, background memory writes. `evidence.rs` holds the research session: pages read (markdown for passages, plain words for verification), verified citations, re-verification when a page changes; `app/research.rs` wires `read`, `cite`, `evidence`, `search`, `open_many`, `extract` and `links` to `ostler-browser`, `ostler-extract` and `ostler-research`. |
 | `ostler-a2a` | The Agent2Agent HTTP surface (`ostler a2a`); see [A2A.md](https://inamdarmihir.github.io/ostler/docs/a2a.html). |
 | `ostler` (`crates/ostler-cli`) | `serve`, `a2a`, `init`, `config`, `setup`, `doctor`, `inspect`, `memory`, `fixtures`. |
 | `ostler-fixtures` | The 49 form test pages (`PAGES` in `crates/ostler-fixtures/src/lib.rs`, plus an internal 404 page), the domain packs under `packs/` (research, gov-forms, jobs, dev-qa, commerce: 34 tasks, 29 pages), and a recording HTTP server (`/__records`, `/__reset`, `/exfil`, `/pay`, `robots.txt`, a second origin port). |

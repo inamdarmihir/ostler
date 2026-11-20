@@ -47,8 +47,11 @@ pub const SCRIPTED: &[&str] = &[
     "jobs-006",
     "jobs-007",
     "dev-qa-001",
+    "dev-qa-002",
+    "dev-qa-003",
     "dev-qa-004",
     "dev-qa-005",
+    "dev-qa-006",
     "commerce-001",
     "commerce-002",
     "commerce-003",
@@ -224,6 +227,9 @@ pub async fn run(app: &App, srv: &FixtureServer, task: &PackTask, upload: &Path)
         log: String::new(),
     };
     let id = task.id.as_str();
+    // `OSTLER_SCRIPTED_CHECKS=1` runs the same script as an agent that also calls `diagnostics` after a
+    // save instead of trusting the toast. Same tasks, same scorer: the difference is the tool.
+    let checks = std::env::var("OSTLER_SCRIPTED_CHECKS").is_ok_and(|v| !v.is_empty() && v != "0");
     let done = match id {
         "research-001" => research_001(&mut a).await,
         "research-002" => research_002(&mut a).await,
@@ -248,8 +254,9 @@ pub async fn run(app: &App, srv: &FixtureServer, task: &PackTask, upload: &Path)
         "jobs-006" => apply(&mut a, Apply::new("Ada Lovelace", "ada@example.com").emp("Lovelace Engines Ltd", "Engineer", "6").auth(true, true).tools(&["GIS software", "Python scripting"])).await,
         "jobs-007" => apply(&mut a, Apply::new("Grace Hopper", "grace@example.com").phone("555-0177").emp("Compiler Works", "Engineer", "4").emp("Harbor Data Co", "Analyst", "2").emp("Valley Maps", "Cartographer", "5").resume().cover("Maps are my craft.").auth(true, false).tools(&["GIS software", "Total station"])).await,
         "dev-qa-001" => dev_001(&mut a).await,
-        "dev-qa-004" => dev_save(&mut a, "dark").await,
-        "dev-qa-005" => dev_save(&mut a, "sepia").await,
+        "dev-qa-002" | "dev-qa-003" | "dev-qa-006" => dev_diag(&mut a).await,
+        "dev-qa-004" => dev_save(&mut a, "dark", checks).await,
+        "dev-qa-005" => dev_save(&mut a, "sepia", checks).await,
         "commerce-001" => commerce_001(&mut a).await,
         "commerce-002" => commerce_002(&mut a).await,
         "commerce-003" => commerce_003(&mut a).await,
@@ -320,6 +327,26 @@ async fn research_002(a: &mut Agent<'_>) -> Done {
         a,
         format!("{best} had the highest output in 2024 H2 ({top} kt); the four sub-regions total {total} kt."),
         vec![a.srv.url("/packs/research/table.html")],
+        "",
+    )
+}
+
+/// Load the app, give its deliberate bugs a moment to fire, and report what `diagnostics` says.
+async fn dev_diag(a: &mut Agent<'_>) -> Done {
+    a.go("/packs/dev-qa/app.html").await;
+    a.tool("wait_for", json!({"ms": 400})).await;
+    let (t, err) = a.tool("diagnostics", json!({})).await;
+    if err || !t.contains("problem(s)") {
+        return failure(
+            a,
+            format!("diagnostics reported nothing usable: {t}"),
+            "no diagnostics",
+        );
+    }
+    success(
+        a,
+        format!("The page reports these problems on load:\n{t}"),
+        vec![],
         "",
     )
 }
@@ -773,7 +800,7 @@ async fn dev_001(a: &mut Agent<'_>) -> Done {
 }
 
 /// Open Settings, choose a theme, save. A naive agent: success is "the page says Settings saved".
-async fn dev_save(a: &mut Agent<'_>, theme: &str) -> Done {
+async fn dev_save(a: &mut Agent<'_>, theme: &str, checks: bool) -> Done {
     a.go("/packs/dev-qa/app.html").await;
     if let Some(e) = a.click("Settings").await {
         return failure(a, format!("Could not open Settings: {e}"), "nav");
@@ -785,6 +812,18 @@ async fn dev_save(a: &mut Agent<'_>, theme: &str) -> Done {
         return failure(a, format!("Could not click Save: {e}"), "click");
     }
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    if checks {
+        let (diag, _) = a.tool("diagnostics", json!({})).await;
+        if diag.contains("[http") && diag.contains("/api/settings") {
+            // The question was "were the settings really saved?": answering it correctly is the task done.
+            return success(
+                a,
+                format!("No, the save did not persist. The page shows a \"Settings saved\" toast, but diagnostics reports the request failed:\n{diag}"),
+                vec![],
+                "diagnostics contradicted the toast",
+            );
+        }
+    }
     let page = a.snap().await;
     // `tabs list` shows the current URL, so the baseline can read the hash. It still trusts the toast.
     let (tabs, _) = a.tool("tabs", json!({"action": "list"})).await;

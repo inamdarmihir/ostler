@@ -468,6 +468,8 @@ pub struct App {
     /// Keep the pages `read` fetches in source memory, so a later session can find and cite them again.
     /// Off by default: pages are not kept across sessions unless the user opts in.
     keep_sources: std::sync::atomic::AtomicBool,
+    /// Per tab (target id): the last diagnostics entry already shown, so each call returns only what is new.
+    diag_marks: StdMutex<BTreeMap<String, u64>>,
     started: Instant,
 }
 
@@ -656,6 +658,7 @@ impl App {
             context: StdMutex::default(),
             pending: StdMutex::default(),
             keep_sources: Default::default(),
+            diag_marks: StdMutex::default(),
             started: Instant::now(),
         }
     }
@@ -1547,6 +1550,7 @@ impl App {
             "read" => self.read_tool(a).await,
             "cite" => self.cite_tool(a).await,
             "evidence" => Ok(self.evidence_tool()),
+            "diagnostics" => self.diagnostics_tool(a).await,
             "search" => self.search_tool(a).await,
             "open_many" => self.open_many_tool(a).await,
             "extract" => self.extract_tool(a).await,

@@ -78,10 +78,12 @@ fn defs() -> Vec<Def> {
     vec![
         Def { name: "navigate", desc: "Open a URL. Returns page state with interactive elements.", group: Core, required: &["url"],
             props: json!({"tab":tab(),"url":{"type":"string"},"observe":{"type":"string","enum":["interactive","full","none"],"description":"default interactive"}}) },
-        Def { name: "snapshot", desc: "Read the page as text with element refs (e1, e2…). Use delta to see only changes. Pass the ref of a heading to read just that section.", group: Core, required: &[],
+        Def { name: "diagnostics", desc: "Console errors, uncaught exceptions, failed or HTTP 4xx/5xx requests on this tab since the last call. Check after a change: a page can look fine while its API call failed.", group: Core, required: &[],
+            props: json!({"tab":tab(),"all":{"type":"boolean","description":"include info/debug logs"},"from_start":{"type":"boolean","description":"ignore the last-call mark"},"limit":{"type":"integer","description":"default 50"}}) },
+        Def { name: "snapshot", desc: "Read the page as text with element refs (e1, e2…). delta shows only changes. A heading ref reads just that section.", group: Core, required: &[],
             props: json!({"tab":tab(),"mode":{"type":"string","enum":["full","delta","interactive"]},"ref":{"type":"string","description":"limit to subtree"},"max_chars":{"type":"integer"}}) },
-        Def { name: "read", desc: "Read a page for research (opens url if given). With query: just the best passages. Without: the start. Only pages you read can be cited. Flags paywalls, bot walls, changed pages, text aimed at AI.", group: Core, required: &[],
-            props: json!({"tab":tab(),"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"},"stored":{"type":"boolean","description":"search stored copies of pages read in earlier sessions (needs --keep-sources); no navigation"}}) },
+        Def { name: "read", desc: "Read a page (opens url if given). With query: the best passages; without: the start. Only pages you read can be cited. Flags paywalls, bot walls, changes, text aimed at AI.", group: Core, required: &[],
+            props: json!({"tab":tab(),"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"},"stored":{"type":"boolean","description":"search copies kept by earlier sessions (--keep-sources); opens nothing"}}) },
         Def { name: "click", desc: "Click an element by ref.", group: Core, required: &["ref"],
             props: json!({"tab":tab(),"ref":{"type":"string"},"observe":observe()}) },
         Def { name: "type", desc: "Type into an element by ref, replacing its content.", group: Core, required: &["ref","text"],
@@ -90,20 +92,20 @@ fn defs() -> Vec<Def> {
             props: json!({"tab":tab(),"key":{"type":"string"},"observe":observe()}) },
         Def { name: "hover", desc: "Move the pointer over an element by ref (opens menus and tooltips).", group: Core, required: &["ref"],
             props: json!({"ref":{"type":"string"},"observe":observe()}) },
-        Def { name: "scroll", desc: "Scroll an element into view (ref) or the page (direction up|down|top|bottom, optional amount in px). Reports position as scrolled/max.", group: Core, required: &[],
+        Def { name: "scroll", desc: "Scroll an element into view (ref) or the page (direction up|down|top|bottom, amount in px).", group: Core, required: &[],
             props: json!({"ref":{"type":"string"},"direction":{"type":"string","enum":["up","down","top","bottom"]},"amount":{"type":"integer"},"observe":observe()}) },
         Def { name: "wait_for", desc: "Wait until text appears/disappears or a CSS selector shows, or just pause for ms milliseconds (max 10000).", group: Core, required: &[],
             props: json!({"text":{"type":"string"},"text_gone":{"type":"string"},"selector":{"type":"string"},"timeout_ms":{"type":"integer"},"ms":{"type":"integer","description":"plain pause"}}) },
-        Def { name: "wait_for_human", desc: "A CAPTCHA/verification wall is blocking the page: wait for the user to complete it in the browser window (needs --headed). Ostler never solves these itself.", group: Core, required: &[],
+        Def { name: "wait_for_human", desc: "A CAPTCHA/verification wall blocks the page: wait for the user to pass it in the browser window (--headed). Ostler never solves these.", group: Core, required: &[],
             props: json!({"timeout_s":{"type":"integer","description":"default 120, max 600"}}) },
         Def { name: "screenshot", desc: "Capture a PNG of the page or one element.", group: Core, required: &[],
             props: json!({"ref":{"type":"string"},"full_page":{"type":"boolean"}}) },
-        Def { name: "look", desc: "See where to click: a screenshot with every clickable element boxed and numbered by its ref, plus a legend saying what each does (type here, submits the form, error…). Use refs with click/type/fill_field.", group: Core, required: &[],
+        Def { name: "look", desc: "Screenshot with every clickable element boxed and numbered by ref, plus a legend of what each does. Use the refs with click/type/fill_field.", group: Core, required: &[],
             props: json!({"max":{"type":"integer"}}) },
-        Def { name: "search_tools", desc: "Find Ostler tools without listing them all. detail: names | brief (default) | full (with input schema). Every tool is callable whether or not it is listed.", group: Core, required: &[],
+        Def { name: "search_tools", desc: "Find tools without listing them all. detail: names | brief | full (with schema). Every tool is callable whether listed or not.", group: Core, required: &[],
             props: json!({"query":{"type":"string"},"detail":{"type":"string","enum":["names","brief","full"]}}) },
         Def { name: "back", desc: "Go back in history.", group: Core, required: &[], props: json!({}) },
-        Def { name: "tabs", desc: "Manage tabs (they share cookies and the context tool). list | new [url] | switch tab | close tab. Popups open as new tabs.", group: Core, required: &["action"],
+        Def { name: "tabs", desc: "Manage tabs (shared cookies and context). list | new [url] | switch tab | close tab. Popups open as tabs.", group: Core, required: &["action"],
             props: json!({"action":{"type":"string","enum":["list","new","switch","close"]},"tab":{"type":"string","description":"tab id, e.g. t2"},"url":{"type":"string"}}) },
         Def { name: "context", desc: "Notes shared by every tab (and later calls). get|set|delete|list. Keep short facts, not page dumps.", group: Core, required: &["action"],
             props: json!({"action":{"type":"string","enum":["get","set","delete","list"]},"key":{"type":"string"},"value":{"type":"string"}}) },
@@ -112,7 +114,7 @@ fn defs() -> Vec<Def> {
         Def { name: "evidence", desc: "What you have read and may state: verified citations, stale ones, and gaps (pages you could not read: paywall, bot wall, robots, errors). Call before answering.", group: Research, required: &[], props: json!({}) },
         Def { name: "search", desc: "Web search (needs OSTLER_SEARXNG_URL or a Brave key). Returns titles, URLs and snippets; read a result before relying on it.", group: Research, required: &["query"],
             props: json!({"query":{"type":"string"},"limit":{"type":"integer","description":"default 8, max 20"},"recency":{"type":"string","enum":["day","week","month","year"]},"site":{"type":"string","description":"host name, e.g. example.com"}}) },
-        Def { name: "open_many", desc: "Read several URLs (max 10) in a scratch tab, respecting robots.txt and per-host limits. With query: the best passages from each. Reports each page's outcome; your current tab is untouched.", group: Research, required: &["urls"],
+        Def { name: "open_many", desc: "Read up to 10 URLs in a scratch tab (robots.txt, per-host limits). With query: best passages from each. Reports each outcome; your tab is untouched.", group: Research, required: &["urls"],
             props: json!({"urls":{"type":"array","items":{"type":"string"}},"query":{"type":"string"},"k":{"type":"integer","description":"passages per page (default 2)"},"force":{"type":"boolean","description":"re-read pages already read"}}) },
         Def { name: "extract", desc: "Structured data from the current page: tables (rows) or lists (repeated cards, with pagination hints and whether the list looks complete).", group: Research, required: &["kind"],
             props: json!({"kind":{"type":"string","enum":["tables","lists"]},"max_rows":{"type":"integer","description":"per table or list (default 30)"},"where":{"type":"string","description":"keep only rows containing any of a|b|c"},"select":{"type":"array","items":{},"description":"table columns to keep (header name or index)"}}) },
@@ -122,7 +124,7 @@ fn defs() -> Vec<Def> {
             props: json!({"script":{"type":"string"},"max_chars":{"type":"integer","description":"default 8000"}}) },
         Def { name: "form_inspect", desc: "List the page's forms as typed fields (label, kind, required, options, errors) plus submit controls and what memory knows.", group: Forms, required: &[],
             props: json!({"form":{"type":"string","description":"form ref"}}) },
-        Def { name: "form_fill", desc: "Fill many fields at once from {label|name|ref: value}; a value {{fact:KEY}} uses that saved fact without you seeing it. Handles selects, radios, checkbox groups, dates, files, comboboxes, dependent dropdowns; verifies each field. auto=required|all fills the rest from memory.", group: Forms, required: &[],
+        Def { name: "form_fill", desc: "Fill many fields at once from {label|name|ref: value}; {{fact:KEY}} uses a saved fact unseen. Handles selects, radios, checkboxes, dates, files, comboboxes, dependent dropdowns; verifies each field. auto=required|all fills the rest from memory.", group: Forms, required: &[],
             props: json!({"values":{"type":"object","additionalProperties":true},"form":{"type":"string"},"auto":{"type":"string","enum":["off","required","all"]},"min_confidence":{"type":"number"}}) },
         Def { name: "form_submit", desc: "Click the form's submit/next control and report whether it was accepted, advanced to another step, or failed validation.", group: Forms, required: &[],
             props: json!({"form":{"type":"string"},"control":{"type":"string","description":"submit button ref"},"confirm":{"type":"boolean","description":"required when the server runs with --require-confirm-submit"},"again":{"type":"boolean","description":"resubmit a form submitted moments ago"}}) },
@@ -252,9 +254,11 @@ mod tests {
     fn schemas_are_small() {
         // A guard on the context cost of just *having* the server connected.
         let all = serde_json::to_string(&list(Profile::All)).unwrap().len();
-        assert!(all < 11_000, "all tool schemas are {all} bytes");
+        // Raised from 11_000 / 5_400 for `diagnostics` (the console and network signal a coding agent needs
+        // after every change) and `read`'s `stored` option, after trimming other descriptions to pay for them.
+        assert!(all < 11_300, "all tool schemas are {all} bytes");
         let auto = serde_json::to_string(&list(Profile::Auto)).unwrap().len();
-        assert!(auto < 5_400, "the starting tool list is {auto} bytes");
+        assert!(auto < 5_850, "the starting tool list is {auto} bytes");
     }
 
     #[test]
