@@ -81,7 +81,7 @@ fn defs() -> Vec<Def> {
         Def { name: "snapshot", desc: "Read the page as text with element refs (e1, e2…). Use delta to see only changes. Pass the ref of a heading to read just that section.", group: Core, required: &[],
             props: json!({"tab":tab(),"mode":{"type":"string","enum":["full","delta","interactive"]},"ref":{"type":"string","description":"limit to subtree"},"max_chars":{"type":"integer"}}) },
         Def { name: "read", desc: "Read a page for research (opens url if given). With query: just the best passages. Without: the start. Only pages you read can be cited. Flags paywalls, bot walls, changed pages, text aimed at AI.", group: Core, required: &[],
-            props: json!({"tab":tab(),"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"}}) },
+            props: json!({"tab":tab(),"url":{"type":"string"},"query":{"type":"string"},"k":{"type":"integer","description":"passages, default 5"},"max_chars":{"type":"integer","description":"default 8000"},"stored":{"type":"boolean","description":"search stored copies of pages read in earlier sessions (needs --keep-sources); no navigation"}}) },
         Def { name: "click", desc: "Click an element by ref.", group: Core, required: &["ref"],
             props: json!({"tab":tab(),"ref":{"type":"string"},"observe":observe()}) },
         Def { name: "type", desc: "Type into an element by ref, replacing its content.", group: Core, required: &["ref","text"],

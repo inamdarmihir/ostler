@@ -1178,6 +1178,10 @@ struct ServeArgs {
     /// After an accepted submit, save the non-sensitive values the agent typed as profile facts.
     #[arg(long, env = "OSTLER_LEARN")]
     learn: bool,
+    /// Keep the pages `read` fetches in memory so later sessions can search and cite them (`read stored:true`).
+    /// Off by default. Needs a memory (Qdrant or `--memory local`); chunks expire after 30 days.
+    #[arg(long, env = "OSTLER_KEEP_SOURCES")]
+    keep_sources: bool,
     /// On start, forget learned skills and error episodes not verified for this many days (0 = keep forever).
     /// Saved facts are never expired.
     #[arg(long, default_value_t = 180, env = "OSTLER_RETAIN_DAYS")]
@@ -1500,6 +1504,7 @@ async fn main() -> Result<()> {
             let profile: Profile = a.tools.parse().map_err(|e: String| anyhow::anyhow!(e))?;
             let allow_domains_for_note = a.allow_domains.clone();
             let headed_for_note = a.headed;
+            let keep_sources = a.keep_sources;
             let app = App::new(AppConfig {
                 launch: LaunchOptions {
                     chrome_path: a.chrome_path,
@@ -1522,6 +1527,13 @@ async fn main() -> Result<()> {
                 require_confirm_submit: a.require_confirm_submit,
                 verbose: a.verbose,
             });
+            if keep_sources {
+                if app.has_memory() {
+                    app.set_keep_sources(true);
+                } else {
+                    eprintln!("ostler: --keep-sources needs a memory (Qdrant or --memory local); pages will not be kept.");
+                }
+            }
             if app.has_memory() {
                 // Fail fast and loudly: a misconfigured memory should not silently degrade mid-task.
                 if let Err(e) = app.init_memory().await {

@@ -28,3 +28,7 @@ ostler-extract = { version = "0.2.0", path = "../ostler-extract" }
 ostler-forms = { version = "0.2.0", path = "../ostler-forms" }
 ostler-memory = { version = "0.2.0", path = "../ostler-memory" }
 ostler-research = { version = "0.2.0", path = "../ostler-research" }
+
+[dev-dependencies]
+ostler-fixtures = { path = "../ostler-fixtures" }
+ostler-cdp = { version = "0.2.0", path = "../ostler-cdp" }

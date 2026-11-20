@@ -18,7 +18,7 @@
     "difficulty": 2,
     "instruction": "On {BASE}/packs/research/table.html, which sub-region had the highest grain output in the second half of 2024, and what was the total output of all four sub-regions for that half-year?",
     "start": "/packs/research/table.html",
-    "tags": ["read", "table", "needs-tool:read"],
+    "tags": ["read", "table"],
     "outcome": {"kind": "answer", "must_contain": ["Delta", "71", "192"], "must_cite": ["/packs/research/table.html"]},
     "expect_gaps": [],
     "risk": "read"

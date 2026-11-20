@@ -29,6 +29,43 @@ From each project's own README (see [research](research/landscape.md); star coun
 
 Stagehand and Browser Use cache or learn actions too; they are Python/TypeScript frameworks rather than MCP tools for coding agents.
 
+## Competitive landscape and moat (2026-11)
+
+Method: vendor pages and third-party roundups found by web search on 2026-11-20. Funding figures are as reported by those pages, not verified. A company is marked **YC** only where a ycombinator.com company or launch page was found. Vendor benchmarks (stealth, speed, cost) are the vendors' own and favour them; none is reproduced here. We have **not** run a head-to-head against any of these.
+
+### Who is in the market, by layer
+
+| layer | players | what they sell | YC (per ycombinator.com) |
+|---|---|---|---|
+| Hosted browser infrastructure | Browserbase, Kernel, Hyperbrowser, Steel, Anchor, Browserless, Cloudflare Browser Run | cloud browsers by the browser-hour, stealth, proxies, CAPTCHA, live view and replays, persistent logins | Kernel, Hyperbrowser; others not confirmed |
+| Agent frameworks and clouds | Browser Use, Stagehand (Browserbase), Skyvern | an agent loop over a browser, often with an action cache, plus a hosted cloud | Browser Use, Skyvern |
+| MCP browsers for coding agents | Playwright MCP, Chrome DevTools MCP, agent-browser, **Ostler** | local tools a client model drives | none confirmed |
+| Page-to-data APIs | Firecrawl and similar | scrape, crawl, search at scale, anti-bot handled server-side | not confirmed |
+| Benchmarks | WebArena (and "Verified"), Online-Mind2Web, Mind2Web 2 | task suites and success judges | n/a |
+
+Where the money and effort go: the hosted layer is converging on a bundled platform (browser, search, fetch, identity, a managed agent behind one API call), competes on stealth and scale, and bills per browser-hour or per task. Anchor now advertises "cost per verified completed workflow" and a deterministic action cache with AI fallback. Stagehand and Skyvern cache actions too. Evaluation of overstated agent success is published work (Online-Mind2Web; WebArena Verified).
+
+### What is **not** a moat
+
+- *"Nobody measures false success."* Others do, in papers and in vendor copy. Ours is a number from one deterministic script (1 of 30), which is not a measurement.
+- Form filling in few calls. Playwright MCP and Chrome DevTools MCP have batch fills; the scripted comparison could not tell the three apart on correctness.
+- Playbook memory. Action caches ship in Stagehand, Skyvern and Anchor.
+- Being open source or free. Browser Use, Stagehand and Skyvern are open source.
+- Stealth, CAPTCHA, scale. Ostler declines these by design (ADR-0009); the hosted layer wins there.
+
+### What could be a moat, and the measurement that decides it
+
+Ostler is a local, model-free verifier with a Qdrant evidence store. The competitors above are infrastructure or agents; none was found shipping a *client-side verdict layer that runs in the user's own Chrome and is independent of whichever model drives it*. That is a hypothesis. Each item below is a claim we may only make once its measurement exists.
+
+| claim | why a competitor would not simply copy it | measurement that proves it | status |
+|---|---|---|---|
+| **Verdicts from live page state, no model inside.** Outcome checks (read-back, `expect`, receipts) are computed from the DOM and network, so they do not share the agent's blind spots. | Agent vendors grade with a model; infra vendors do not see intent. | False-success rate with the verdict layer on vs off, same model and tasks, on a held-out set, with confidence intervals. | **Not measured.** The verdict layer is not wired to MCP. |
+| **Evidence store: hash-pinned, versioned sources in Qdrant that citations are checked against.** A citation is `VERIFIED` live, `VERIFIED AGAINST A STORED COPY` with fetch time and hash, or refused. | Scrape APIs return text, not a checkable ledger; retention and sealing are product decisions they have not made. | Citation precision (quote present *and* supports the claim) and stale-citation catch rate over two-session tasks; recall quality (nDCG, recall@k) dense vs hybrid vs hybrid+MMR on labelled queries. | Mechanism tested ([ADR-0020](adr/0020-source-memory.md)); precision, recall quality and the model run **not measured**. |
+| **Runs in the user's own signed-in Chrome, with the safety policy enforced in the browser** (allowlist, private-network block, confirm gate), no stealth. | Cloud vendors cannot reach the user's session; they sell the opposite posture. | Zero canary leaks across channels (in CI today) plus unsafe-action rate under injected instructions, per server, with a model in the loop. | Enforcement tested; model-in-the-loop rate **not measured**. |
+| **Cost to a verified outcome.** Fewer tokens and calls *per verified completion*, not per run. | Anchor's pitch is similar; it is unverified and hosted. | Tokens and calls per verified completed task, completed tasks only, three servers, three models. | **Not measured** (scripted numbers only). |
+
+The order of work follows from this table: run the model-in-the-loop baseline, run the verification on/off ablation, wire the verdict layer only as far as the numbers justify, and publish the result whichever way it points. If the ablation shows no drop in false success, the first row is not a moat and the project is a well-built tool, not a defensible product.
+
 ## Roadmap
 
 - [x] CDP client, in-page runtime, form engine, Qdrant memory, MCP server, benchmark harness, `init`/`config`/`setup`

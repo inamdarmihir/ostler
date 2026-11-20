@@ -24,6 +24,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("retain_days", "OSTLER_RETAIN_DAYS"),
     ("qdrant_on_disk", "OSTLER_QDRANT_ON_DISK"),
     ("learn", "OSTLER_LEARN"),
+    ("keep_sources", "OSTLER_KEEP_SOURCES"),
     ("lean", "OSTLER_LEAN"),
     ("verbose", "OSTLER_VERBOSE"),
     ("a2a_bind", "OSTLER_A2A_BIND"),
@@ -951,7 +952,12 @@ pub fn validate(key: &str, value: &str) -> Result<String> {
                 "embedding_dim must be a positive whole number such as 384 (got {value:?})"
             ),
         },
-        "allow_insecure_qdrant" | "qdrant_on_disk" | "learn" | "lean" | "verbose" => boolean(),
+        "allow_insecure_qdrant"
+        | "qdrant_on_disk"
+        | "learn"
+        | "keep_sources"
+        | "lean"
+        | "verbose" => boolean(),
         "qdrant_url" | "embedding_url" => {
             anyhow::ensure!(
                 value.starts_with("http://") || value.starts_with("https://"),

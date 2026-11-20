@@ -64,6 +64,7 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `retain_days` | `OSTLER_RETAIN_DAYS` | on start, forget learned skills and episodes not verified for this many days (default 180; 0 = keep forever) |
 | `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
+| `keep_sources` | `OSTLER_KEEP_SOURCES` | keep pages `read` fetches in memory so later sessions can search and cite them (off by default; needs a memory; expires after 30 days; see [ADR-0020](adr/0020-source-memory.md)) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `key_store` | `OSTLER_KEY_STORE` | where the sealing key lives: `file` (default) or `keychain` |
 | `verbose` | `OSTLER_VERBOSE` | timings, fingerprints and ids in tool output |

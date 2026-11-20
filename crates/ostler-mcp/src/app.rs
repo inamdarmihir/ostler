@@ -465,6 +465,9 @@ pub struct App {
     /// Notes the agent keeps for itself, shared by every tab and kept across browser restarts.
     context: StdMutex<BTreeMap<String, String>>,
     pending: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
+    /// Keep the pages `read` fetches in source memory, so a later session can find and cite them again.
+    /// Off by default: pages are not kept across sessions unless the user opts in.
+    keep_sources: std::sync::atomic::AtomicBool,
     started: Instant,
 }
 
@@ -652,8 +655,23 @@ impl App {
             research: Default::default(),
             context: StdMutex::default(),
             pending: StdMutex::default(),
+            keep_sources: Default::default(),
             started: Instant::now(),
         }
+    }
+
+    /// Opt in (or out) of keeping read pages in source memory. Needs memory to be configured.
+    pub fn set_keep_sources(&self, on: bool) {
+        self.keep_sources
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Source memory is on and there is a memory to keep it in.
+    fn sources_memory(&self) -> Option<&Memory> {
+        self.keep_sources
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .then_some(self.cfg.memory.as_ref())
+            .flatten()
     }
 
     /// (CDP round-trips so far, browser memory in KiB). `None` until the browser has started.
@@ -1527,7 +1545,7 @@ impl App {
                 arg_str(a, "detail").unwrap_or("brief"),
             ))),
             "read" => self.read_tool(a).await,
-            "cite" => self.cite_tool(a),
+            "cite" => self.cite_tool(a).await,
             "evidence" => Ok(self.evidence_tool()),
             "search" => self.search_tool(a).await,
             "open_many" => self.open_many_tool(a).await,
