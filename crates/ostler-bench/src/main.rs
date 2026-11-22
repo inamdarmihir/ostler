@@ -14,6 +14,7 @@ mod packs_tests;
 mod real;
 mod scale;
 mod scripted;
+mod sources;
 mod suite;
 
 use clap::{Parser, Subcommand};
@@ -91,6 +92,15 @@ enum Cmd {
         #[arg(long)]
         no_write: bool,
     },
+    /// Source memory cost by store (in-process, local file, real Qdrant): save and recall latency, open time,
+    /// and lost updates with two writers.
+    Sources {
+        /// Comma list of corpus sizes in chunks, e.g. 1000,10000,50000
+        #[arg(long, default_value = "1000,10000,50000")]
+        sizes: String,
+        #[arg(long, default_value_t = 100)]
+        queries: usize,
+    },
     /// Parallel browser sessions: throughput, memory per session, CPU per task, cost to serve.
     Concurrency {
         #[arg(long, default_value = "1,2,4,8")]
@@ -115,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
             queries,
             on_disk,
         } => memory::run(&sizes, queries, on_disk).await?,
+        Cmd::Sources { sizes, queries } => sources::run(&sizes, queries).await?,
         Cmd::Suite { only } => suite::run(only).await?,
         Cmd::Real { only } => real::run(only).await?,
         Cmd::ServeFixtures { port } => {
