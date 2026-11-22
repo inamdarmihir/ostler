@@ -65,6 +65,7 @@ Qdrant Cloud Inference follows Qdrant's documentation and is covered by request-
 | `qdrant_on_disk` | `OSTLER_QDRANT_ON_DISK` | keep vectors on disk: less RAM per user |
 | `learn` | `OSTLER_LEARN` | save non-sensitive values typed after an accepted submit (off by default) |
 | `swarm` | `OSTLER_SWARM` | several agents share this server: page calls without `tab` are refused once more than one tab is open (off by default) |
+| `qdrant_scope` | `OSTLER_QDRANT_SCOPE` | what Qdrant holds when configured: `all` (default: facts, playbooks, episodes, pages) or `sources` (only pages; the rest stays in the local encrypted file). See [ADR-0021](adr/0021-where-qdrant-earns-its-place.md) |
 | `keep_sources` | `OSTLER_KEEP_SOURCES` | keep pages `read` fetches in memory so later sessions can search and cite them (off by default; needs a memory; expires after 30 days; see [ADR-0020](adr/0020-source-memory.md)) |
 | `lean` | `OSTLER_LEAN` | lower memory use; no images in screenshots |
 | `key_store` | `OSTLER_KEY_STORE` | where the sealing key lives: `file` (default) or `keychain` |

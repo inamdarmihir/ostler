@@ -46,10 +46,12 @@ const TOTAL_SECS: u64 = 90;
 const STORED_CITE_CHUNKS: usize = 200;
 
 impl App {
-    /// Keep a page this session read in source memory (opt-in). A failure is a note on stderr, never a
-    /// failed read: memory is an aid, and the page is still in this session's evidence.
-    async fn keep_source(&self, doc: &Doc) {
-        let Some(mem) = self.sources_memory() else {
+    /// Keep a page this session read in source memory (opt-in), in the background: a save can take a while
+    /// (the local file store rewrites its whole file), and `read` must not wait for it. `shutdown` and
+    /// `flush` wait for pending saves. A failure is a note on stderr, never a failed read: memory is an
+    /// aid, and the page is still in this session's evidence.
+    fn keep_source(&self, doc: &Doc) {
+        let Some(mem) = self.sources_memory().cloned() else {
             return;
         };
         let chunks: Vec<ostler_memory::SourceChunk> = doc
@@ -67,9 +69,12 @@ impl App {
                 title: Some(doc.title.clone()),
             })
             .collect();
-        if let Err(e) = mem.save_sources(&doc.url, chunks).await {
-            eprintln!("ostler: could not keep {} in source memory: {e}", doc.url);
-        }
+        let url = doc.url.clone();
+        self.spawn_memory_write(async move {
+            if let Err(e) = mem.save_sources(&url, chunks).await {
+                eprintln!("ostler: could not keep {url} in source memory: {e}");
+            }
+        });
     }
 
     /// `read` with `stored: true`: passages from copies kept by earlier sessions. Every hit says it is a
@@ -545,7 +550,7 @@ impl App {
         e.title = Some(short(&doc.title));
         let _ = self.research.ledger.record(e);
         if !paywalled {
-            self.keep_source(&doc).await;
+            self.keep_source(&doc);
         }
         Ok(Ingest::Read {
             doc,

@@ -1,0 +1,184 @@
+{
+  "source_scale": [
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.23,
+      "id_with_words_sparse_x4_hit_rate": 0.23,
+      "ingest_s": 0.018192316,
+      "ingested_chunks": 500,
+      "lost_updates_two_writers": null,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 0.485657,
+        "p95": 0.713563
+      },
+      "save_ms": {
+        "p50": 0.306481,
+        "p95": 0.356175
+      },
+      "store": "in-process",
+      "target_chunks": 500
+    },
+    {
+      "file_mib": 2.5810346603393555,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.23,
+      "id_with_words_sparse_x4_hit_rate": 0.23,
+      "ingest_s": 5.97795206,
+      "ingested_chunks": 500,
+      "lost_updates_two_writers": 0,
+      "open_ms": 19.635452,
+      "recall_ms": {
+        "p50": 0.46216999999999997,
+        "p95": 0.507575
+      },
+      "save_ms": {
+        "p50": 116.494771,
+        "p95": 244.18574800000002
+      },
+      "store": "local file (sealed)",
+      "target_chunks": 500
+    },
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.22,
+      "id_with_words_sparse_x4_hit_rate": 0.2,
+      "ingest_s": 0.570415311,
+      "ingested_chunks": 500,
+      "lost_updates_two_writers": 0,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 1.782006,
+        "p95": 2.066527
+      },
+      "save_ms": {
+        "p50": 10.853069999999999,
+        "p95": 14.551639
+      },
+      "store": "qdrant 1.20",
+      "target_chunks": 500
+    },
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.14,
+      "id_with_words_sparse_x4_hit_rate": 0.13,
+      "ingest_s": 0.082154819,
+      "ingested_chunks": 2000,
+      "lost_updates_two_writers": null,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 1.318051,
+        "p95": 1.682747
+      },
+      "save_ms": {
+        "p50": 0.444513,
+        "p95": 0.496052
+      },
+      "store": "in-process",
+      "target_chunks": 2000
+    },
+    {
+      "file_mib": 10.335710525512695,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.14,
+      "id_with_words_sparse_x4_hit_rate": 0.13,
+      "ingest_s": 119.906131934,
+      "ingested_chunks": 2000,
+      "lost_updates_two_writers": 0,
+      "open_ms": 94.121709,
+      "recall_ms": {
+        "p50": 1.436905,
+        "p95": 1.533187
+      },
+      "save_ms": {
+        "p50": 1042.601596,
+        "p95": 1273.507516
+      },
+      "store": "local file (sealed)",
+      "target_chunks": 2000
+    },
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.13,
+      "id_with_words_sparse_x4_hit_rate": 0.12,
+      "ingest_s": 2.214247343,
+      "ingested_chunks": 2000,
+      "lost_updates_two_writers": 0,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 2.5598069999999997,
+        "p95": 3.089444
+      },
+      "save_ms": {
+        "p50": 10.767377,
+        "p95": 13.265417
+      },
+      "store": "qdrant 1.20",
+      "target_chunks": 2000
+    },
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.26,
+      "id_with_words_sparse_x4_hit_rate": 0.23,
+      "ingest_s": 0.95456559,
+      "ingested_chunks": 10000,
+      "lost_updates_two_writers": null,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 6.821378,
+        "p95": 11.475957
+      },
+      "save_ms": {
+        "p50": 1.417331,
+        "p95": 1.587105
+      },
+      "store": "in-process",
+      "target_chunks": 10000
+    },
+    {
+      "file_mib": 12.350214958190918,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.18,
+      "id_with_words_sparse_x4_hit_rate": 0.11,
+      "ingest_s": 150.278461094,
+      "ingested_chunks": 2340,
+      "lost_updates_two_writers": 0,
+      "open_ms": 141.182166,
+      "recall_ms": {
+        "p50": 2.052134,
+        "p95": 2.272497
+      },
+      "save_ms": {
+        "p50": 1521.741023,
+        "p95": 1785.308939
+      },
+      "store": "local file (sealed)",
+      "target_chunks": 10000
+    },
+    {
+      "file_mib": null,
+      "id_only_hit_rate": 1.0,
+      "id_with_words_hit_rate": 0.25,
+      "id_with_words_sparse_x4_hit_rate": 0.23,
+      "ingest_s": 11.175780021,
+      "ingested_chunks": 10000,
+      "lost_updates_two_writers": 0,
+      "open_ms": null,
+      "recall_ms": {
+        "p50": 2.537826,
+        "p95": 3.178961
+      },
+      "save_ms": {
+        "p50": 9.332979,
+        "p95": 11.897810999999999
+      },
+      "store": "qdrant 1.20",
+      "target_chunks": 10000
+    }
+  ]
+}

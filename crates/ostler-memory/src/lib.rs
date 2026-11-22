@@ -27,6 +27,7 @@ mod embed;
 pub mod fusion;
 mod local;
 mod qdrant;
+mod routed;
 mod sealed;
 mod source;
 pub mod sparse;
@@ -36,6 +37,7 @@ mod token;
 pub use embed::{Embedder, HashEmbedder, OllamaEmbedder};
 pub use local::LocalStore;
 pub use qdrant::{QdrantConfig, QdrantStore, VectorSource, MIN_HYBRID_VERSION};
+pub use routed::RoutedStore;
 pub use sealed::{
     migrate_sealed, probe_key, seal_legacy, write_v1_point_for_tests, KeyProbe, MigrateReport,
     SealKey, SealReport, SealedStore,

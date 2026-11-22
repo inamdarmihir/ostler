@@ -46,6 +46,11 @@ Memory is optional and off until you give Ostler a Qdrant URL. With memory in Qd
 
 Details: [ARCHITECTURE](ARCHITECTURE.md), [ADRs](adr/).
 
-### Source memory (library only; not yet reachable over MCP)
+### Source memory (opt-in: `--keep-sources`)
 
-A fourth kind, `source`, stores chunks of pages an agent has read, for "what did I already read about X". Chunks are sealed like every other kind (AES-GCM payloads, HMAC-keyed ids). Each point carries a dense vector and a sparse BM25 vector whose term ids are HMAC-derived (truncated to 32 bits), so the server never sees plaintext terms; the cost is rare hash collisions and no cross-tenant term statistics. Search uses one hybrid Query API call with weighted RRF on Qdrant 1.17 or newer and client-side fusion plus MMR on older servers. Retention is short by default (`Memory::with_source_retain_days`), and `forget`/wipe covers the kind. It is tested against Qdrant 1.20.0. The configuration key and the MCP tools are not wired yet.
+A fourth kind, `source`, stores chunks of pages an agent has read, for "what did we already read about X", and
+`read {stored: true, query}` finds them in a later session ([ADR-0020](adr/0020-source-memory.md)). Chunks are sealed like every other kind (AES-GCM payloads, HMAC-keyed ids). Each point carries a dense vector and a sparse BM25 vector whose term ids are HMAC-derived (truncated to 32 bits), so the server never sees plaintext terms; the cost is rare hash collisions and no cross-tenant term statistics. Search uses one hybrid Query API call with weighted RRF on Qdrant 1.17 or newer and client-side fusion plus MMR on older servers. Retention is 30 days by default, and `forget`/wipe covers the kind. It is tested against Qdrant 1.20.0.
+
+### Where Qdrant is used, and where it is not
+
+Qdrant is the right store for **source chunks**: they grow with every page read, are searched by meaning and by exact terms, and are what several agents or machines share. It is **not** needed for saved facts, playbooks and episodes for one person: tens of small records looked up by exact key. `--qdrant-scope sources` keeps only pages in Qdrant and leaves the rest in the local encrypted file; the default `all` is unchanged. The measurements (the local file takes about 1 s to save a page at 2,000 chunks, Qdrant about 10 ms) and the audit of each kind are in [ADR-0021](adr/0021-where-qdrant-earns-its-place.md) and [bench-results/source-scale.md](../bench-results/source-scale.md).

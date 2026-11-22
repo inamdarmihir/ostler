@@ -762,6 +762,10 @@ fn memory_report(m: &MemoryArgs) {
         }
         Embeddings::DevHash => println!("  embeddings: local dev-hash. Nothing leaves this machine for embedding, but matching is not semantic (development only)."),
     }
+    match m.qdrant_scope {
+        QdrantScope::All => println!("  scope:      Qdrant holds everything (facts, playbooks, episodes, pages). `--qdrant-scope sources` keeps only pages there."),
+        QdrantScope::Sources => println!("  scope:      Qdrant holds only the pages agents read; facts, playbooks and episodes are in {}.", config::local_memory_path().display()),
+    }
     match m.isolation {
         Isolation::Shared => println!("  isolation:  shared collections; tenants are separated by a filter. Anyone holding the Qdrant key can read every tenant.\n              For per-tenant keys: `--isolation collection` plus `ostler memory token`."),
         Isolation::Collection => println!("  isolation:  one set of collections per tenant. Give clients a scoped key from `ostler memory token` instead of the admin key."),
@@ -1039,6 +1043,17 @@ enum Isolation {
 }
 
 #[derive(Clone, Copy, ValueEnum, PartialEq, Eq)]
+enum QdrantScope {
+    /// Everything Qdrant can hold goes to Qdrant: saved facts, playbooks, episodes and source chunks (default,
+    /// what earlier versions did).
+    All,
+    /// Qdrant holds only source chunks (pages read, shared by agents, searched by words and meaning). Saved facts,
+    /// playbooks and episodes stay in the local encrypted file: tens of small records, looked up by exact key,
+    /// that need no server and, with `--embeddings cloud`, no cloud embedding of your field labels.
+    Sources,
+}
+
+#[derive(Clone, Copy, ValueEnum, PartialEq, Eq)]
 enum SealMode {
     /// Seal when memory is stored in Qdrant (default).
     Auto,
@@ -1091,6 +1106,16 @@ struct MemoryArgs {
         env = "OSTLER_EMBEDDING_DIM"
     )]
     embedding_dim: usize,
+    /// What Qdrant holds when it is configured: `all` (default) or `sources` (only the pages agents read).
+    /// See docs/adr/0021-where-qdrant-earns-its-place.md.
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value = "all",
+        env = "OSTLER_QDRANT_SCOPE"
+    )]
+    qdrant_scope: QdrantScope,
     /// Keep Qdrant vectors on disk (memory-mapped): much less RAM per user, slightly slower search.
     #[arg(long, global = true, env = "OSTLER_QDRANT_ON_DISK")]
     qdrant_on_disk: bool,
@@ -1354,33 +1379,39 @@ fn qdrant_store(a: &MemoryArgs) -> Result<QdrantStore> {
     Ok(store)
 }
 
+/// The local encrypted file store: where saved facts, playbooks and episodes live without a server, and
+/// where they stay when `--qdrant-scope sources` is chosen.
+fn local_store(a: &MemoryArgs) -> Result<ostler_memory::LocalStore> {
+    // No server to embed for us: Cloud Inference is not available, so unless Ollama is chosen the
+    // vectors are the local hashing ones (found by shared words, not by meaning).
+    let embedder: Arc<dyn ostler_memory::Embedder> = match a.embeddings {
+        Embeddings::Ollama => Arc::new(OllamaEmbedder::new(
+            &a.embedding_url,
+            &a.embedding_model,
+            a.embedding_dim,
+            a.allow_insecure_qdrant,
+        )?),
+        Embeddings::DevHash => Arc::new(HashEmbedder::new(a.embedding_dim)),
+        Embeddings::Cloud => Arc::new(HashEmbedder::default()),
+    };
+    let key = if a.seal == SealMode::Off {
+        eprintln!("ostler: warning: --seal off. Anyone who can read {} can read your saved facts and the sites you use.", config::local_memory_path().display());
+        None
+    } else {
+        Some(config::memory_key()?)
+    };
+    Ok(ostler_memory::LocalStore::open(
+        config::local_memory_path(),
+        embedder,
+        key,
+    )?)
+}
+
 fn build_memory_inner(a: &MemoryArgs) -> Result<Option<Memory>> {
     let mode = resolved_mode(a);
     Ok(match mode {
         MemoryMode::Off | MemoryMode::Auto => None,
-        MemoryMode::Local => {
-            // No server to embed for us: Cloud Inference is not available, so unless Ollama is chosen the
-            // vectors are the local hashing ones (found by shared words, not by meaning).
-            let embedder: Arc<dyn ostler_memory::Embedder> = match a.embeddings {
-                Embeddings::Ollama => Arc::new(OllamaEmbedder::new(
-                    &a.embedding_url,
-                    &a.embedding_model,
-                    a.embedding_dim,
-                    a.allow_insecure_qdrant,
-                )?),
-                Embeddings::DevHash => Arc::new(HashEmbedder::new(a.embedding_dim)),
-                Embeddings::Cloud => Arc::new(HashEmbedder::default()),
-            };
-            let key = if a.seal == SealMode::Off {
-                eprintln!("ostler: warning: --seal off. Anyone who can read {} can read your saved facts and the sites you use.", config::local_memory_path().display());
-                None
-            } else {
-                Some(config::memory_key()?)
-            };
-            let store =
-                ostler_memory::LocalStore::open(config::local_memory_path(), embedder, key)?;
-            Some(Memory::new(Arc::new(store), a.tenant.clone()))
-        }
+        MemoryMode::Local => Some(Memory::new(Arc::new(local_store(a)?), a.tenant.clone())),
         MemoryMode::Ephemeral => {
             let store: Arc<dyn Store> =
                 Arc::new(InMemoryStore::new(Arc::new(HashEmbedder::default())));
@@ -1394,6 +1425,15 @@ fn build_memory_inner(a: &MemoryArgs) -> Result<Option<Memory>> {
             } else {
                 Arc::new(SealedStore::new(Arc::new(store), config::memory_key()?))
             };
+            if a.qdrant_scope == QdrantScope::Sources {
+                if matches!(a.embeddings, Embeddings::Cloud) {
+                    eprintln!("ostler: note: --embeddings cloud sends the text of pages your agents read to Qdrant Cloud Inference to be embedded (even when sealed). Use --embeddings ollama to keep it local.");
+                }
+                // Qdrant keeps the pages; the small exact-key records stay in the local file.
+                let rest: Arc<dyn Store> = Arc::new(local_store(a)?);
+                let routed = ostler_memory::RoutedStore::new(store, rest);
+                return Ok(Some(Memory::new(Arc::new(routed), a.tenant.clone())));
+            }
             if a.seal != SealMode::Off && matches!(a.embeddings, Embeddings::Cloud) {
                 eprintln!("ostler: note: payloads are sealed, but --embeddings cloud still sends field text to Qdrant Cloud Inference to embed. Use --embeddings ollama to keep it local.");
             }
